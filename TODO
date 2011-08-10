@@ -17,8 +17,6 @@ How to add rules for new Object types?
 
 Add parallel build support.
 
-Add -q to quit after the first failure.
-
 Better debug levels
 
 Support Test, Publish
@@ -26,8 +24,11 @@ Support Test, Publish
 Add getopt and use it like automf for Executable --test --install=/blah ...
 
 Do proper getopt processing in tmake
-- --debug, --verbose, etc.
 
 Use source location even when unable to build something to show what rules
 were used to determine that something was needed. Perhaps look back along
-tmake(current)
+tmake(current). This is done, but could be formatted better.
+
+Add a version number
+
+Add user errors and internal errors like autosetup
