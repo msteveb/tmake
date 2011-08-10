@@ -24,7 +24,7 @@ set tmake(numtargets) 0
 
 proc dputs {msg} {
 	if {$::tmake(debug)} {
-		puts $msg
+		puts [msg-indent]$msg
 	}
 }
 
@@ -103,8 +103,18 @@ proc get-installdirs {} {
 	prefix $::DESTDIR [lsort [dict keys $::tmake(installdirs)]]
 }
 
+proc find-rule-source {} {
+	foreach i [range [info level]] {
+		lassign [info frame $i] proc file line
+		if {[string match *.spec $file]} {
+			return $file:$line
+		}
+	}
+	return unknown
+}
+
 proc target {target args} {
-	set info(source) [lrange [info frame 0] 1 end]
+	set info(source) [find-rule-source]
 	set -inputs {}
 	set -depends {}
 	set -clean {}
@@ -127,6 +137,7 @@ proc target {target args} {
 	foreach v ${-vars} {
 		dict set info(vars) $v [uplevel 1 set $v]
 	}
+	set info(result) 0
 	set info(inputs) [join ${-inputs}]
 	set info(depends) [join ${-depends}]
 	set info(clean) ${-clean}
@@ -149,6 +160,7 @@ proc target {target args} {
 		lappend info(depends) {*}$orig(depends)
 		lappend info(inputs) {*}$orig(inputs)
 		lappend info(clean) {*}$orig(clean)
+		lappend info(source) {*}$orig(source)
 		append info(onfail) \n$orig(onfail)
 		if {$info(rules) eq ""} {
 			set info(rules) $orig(rules)
@@ -197,17 +209,21 @@ proc dumptargets {} {
 }
 
 proc needbuild? {target source} {
+	set result [get-target-result $target]
+	if {$result} {
+		return $result
+	}
 	if {[file exists $target]} {
 		if {[file exists $source]} {
 			if {[file mtime $target] >= [file mtime $source]} {
-				dputs "Not building $target because it is newer than $source"
+				dputs "$target is newer than $source, so not forcing rebuild"
 				return 0
 			}
 		}
-		dputs "Building $target because it is older than $source or $source does not exist"
+		dputs "$target is older than $source, so forcing rebuild"
 		return 1
 	} else {
-		dputs "Building $target because it does not exist"
+		dputs "$target does not exist, so forcing build"
 		return 1
 	}
 }
@@ -216,6 +232,19 @@ proc needbuild? {target source} {
 proc set-target-vars {vars} {
 	foreach {n v} $vars {
 		uplevel #0 [list set $n $v]
+	}
+}
+
+proc get-target-result {target} {
+	if {![is-target? $target]} {
+		return -1
+	}
+	dict get $::tmake(targets) $target result
+}
+
+proc set-target-result {target result} {
+	if {[get-target-result $target] == 0} {
+		dict set ::tmake(targets) $target result $result
 	}
 }
 
@@ -229,7 +258,17 @@ proc run {args} {
 	if {$::tmake(verbose)} {
 		puts "[join $args]"
 	}
-	exec {*}[join $args]
+	try {
+		exec {*}[join $args]
+	} on error msg {
+		puts stderr \n\t[join $args]\n
+		puts stderr $msg
+		return -code break
+	}
+}
+
+proc msg-indent {} {
+	string repeat "  " [llength $::tmake(current)]
 }
 
 proc build {target} {
@@ -238,67 +277,94 @@ proc build {target} {
 	lappend current $target
 	if {![is-target? $target]} {
 		if {[file exists $target]} {
-			return 1
+			dputs "$target is not a target, but exists"
+			return 0
 		}
+		dputs "$target is not a target and does not exist"
 		return -1
 	}
 	set t [get-target $target]
-	set needbuild 0
-	set nobuild 0
+	if {$t(result) < 0} {
+		dputs "$target has previously failed to build"
+		return -1
+	} elseif {$t(result) > 0} {
+		dputs "$target has previously been built"
+		return 1
+	}
 	if {[file exists $target]} {
+		dputs "$target exists, so check dependencies"
 		foreach i $t(depends) {
-			if {[needbuild? $target $i]} {
-				incr needbuild
+			incr result [needbuild? $target $i]
+			if {$result} {
 				break
 			}
 		}
 	} else {
-		incr needbuild
+		dputs "$target doesn't exist, so rebuilding"
+		incr result
+	}
+
+	if {$result == 0} {
+		dputs "$target not forced by dependencies"
+		#return 0
 	}
 
 	set oldcurrent $tmake(current)
 	set tmake(current) $current
-	if {$needbuild} {
-		# First make sure dependencies are up to date
-		dputs "Building dependencies of $target"
-		foreach i $t(depends) {
-			#puts "Building $i"
-			#dumptarget $i
-			if {[build $i] < 0} {
-				puts stderr "Don't know how to build $i: [join [lreverse $current] { <= }] @[join $t(source) :]"
-				dumptarget $target
-				set nobuild 1
+
+	# First make sure dependencies are up to date
+	dputs "Building dependencies of $target"
+	foreach i $t(depends) {
+		#puts "Building $i"
+		#dumptarget $i
+		set rc [build $i]
+		if {$rc < 0} {
+			if {[get-target-result $target] >= 0} {
+				puts stderr "Don't know how to build $i: [join [lreverse $current] { <= }] @[join $t(source) {, }]"
 			}
+			#dumptarget $target
+			#show-reason $current
+			set result -1
+		} elseif {$rc > 0} {
+			dputs "For $target, $i was built so rebuilding $target"
+			set result 1
 		}
-		if {!$nobuild && $t(rules) ne ""} {
-			#puts "Running rules for $target"
-			dputs "Building [join [lreverse $current] { <= }] with rule @[join $t(source) :]"
+	}
+	if {$result > 0 && $t(rules) ne ""} {
+		#puts "Running rules for $target"
+		dputs "Building [join [lreverse $current] { <= }] with rule @[join $t(source) {, }]"
+		try {
+			set-target-vars $t(vars)
+			uplevel #0 $t(msg)
+			if {$tmake(norun)} {
+				showrules [uplevel #0 [list subst $t(rules)]]
+			} else {
+				incr tmake(numtargets)
+				uplevel #0 $t(rules)
+			}
+		} on {error break} {msg opts} {
+			file delete $target {*}$t(clean)
 			try {
-				set-target-vars $t(vars)
-				uplevel #0 $t(msg)
-				if {$tmake(norun)} {
-					showrules [uplevel #0 [list subst $t(rules)]]
-				} else {
-					incr tmake(numtargets)
-					uplevel #0 $t(rules)
-				}
-			} on error {msg opts} {
-				file delete $target {*}$t(clean)
-				try {
-					uplevel #0 $t(onfail)
+				uplevel #0 $t(onfail)
+				if {[info returncode $opts(-code)] eq "error"} {
 					puts stderr [errorInfo $msg]
-				} on error {fmsg fopts} {
-					puts stderr [errorInfo $fmsg]
 				}
+			} on error {fmsg fopts} {
+				puts stderr [errorInfo $fmsg]
 			}
-		} else {
-			#puts "Not running rules for $target [expr {$nobuild ? "because dependency failed" : "because no rules"}]"
+			set result -1
 		}
-	} else {
-		dputs "No need to build $target"
+	}
+
+	# For each target, mark it as made (> 0) or unmakeable(< 0)
+	if {$result != 0} {
+		#puts "Marking target result=$result for $current"
+		foreach t $current {
+			set-target-result $t $result
+		}
 	}
 	set tmake(current) $oldcurrent
-	return 0
+	return $result
 }
 
 proc find {filename} {
@@ -381,6 +447,13 @@ target uninstall -rules {
 	}
 	foreach i [get-installdirs] {
 		file delete -force $i
+	}
+}
+
+proc show-reason {targets} {
+	foreach t $targets {
+		set p [get-target $t]
+		puts "[join $p(source) {, }] $t"
 	}
 }
 
@@ -556,6 +629,7 @@ set CCACHE ""
 set CC cc
 set CXX c++
 set AR ar
+set RANLIB ranlib
 set ARFLAGS cr
 set CFLAGS ""
 set CXXFLAGS ""
