@@ -1,0 +1,46 @@
+storage none
+pageformat raw
+
+accesslevel status
+
+field type {
+	stdmode hidden
+	default hour
+}
+
+display {
+	package require rrdgraph
+
+	# Easy debugging
+	if {0 && [file exists /tmp/rrd.test]} {
+		source /tmp/rrd.test
+		return
+	}
+
+	set r [rrdgraph modem modn [cgi get type]]
+
+	$r stdinit
+	$r title "Modem Modulation"
+	$r ylabel "Modulation"
+	$r params -l 0 -u 6 -y none
+
+	$r comment "Modem 1:"
+	$r bool m1 m1txmodn -label "TX Modulation"
+	$r bool rf1 m1rxmodn -label "RX Modulation\n"
+
+	$r comment "Modem 2:"
+	$r bool m2 m2txmodn -label "TX Modulation"
+	$r bool rf2 m2rxmodn -label "RX Modulation\n"
+
+	# QPSK is gray
+	# 64/16QAM is purple
+	# 256QAM is red
+	set i 0
+	foreach {name col} {QPSK-LOCK 222222 QPSK-TCM 888888 16QAM-TCM CC22CC 64QAM-TCM CC22CC 256QAM-TCM CC2222 256QAM-RS FF2222} {
+		# Note: Add some alpha to these colours so that they don't conflict too much
+		$r params HRULE:[incr i]#${col}CC:$name
+	}
+
+	$r output
+	$r close
+}

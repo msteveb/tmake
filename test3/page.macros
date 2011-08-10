@@ -1,0 +1,146 @@
+# This file is automatically loaded when parsing page files
+# It is most useful to contain common declarations across multiple
+# page files
+
+# Simple separator bar, which is shown either in both modes (the default)
+# or only in std or edit mode, if specified
+proc bar {{mode {}} msg} {
+	# Note that the script needs to be set as a global since 'text' operates
+	# in a different scope
+	text {
+		tclmapping @msg@ $msg
+		switch -- $mode \
+			"" {
+				tclmapping @modes@ {std edit}
+			} \
+			-std {
+				tclmapping @modes@ std
+			} \
+			-edit {
+				tclmapping @modes@ std
+			} \
+			default {
+				error "Usage: bar ?-std|-edit? msg"
+			}
+		display {
+			if {[cgi mode] in {@modes@}} {
+				cgi display row {
+					html str div class=bar {@msg@}
+				}
+			}
+		}
+	}
+}
+
+proc ifmodified_message {} {
+	text {
+		display display_ifmodified_message
+	}
+}
+
+proc accesslevel {type args} {
+	switch $type \
+		internal {
+			access factory rw {*}$args
+		} \
+		support {
+			access factory rw support rw {*}$args
+		} \
+		install {
+			access factory rw support rw install rw {*}$args
+		} \
+		link {
+			access factory rw support rw install rw admin ro user ro {*}$args
+		} \
+		admin {
+			access factory rw support rw install rw admin rw {*}$args
+		} \
+		status {
+			access factory rw support rw install rw admin rw user ro {*}$args
+		} \
+		default {
+			return -code "Error: Unknown accesslevel '$type'"
+		}
+}
+
+# $args is a list of fields which should be kept with 'cgi vars keep'
+proc auto_refresh_page {args} {
+	set keepvars ""
+	if {[llength $args]} {
+		set keepvars "cgi vars keep $args"
+	}
+
+	field autorefresh {
+		storagename status.autorefresh
+		storage cookie
+		stdmode hidden
+		default 0
+	}
+
+	button refresh {
+		tclmapping @keepvars@ $keepvars
+		label Refresh
+		editmode none
+		stdmode onClick=history.go(0)
+		submit {
+			@keepvars@
+			cgi nextpage $page
+		}
+	}
+
+	button auto {
+		tclmapping @keepvars@ $keepvars
+		label "Enable Auto Refresh"
+		display {
+			cgi set auto [cgi get autorefresh]
+			if {[cgi get autorefresh] eq "1"} {
+				cgi setdisplay label "Disable Auto Refresh"
+			}
+		}
+		submit {
+			cgi set autorefresh [toggle {0 1} [cgi get autorefresh]]
+			@keepvars@
+			cgi nextpage $page
+		}
+	}
+
+	submit -onget {
+		if {[cgi get autorefresh] eq "1"} {
+			cgi http header Refresh 5
+		}
+	}
+}
+
+proc history_page {label title type} {
+	label $label
+	title $title
+
+	accesslevel support
+	storage none
+
+	bar $title
+
+	text {
+		tclmapping @type@ $type
+		display {
+			html eval p {
+				html tag img src=[cgi href graph_@type@ type hour]
+			}
+			html eval p {
+				html tag img src=[cgi href graph_@type@ type day]
+			}
+			html eval p {
+				html tag img src=[cgi href graph_@type@ type week]
+			}
+		}
+	}
+
+	button refresh {
+		label Refresh
+		submit {
+			cgi nextpage $page
+		}
+	}
+}
+
+# vi: se syn=tcl ts=4 noet:

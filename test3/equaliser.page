@@ -1,0 +1,130 @@
+label "Equaliser"
+title "Equaliser Taps"
+
+accesslevel support
+
+storage page
+
+init {
+	proc max {args} {
+		foreach m [lassign $args max] {
+			if {$m > $max} {
+				set max $m
+			}
+		}
+		return $max
+	}
+
+	proc min {args} {
+		foreach m [lassign $args min] {
+			if {$m < $min} {
+				set min $m
+			}
+		}
+		return $min
+	}
+
+	proc trunc {n limit} {
+		if {$n < 0} {
+			set limit -$limit
+		}
+		set nn [expr {$n / $limit}]
+		# Now round this to the next highest 1.0
+		set nn [expr {int($nn + 0.99999999)}]
+		expr {int($nn * $limit)}
+	}
+
+	proc make_chart_options {label xlabels real imag} {
+		set options {}
+
+		lappend options chtt=[string map {" " +} $label]
+		lappend options chxs=1,676767,9.5,0,l,676767 chxt=y,x,t chbh=a,4,20 chs=600x285 cht=bvg chco=7777CC,3D30C9
+		set min [trunc [min {*}$real {*}$imag] 10.0]
+		set max [trunc [max {*}$real {*}$imag] 10.0]
+		# Interleave top labels
+		set toplabels {}
+		foreach v1 $real v2 $imag {
+			lappend toplabels [string map {+ %2b} [format "%d%+di" $v1 $v2]]
+		}
+		lappend options chts=676767,12.5 chxr=0,$min,$max chds=$min,$max
+		lappend options chd=t:[join $real ,]|[join $imag ,]
+		lappend options chxl=1:|[join $xlabels |]|2:|[join $toplabels |]
+		if {$max - $min > 0} {
+			lappend options chg=0,[expr {100/(($max-$min)/10)}]
+		}
+		return $options
+	}
+
+	proc make_line_chart_options {label mag phase} {
+		set options {}
+
+		lappend options chtt=[string map {" " +} $label]
+		lappend options cht=lc chls=1|2,4,1 chs=600x285 chco=CC7722,FFBB55
+		lappend options chd=t:[join $mag ,]|[join $phase ,]
+		set min [trunc [min {*}$mag {*}$phase] 1.0]
+		set max [trunc [max {*}$mag {*}$phase] 1.0]
+		# REVISIT: Range
+		lappend options chds=$min,$max chdl=Magnitude|Phase chdlp=b
+		lappend options chxt=y chxr=0,$min,$max
+		return $options
+	}
+}
+
+field modem {
+	stdmode hidden
+	default 1
+}
+
+field eq {
+	stdmode hidden
+	default dfe
+}
+
+display {
+	set modem [cgi get modem]
+	if {$modem ne "2"} {
+		set modem 1
+	}
+	set eq [cgi get eq]
+	if {$eq ne "timing"} {
+		set eq "dfe"
+		set prefix "DFE/FFE Equaliser"
+	} else {
+		set prefix "Timing Equaliser"
+	}
+
+	set m [- $modem 1]
+	cgi tabs $m [list [cgi href $page modem 1] "Modem 1"  [cgi href $page modem 2] "Modem 2"]
+	set e [lsearch {dfe timing} $eq]
+	cgi tabs $e [list [cgi href $page eq dfe] "DFE/FFE"  [cgi href $page eq timing] "Timing"]
+
+	set data {}
+	set xlabels {}
+
+	set result [exec equaliser-taps -q -$eq $modem]
+	foreach line [split $result \n] {
+		incr numtaps
+		foreach val $line var {xlabels i(real) i(imag) q(real) q(imag)} {
+			lappend $var $val
+		}
+	}
+
+	set chartoptions [make_chart_options "$prefix Taps" $xlabels $i(real) $i(imag)]
+	html tag img "src=http://chart.apis.google.com/chart?[join $chartoptions &]"
+
+	html tag br
+
+	set result [exec equaliser-taps -q -$eq $modem | eqfft]
+	foreach line [split $result \n] {
+		foreach val $line var {n imag iphase qmag qphase} {
+			lappend $var $val
+		}
+	}
+
+	# now plot $mag and $phase
+	set chartoptions [make_line_chart_options "$prefix Spectrum" $imag $iphase]
+	stderr puts [join $chartoptions \n]
+	html tag img "src=http://chart.apis.google.com/chart?[join $chartoptions &]"
+}
+
+auto_refresh_page

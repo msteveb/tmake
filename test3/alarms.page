@@ -1,0 +1,124 @@
+label "Alarms"
+title "Alarms"
+summary "Alarm Events"
+help {View alarm events for this device}
+
+accesslevel status
+
+bar "Alarm Events"
+
+init {
+	package require common
+
+	set mapping {
+		"IDU to ODU X Comms"		{enum {0 "Not Established" 1 "Established"}}
+		"Modem X 1.2V Rail OK"		{enum {0 "Not OK" 1 "OK"}}
+		"Modem X 2.5V Rail OK"		{enum {0 "Not OK" 1 "OK"}}
+		"Modem X 3.3V Rail 1 OK"	{enum {0 "Not OK" 1 "OK"}}
+		"Modem X 3.3V Rail 2 OK"	{enum {0 "Not OK" 1 "OK"}}
+		"Modem X -48VDC Input 1"	{expr {$value / 1000.0} format %.1fV}
+		"Modem X -48VDC Input 2"	{expr {$value / 1000.0} format %.1fV}
+		"Modem X -48VDC Input 3"	{expr {$value / 1000.0} format %.1fV}
+		"Modem X BER Estimate"		{}
+		"Modem X Config Alarm"		{enum {0 "OK" 1 "Invalid Configuration"}}
+		"Modem X Fan 1 Running"		{enum {0 "Not Running" 1 Running}}
+		"Modem X Fan 2 Running"		{enum {0 "Not Running" 1 Running}}
+		"Modem X Frame Lock"		{enum {0 "Not Locked" 1 "Locked"}}
+		"Modem X IF Loopback"		{enum {0 "Normal" 1 "Loopback Enabled"}}
+		"Modem X LO Loop"			{append mV}
+		"Modem X Phase Lock"		{enum {0 "Not Locked" 1 "Locked"}}
+		"Modem X RX ADC ALC"		{}
+		"Modem X RX IF AFC"			{}
+		"Modem X RX IF Cable AGC"	{expr {$value/100.0} format "%.1fV"}
+		"Modem X Temperature"		{append \xc2\xb0C}
+		"Modem X Timing Lock"		{enum {0 "Not Locked" 1 "Locked"}}
+		"Modem X Timing Loop"  		{append mV}
+		"Modem X TX LO Lock"		{enum {0 "Not Locked" 1 "Locked"}}
+		"ODU X 12V Rail"			{expr {$value / 1000.0} format %.1fV}
+		"ODU X IF LO Lock"			{enum {0 "Not Locked" 1 "Locked"}}
+		"ODU X RF RX LO Lock"		{enum {0 "Not Locked" 1 "Locked"}}
+		"ODU X RF TX LO Lock"		{enum {0 "Not Locked" 1 "Locked"}}
+		"ODU X RX Loop Voltage"  	{append mV}
+		"ODU X RX Power"			{expr {$value / 10.0} format %.1fdBm}
+		"ODU X Temperature"			{append "\xc2\xb0C"}
+		"ODU X TX Loop Voltage"		{append mV}
+		"ODU X TX Mute"				{enum {0 "Normal" 1 "Muted"}}
+		"ODU X TX Power"			{expr {$value / 10.0} format %.1fdBm}
+		"PER Estimate"				{}
+		"Port 1 Link Integrity"		{enum {0 "No Link" 1 "OK"}}
+		"Port 2 Link Integrity"		{enum {0 "No Link" 1 "OK"}}
+		"Port 3 Link Integrity"		{enum {0 "No Link" 1 "OK"}}
+		"Port 4 Link Integrity"		{enum {0 "No Link" 1 "OK"}}
+		"Supervisory Comms"			{enum {0 "Not Established" 1 "Established"}}
+        "ODU X Comms"			    {enum {0 "Comms Failure" 1 OK -1 "Mismatch"}}
+	}
+}
+
+text {
+	display {
+		cgi display row {
+
+			# Get log entries into a list
+			set logfull [split [readfile [root]/var/run/web-alarms] \n]
+			set logfull [lsort $logfull]
+			set totlen [llength $logfull]
+			set first 1
+
+			html eval p {
+				if {$totlen <= 0} {
+					html puts "<i>No alarm data available.</i>"
+				}
+			}
+
+			html eval table class=alarms {
+				# Read each log record ..
+				foreach line $logfull {
+					try {
+						lassign [split $line ,] stamp name pri val
+					} on error msg {
+						html eval tr {
+							html eval td colspan=4 {
+								html str i $msg
+							}
+						}
+						continue
+					}
+
+					# Format each field in a table
+					if {$first} {
+						set first 0
+						html eval tr class=header {
+							html eval td colspan=4 {
+								set date [clock format $stamp -format "%a, %d %b %Y"]
+								set time [clock format $stamp -format "%H:%M"]
+								html str b "$date $time"
+							}
+						}
+					}
+
+					set generic_name [regsub {(Modem|ODU) [12]} $name {\1 X}]
+					# Now the value may need scaling
+					if {[info exists mapping($generic_name)]} {
+						set val [mapvalue $val $mapping($generic_name)]
+					}
+
+					html eval tr class=$pri {
+						html str td $pri
+						html str td $name
+						html str td class=value $val
+					}
+				}
+			}
+		}
+	}
+}
+
+button refresh {
+	label Refresh
+	editmode none
+	submit {
+		cgi nextpage $page
+	}
+}
+
+# vim: se ts=4:

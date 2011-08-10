@@ -1,0 +1,263 @@
+label "Users"
+title "Users"
+help {Configure user accounts and roles/access for this device}
+
+accesslevel install
+
+storage none
+
+bar "User Settings"
+
+init {
+	# Common function to check for at least 1 installer in user db, other than
+	# the passed userid.
+	proc have_installer {uf userid} {
+		foreach user [$uf keys users] {
+			array set data [$uf get users $user]
+			if {$data(userid) ne $userid && $data(role) eq "install"} {
+
+				# Found another install user
+				return 1
+			}
+		}
+
+		cgi error "There must be at least one installer."
+		return 0
+	}
+}
+
+text {
+	display display_page_help
+}
+
+table {
+	field userid {
+		label "User Name"
+		help {Enter user name. Alphanumeric, underscore	dash or dot}
+		display {
+			if {![cgi get add]} {
+				cgi addattrs disabled
+				cgi set $field [cgi get huserid]
+			} else {
+				display_field_help
+			}
+		}
+	}
+	field huserid {
+		stdmode hidden
+		editmode hidden
+	}
+	field password {
+		label Password
+		help {Leave Password and Confirm fields blank to skip password update
+			when only changing an existing user's role.}
+		type password blank
+		stdmode none
+		display display_field_help
+	}
+	field hpassword {
+		stdmode hidden
+		editmode hidden
+	}
+	field confirm {
+		label Confirm
+		help {Must match password above.}
+		type password blank
+		stdmode none
+		display display_field_help
+	}
+	field role {
+		label "Access Role"
+		help {Select user role.}
+		type {enum install admin user}
+		stdmode {enum install Installer admin Administrator user User}
+		editmode {select install Installer admin Administrator user User}
+		display display_field_help
+	}
+	field hrole {
+		stdmode hidden
+		editmode hidden
+	}
+	button modify {
+		label Modify
+		editmode none
+		stdmode image
+		setmode edit
+		display {
+			if {[cgi auth access $page] < 2} {
+				cgi return done
+			}
+		}
+		submit {
+			cgi set add 0
+		}
+	}
+}
+
+field add {
+	storage page
+	stdmode hidden
+	editmode hidden
+	default 0
+}
+
+button submit {
+	label Submit
+	stdmode none
+	submit {
+
+		# Function to validate entered user password
+		proc validatePW {password} {
+
+			# Currently a naive implementation only ..
+			if {[string length $password] < 1} {
+				return "Password is less than 1 char"
+			}
+
+			return ""
+		}
+
+		# Add/update user id in database
+		set uf [db open [root]/etc/config/users]
+		set password [cgi get password]
+		set confirm [cgi get confirm]
+		set role [cgi get role]
+		set change 1
+		set newpassword 1
+
+		if {[cgi get add]} {
+
+			# New user being added ..
+			set userid [cgi get userid]
+			set change_desc "added"
+
+			# Validate the userid
+			if {![regexp {^[a-zA-Z0-9_.-]+$} $userid} {
+				cgi error "Username \"$userid\" must be alphanumeric or underscore, dash or dot." userid
+				set change 0
+			} elseif {$userid in {root support}} {
+				cgi error "That username is reserved. Please select a different username." userid
+				set change 0
+			} elseif {$userid eq ""} {
+				cgi error "No user name entered." userid
+				set change 0
+			} elseif {[lsearch [$uf keys users] $userid] >= 0} {
+				cgi error "User \"$userid\" already exists." userid
+				set change 0
+			}
+		} else {
+
+			# Existing user being modified ..
+			set userid [cgi get huserid]
+			set change_desc "updated"
+
+			# If user did not touch password then don't validate it.
+			if {$password eq "" && $confirm eq ""} {
+				set newpassword 0
+
+				# Check that at least the user role did change
+				if {$role eq [cgi get hrole]} {
+					set change 0
+				}
+			}
+		}
+
+		# Validate password if new user or if existing user who modified password
+		if {$change && $newpassword} {
+			if {$password != $confirm} {
+				cgi error "Passwords don't match." confirm
+				set change 0
+			} else {
+				set result [validatePW $password]
+				if {$result ne ""} {
+					cgi error $result password
+					set change 0
+				} else {
+					cgi set hpassword [cgi auth hash $userid $password]
+				}
+			}
+		}
+
+		# Ensure we have at least one installer
+		if {![cgi get add] && $role ne "install" && ![have_installer $uf $userid]} {
+			set change 0
+		}
+
+		# Save new user details
+		if {$change} {
+			$uf add users [list userid $userid role $role password [cgi get hpassword]]
+			$uf commit
+			cgi success "User \"$userid\" $change_desc."
+		}
+
+		$uf close
+	}
+}
+
+button cancel {
+	label Cancel
+	stdmode none
+}
+
+button deleteuser {
+	label Delete
+	stdmode none
+	display {
+		if {[cgi get add]} {
+			cgi return done
+		}
+	}
+	submit {
+		set userid [cgi get huserid]
+
+		if {$userid eq [cgi auth username]} {
+			cgi error "Can not delete yourself."
+			return
+		}
+
+		set uf [db open [root]/etc/config/users]
+
+		# Ensure we have at least one other installer
+		if {[have_installer $uf $userid]} {
+
+			# Delete this user id from database
+			$uf delete users $userid
+			$uf commit
+			$uf close
+			cgi success "User \"$userid\" deleted."
+			cgi vars discard
+		}
+	}
+}
+
+button new {
+	label "Add User"
+	editmode none
+	setmode edit
+	submit {
+		cgi set add 1
+	}
+}
+
+display {
+	package require common
+
+	if {[cgi mode std]} {
+		# Default user database schema
+		set defschema "@users userid role password"
+		set uf [db open [root]/etc/config/users $defschema]
+
+		# Iterate through user database and set data in table ..
+		set row 0
+		foreach user [lsort [$uf keys users]] {
+			cgi row $row
+			incr row
+			array set data [$uf get users $user]
+			cgi set userid $data(userid) huserid $data(userid)
+			cgi set role $data(role) hrole $data(role)
+			cgi set hpassword $data(password)
+		}
+
+		$uf close
+	}
+}

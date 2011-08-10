@@ -1,0 +1,121 @@
+# Date/Time & timezone configuration for the device
+# Value is stored as a symlink from /etc/config/TZ -> /usr/share/zoneinfo/<tz>
+label "Date/Time"
+title "Date, Time & Timezone"
+help {Set the current time on the device and set the timezone.
+	Press the "Sync from PC" button to set the device's time to your host's PC time.}
+
+bar "Date, Time & Timezone"
+
+accesslevel status
+
+text {
+	display display_page_help
+}
+
+init {
+	set tzfile [cgi configdir]/TZ
+	set zonefile [root]/usr/share/zoneinfo.list
+}
+
+field date {
+	label "Current Date/Time"
+	stdmode readonly
+	editmode none
+	storage none
+	help {Shows the current time of this device.
+		Time is local, i.e. includes timezone offset.}
+	display {
+		cgi set $field [clock format [clock seconds]]
+		display_field_help modes std
+	}
+}
+
+field tz {
+	label "Timezone"
+	help {Select a timezone for the device}
+	display {
+		if {[cgi mode std]} {
+			display_field_help
+		} else {
+			# Build the list of timezones. The name is the value.
+			foreach {zone spec} [readfile $::zonefile] {
+				lappend zones $zone $zone
+			}
+			display_field_help class elemrowfirst display {
+				cgi_select_list $field [cgi get $field] $zones
+			}
+		}
+	}
+	default Australia/Brisbane
+}
+
+field synctime {
+	stdmode hidden
+	editmode none
+	storage none
+}
+
+button edit {
+	label Edit
+	editmode none
+	setmode edit
+}
+
+button sync {
+	label "Sync from PC"
+	editmode none
+	stdmode onclick=syncTime()
+	display {
+		# Define function to return current time in millisecs since epoch.
+		html str script type=text/javascript {
+			function syncTime()
+			{
+				var now = new Date();
+				document.form.synctime.value=Date.UTC(
+					now.getUTCFullYear(),
+					now.getUTCMonth(),
+					now.getUTCDate(),
+					now.getUTCHours(),
+					now.getUTCMinutes(),
+					now.getUTCSeconds()
+				);
+			}
+		}
+	}
+
+	submit {
+		# Get UTC date/time "millisecs since epoch" string from javascript above on PC
+		# and round to secs since epoch.
+		set utcsecs [expr ([cgi get synctime] + 500) / 1000]
+
+		# Convert to the string format required to set unix time, see man date.
+		# i.e. Convert to "MMDDhhmmCCYY.ss" Note this is in local time.
+		set unixset [clock format $utcsecs -format "%m%d%H%M%Y.%S"]
+
+		# Also create human printable string for message
+		set unixstr [clock format $utcsecs]
+
+		# Call a script to actually set the date+time
+		if {[catch {exec set-date-time $unixset $unixstr} result]} {
+			cgi error "Problem setting time: $result"
+		} else {
+			cgi success "Time successfully updated to $unixstr"
+		}
+	}
+}
+
+button submit {
+	label Submit
+	stdmode none
+	submit {
+		set zones [readfile $::zonefile]
+		file delete $::tzfile
+		writefile $::tzfile $zones([cgi get tz])\n
+	}
+}
+
+button cancel {
+	label Cancel
+	stdmode none
+}

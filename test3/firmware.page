@@ -1,0 +1,153 @@
+label "Firmware Upgrade"
+title "Firmware Upgrade"
+
+accesslevel install
+
+# This page is in edit mode by default
+setmode edit
+storage none
+
+head {
+<style>
+span#seconds { color: red; }
+</style>
+}
+
+init {
+	package require fileutil
+	package require javascript
+
+	set upgrading 0
+	# Easiest way to see if the upgrade is still in progress
+	if {[catch {exec /sbin/setlock -d 0 /var/run/upgrade.lock true}]} {
+		# Failed, so must stil be in progress
+		set upgrading 1
+	}
+
+	proc disable_if_upgrading {} {
+		if {$::upgrading} {
+			cgi addattrs disabled
+		}
+	}
+}
+
+# Display the upgrading status
+text {
+	display {
+		if {$upgrading == 1} {
+			html eval div class=warningmsg {
+				html str h2 id=upgradeheader Upgrading
+				html eval table id=upgrade {
+					html eval tr {
+						html str td id=done width=0% {}
+						html str td id=togo width=100% {}
+					}
+				}
+				html str p id=upgradestatus "Waiting for upgrade to begin"
+			}
+			javascript script {
+				var first = 0;
+				/* This device takes about the following secs to reboot */
+				var reboottimeout = 15;
+
+				upgrade_get_status();
+			}
+		}
+	}
+}
+
+bar "Firmware Version"
+
+field version {
+	label "Current Version"
+	editmode readonly
+	display {
+		cgi set $field [readfile /etc/version ?]
+	}
+}
+
+field date {
+	label "Build Date"
+	editmode readonly
+	display {
+		cgi set $field [readfile /etc/date ?]
+	}
+}
+
+bar "Upgrade Firmware"
+text {
+	str {<p>Select a firmware image file from your host and then press the
+	<b>Upgrade</b> button to upgrade this device's firmware from that
+	file.</p>}
+}
+
+upload file {
+	label "Firmware to upload"
+	help {Browse for the firmware image to use to upgrade}
+	display {
+		disable_if_upgrading
+	}
+}
+
+button upgrade {
+	label Upgrade
+	display {
+		disable_if_upgrading
+	}
+	submit {
+		# Check that the file looks approximately correct
+		if {[cgi file length file] == 0} {
+			cgi error "This doesn't look like a valid image" file
+			return
+		}
+		if {[cgi auth role] eq "factory"} {
+			# Special debugging support
+			if {[string match *super*bit [cgi file name file]} {
+				cgi file save file /settings/cache/super.bit
+
+				reboot_system "Updating supervisory bit file"
+				return
+			}
+			if {[string match *modem*bit [cgi file name file]} {
+				cgi success "Looks like a modem bit file"
+				cgi file save file /tmp/modem.bit
+				foreach m {1 2} {
+					catch {
+						exec setlock /var/run/hotplug.lock modem-hotplug /tmp/modem.bit $m
+						cgi success "Programmed modem $m"
+					}
+				}
+				file delete /tmp/modem.bit
+				return
+			}
+		}
+
+		cgi file save file /tmp/upgrade.tar
+
+		# Now open a pipe and exec the firmware upgrade script
+		lassign [socket pipe] r w
+
+		# Any options needed for upgrade-firmware
+		set opts {}
+		lappend opts -web [cgi getenv SERVER_PORT]
+
+		# Must close $w after exec
+		exec setlock -d 0 /var/run/upgrade.lock upgrade-firmware {*}$opts /tmp/upgrade.tar </dev/null 2>>/var/log/upgrade.log >@$w &
+		$w close
+
+		# Now read the response. The first line will start with Usage:, Error: or Updating:
+		set buf "upgrade-firmware failed"
+		gets $r buf
+		if {[string match "Failed to lock *" $buf]} {
+			cgi error "Firmware upgrade is already in progress"
+		} elseif {[string match "Updating:*" $buf]} {
+			# If we can't provide progress or something goes wrong,
+			# at least do a page refresh when the firmware upgrade should be complete.
+			# About 45 seconds for the upgrade and 20 seconds for the reboot
+			cgi http header Refresh 70
+			set upgrading 1
+		} else {
+			cgi error $buf
+		}
+	}
+}

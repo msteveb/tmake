@@ -1,0 +1,65 @@
+label "Hot Standby"
+title "Hot Standby Status"
+summary "Hot Standby Status and Control"
+
+accesslevel status
+
+storage none
+
+bar "Hot Standby Status"
+
+field status {
+	label "Status"
+	display {
+		set active [readfile /var/run/txactive 1]
+		set m1bad [readfile /supervisory/modctrl/m1bad 0]
+		set state [readfile /supervisory/modctrl/state 1]
+		if {$state == 2} {
+			set msg "Establishing Link"
+		} elseif {$state == 3} {
+			set msg "Testing Link"
+		} elseif {$active == 1} {
+			set msg "Operating on Link 1"
+		} else {
+			set msg "Fallback to Link 2"
+		}
+		cgi set $field $msg
+	}
+}
+
+auto_refresh_page
+
+bar "Hot Standby Control"
+
+text {
+	display {
+		html str div class=infobox {
+			If Hot Standby Control has identified a modem as non-functional, it
+			may be replaced and Hot Standby Control reset using the button below.
+		}
+	}
+}
+
+button hsreset {
+	label "Reset Hot Standby"
+	submit {
+		if {[cgi auth access $page rw]} {
+			set ::argv0 web
+			package require logging
+			log_info "Hot Standby Reset by [cgi auth username]"
+			kill -TERM [readfile /var/run/modctrl.pid]
+			cgi success "Hot Standby Control has been reset"
+		}
+	}
+}
+
+display {
+	if {[cgi storage get mode.mode] != 0} {
+		html eval div class=infobox {
+			html puts "Link is not configured for <a href=mode>Hot Standby</a> mode"
+		}
+		cgi return done
+	}
+}
+
+# vim: se ts=4:

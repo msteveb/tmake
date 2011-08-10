@@ -1,0 +1,27 @@
+storage none
+pageformat raw
+
+accesslevel status
+
+field type {
+	stdmode hidden
+	default hour
+}
+
+display {
+	package require rrdgraph
+
+	set r [rrdgraph system state [cgi get type]]
+	$r stdinit
+	$r title "System State"
+	$r ylabel "up"
+	$r params -l 0 -u 5 -y none
+
+	$r bool up up -label "System Up" -value 4
+	$r bool m1 odu1comms -label "ODU 1" -value 3
+	$r bool m2 odu2comms -label "ODU 2" -value 2
+	$r bool super supercomms -label "Supervisory Link" -value 1
+
+	$r output
+	$r close
+}

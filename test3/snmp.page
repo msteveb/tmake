@@ -1,0 +1,112 @@
+title "SNMP"
+label "SNMP"
+help {Configure the SNMP agent settings, including traps}
+
+accesslevel status
+
+ifmodified_message
+
+bar "SNMP Settings"
+
+text {
+	display display_page_help
+}
+
+field enable {
+	label "Enable SNMP"
+	type boolean
+	default 0
+	help {Enable or disable the SNMP agent}
+	display display_field_help
+}
+
+field community {
+	label "Community"
+	type text
+	default public
+	help {The (read-only) SNMP community string}
+	display display_field_help
+}
+
+field sendtraps {
+	label "Send Traps"
+	type {enum 0 1 2}
+	stdmode {enum 0 "None" 1 "Major Only" 2 "Major + Minor"}
+	editmode {select 0 "None" 1 "Major Only" 2 "Major + Minor"}
+	default 0
+	help {Enable or disable the sending of traps}
+	display display_field_help
+}
+
+field trapcommunity {
+	label "Trap Community"
+	type text
+	default public
+	help {The SNMP community string for traps}
+	display display_field_help
+}
+
+field trapdest {
+	label "Trap Destinations"
+	help {The space-separated list of IP address destinations for traps}
+	type ipaddrlist blank
+	editmode size=60
+	display {
+		display_unset
+		display_field_help
+	}
+}
+
+field syscontact {
+	label "System Contact"
+	type text
+	default unknown
+	help {The value to return for SNMP sysContact field}
+	display display_field_help
+}
+
+field syslocation {
+	label "System Location"
+	type text
+	default unknown
+	help {The value to return for SNMP sysLocation field}
+	display display_field_help
+}
+
+button submit {
+	label Submit
+	stdmode none
+	submit {
+		if {[cgi get sendtraps]} {
+			if {[cgi get trapdest] eq ""} {
+				cgi warning "Traps are enabled but no destinations are set"
+			}
+		}
+		save_config
+	}
+}
+
+button edit {
+	label Edit
+	editmode none
+	setmode edit
+}
+
+button cancel {
+	label Cancel
+	stdmode none
+}
+
+text {
+	display {
+		if {[cgi mode std]} {
+			cgi display row {
+				html tag hr
+				html eval p {
+					set mibfile [file tail [glob /etc/mibs/ETHERMUX-E620-V*.mib]]
+					html puts "<b>Note:</b> The E620 SNMP MIB may be downloaded at <a href=/$mibfile>$mibfile</a>"
+				}
+			}
+		}
+	}
+}

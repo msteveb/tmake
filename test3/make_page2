@@ -1,0 +1,71 @@
+#!/bin/bash
+# Run this script to create all *2.page files from the *1.page files
+# since they are just a copy with a few string name changes. Run this
+# after you edit any *1.page file but before you check anything in.
+#
+# Mark Blakeney, Oct 2010.
+#
+
+usage() {
+	echo "Usage: `basename $0` [-options] [files ..]"
+	echo "Options: <none>"
+	exit 1
+}
+
+while getopts ? c; do
+	case $c in
+		?) usage;;
+	esac
+done
+
+shift `expr $OPTIND - 1`
+
+# This script will update all *2.pages by default but can be called for
+# a specific page.
+args="*1.page"
+if [ $# -ne 0 ]; then
+	args=$*
+fi
+
+tmp=$(mktemp /tmp/mkhspa1XXXXX)
+trap "rm -f $tmp; exit" 0 1 2 3 15
+for page1 in $args; do
+	page2=${page1//1/2}
+
+	# Copy first to duplicate permissions
+	cp -a $page1 $tmp
+
+	sed \
+		-e 's/LINK1/LINK2/g' \
+		-e 's/link1/link2/g' \
+		-e 's/Link1/Link2/g' \
+		-e 's/MODEM1/MODEM2/g' \
+		-e 's/modem1/modem2/g' \
+		-e 's/Modem1/Modem2/g' \
+		-e 's/RF1/RF2/g' \
+		-e 's/rf1/rf2/g' \
+		-e 's/ODU1/ODU2/g' \
+		-e 's/odu1/odu2/g' \
+		-e 's/LINK 1/LINK 2/g' \
+		-e 's/link 1/link 2/g' \
+		-e 's/Link 1/Link 2/g' \
+		-e 's/MODEM 1/MODEM 2/g' \
+		-e 's/modem 1/modem 2/g' \
+		-e 's/Modem 1/Modem 2/g' \
+		-e 's/RF 1/RF 2/g' \
+		-e 's/rf 1/rf 2/g' \
+		-e 's/ODU 1/ODU 2/g' \
+		-e 's/odu 1/odu 2/g' \
+		$page1 >$tmp
+
+	if ! cmp -s $tmp $page2; then
+		mv -f $tmp $page2
+		echo "$page2 UPDATED."
+	else
+		echo "$page2 not updated."
+	fi
+done
+
+exit 0
+
+# vim: se ts=4:

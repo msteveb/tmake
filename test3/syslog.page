@@ -1,0 +1,98 @@
+label "Syslog"
+
+title "System Log"
+
+summary "Display the system message log"
+
+accesslevel support
+
+setmode edit
+storage none
+
+bar "System Log"
+
+text intro {
+	str {
+		<p>Display, search and clear the system log messages</p>
+	}
+}
+
+field search {
+	label "Search"
+	editmode text
+	help "Search the log display"
+}
+
+field full {
+	storage page
+	editmode hidden
+	default 0
+}
+
+button refresh {
+	label "Refresh"
+	help "Refresh the log display"
+}
+
+button clear {
+	label "Clear Log"
+	help "Clear the log display"
+	editmode newline
+	submit -tcl {
+		cgi success "Message log cleared"
+		file delete /var/log/messages
+	}
+}
+
+text log {
+	display -tcl {
+		cgi display row {
+			html tag hr
+			set pattern ""
+			set count 0
+			if {[cgi get search] ne ""} {
+				set pattern "*[cgi get search]*"
+				cgi set full 1
+			}
+
+			html eval tt id=syslog {
+				set filename /var/log/messages
+				if {[file exists $filename]} {
+					set f [open $filename]
+
+					if {![cgi get full]} {
+						# By default, show approx. the last 40 lines
+						# 3200 is about 40 lines at 80 chars
+						if {[file size $filename] > 3200} {
+							html str a "href=[cgi href $page full 1]" "...show earlier messages..."
+							html tag br
+							$f seek [expr {[file size $filename] - 3200}]
+							# discard a possible partial line
+							$f gets
+						}
+					}
+					while {[gets $f buf] >= 0} {
+						if {$pattern ne "" && ![string match $pattern $buf]} {
+							continue
+						}
+						# Remove the (nnnnnn) timestamp
+						regsub {\(1[0-9]*\)} $buf "" buf
+						html escape $buf
+						html tag br
+						incr count
+					}
+					close $f
+				}
+				if {$count == 0} {
+					if {$pattern eq ""} {
+						html str i "Log is empty"
+					} else {
+						html str i "No matches"
+					}
+				}
+			}
+		}
+	}
+}
+
+# vim: se ts=4 syn=tcl:

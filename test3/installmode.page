@@ -1,0 +1,442 @@
+label "Installer"
+title "Installer Mode"
+help {Enable Installer mode for this device}
+
+accesslevel install
+
+ifmodified_message
+
+init {
+	package require javascript
+	set conffile [root]/var/run/installmode
+
+	# Add $incval to $link txpower
+	proc txpower {link incval} {
+		set cf [conf $::conffile]
+		set value [expr {[cgi get txpower$link] + $incval}]
+
+		# Range check
+		if {$value > 30} {
+			set value 30
+		} elseif {$value < 1} {
+			set value 1
+		}
+
+		$cf set txpower$link $value
+		$cf close -save
+		exec installer-mode setpower $link $value
+	}
+
+	set installmode_help {
+		0 {<b>Note:</b> This page allows special installation and test modes to be selected. Do <i>not</i> use in normal operation.}
+		1 {Each modem is looped internally. This can help to diagnose modem issues vs. RF issues.}
+		2 {Each RF Unit is configured in loopback mode.<br><i>Note: not all RF hardware supports RF loopback mode.</i>}
+		3 {The system is configured in fixed QPSK mode. The TX power may be adjusted with the buttons below to assist
+		with optimising the system configuration.}
+	}
+}
+
+head {
+<style>
+.bar_outer {
+	border: solid 1px black;
+	width: 406px;
+	padding: 0;
+	margin: 8px 2px 6px 6px;
+	background: white;
+}
+
+.bar_innerlow, .bar_inner {
+	overflow: visible;
+	background: #7e9bf2;
+	padding: 2px;
+	margin: 0;
+	height: 14px;
+	border: solid 1px #e8e8ff;
+}
+
+.bar_innerlow {
+	background: #f44;
+}
+
+p.bar_label {
+	overflow: visible;
+	margin: 0px 2px 2px 0px;
+	padding: 0;
+	color: black;
+	white-space: nowrap;
+}
+input#up1, input#up2, input#down1, input#down2 {
+	border: none;
+	margin: 0;
+	padding: 0;
+	width: 16px;
+	height: 16px;
+	background: transparent no-repeat center;
+}
+input#up1, input#up2 {
+	background: url("/img/arrowup16.jpg") no-repeat;
+}
+input#down1, input#down2 {
+	background: url("/img/arrowdown16.jpg") no-repeat;
+}
+</style>
+}
+
+field get {
+	type {enum 0 1}
+	storage page
+	stdmode none
+	editmode none
+	default 0
+}
+
+bar "Installer Mode Settings"
+
+text {
+	display display_page_help
+}
+
+field mode {
+	label "Installer Mode"
+	type {enum 0 1 2 3 4}
+	stdmode {enum 0 "Off" 1 "Modem Loopback Mode" 2 "RF Loopback Mode" 3 "Fixed Output Panning Mode" 4 "External Loopback Mode"}
+	editmode {select 0 "Off" 3 "Fixed Output Panning Mode"}
+	storage custom
+	storagename install.mode.tmp
+	default 0
+	help {Enable or disable panning mode}
+	display display_field_help
+}
+
+text {
+	display {
+		if {[cgi mode edit]} {
+			return
+		}
+
+		html eval div class=infobox {
+			html puts $installmode_help([cgi get mode])
+		}
+	}
+}
+
+if 0 {
+field txmute1 {
+	label "Tx1 Mute"
+	help "Select whether Tx1 mute is off/auto"
+	storagename rf1.txmute
+	type {enum 1 0}
+	stdmode {enum 1 Muted 0 Auto}
+	editmode {select 1 Muted 0 Auto}
+	default 0
+	display {
+		display_field_help
+	}
+}
+
+field txmute2 {
+	label "Tx2 Mute"
+	help "Select whether Tx2 mute is off/auto"
+	storagename rf2.txmute
+	type {enum 1 0}
+	stdmode {enum 1 Muted 0 Auto}
+	editmode {select 1 Muted 0 Auto}
+	default 0
+	display {
+		display_field_help
+	}
+}
+}
+
+button submit {
+	label Submit
+	stdmode none
+	submit {
+		set newmode [cgi get mode]
+
+		# Save new mode
+		set cf [conf $conffile]
+		$cf set mode $newmode
+		$cf close -save
+
+		# Action new mode
+		exec installer-mode setmode [lindex {none modem rf panning} $newmode]
+	}
+}
+
+button edit {
+	label Change
+	editmode none
+	setmode edit
+}
+
+button cancel {
+	label Cancel
+	stdmode none
+}
+
+bar -std "Link Status"
+
+text {
+	display {
+		if {[cgi mode std]} {
+			html eval div class=warningmsg {
+				html str h2 "Link 1"
+				html str p "Rx Power"
+				html eval div class=bar_outer {
+					html eval div id=prx1 class=bar_inner "style=width: 0px" {
+						html str p id=vrx1 class=bar_label ""
+					}
+				}
+
+				if {[cgi get mode] != 0} {
+					html str p "Signal Quality"
+					html eval div class=bar_outer {
+						html eval div id=psq1 class=bar_inner "style=width: 0px" {
+							html str p id=vsq1 class=bar_label ""
+						}
+					}
+				}
+
+				html str p id=locked1 "-"
+			}
+		}
+	}
+}
+
+field txpower1 {
+	label "Tx1 Power"
+	stdmode nonewline
+	editmode none
+	type number
+	storage none
+	default 0
+	display {
+		if {[cgi get mode] != 3} {
+			cgi return done
+		}
+	}
+}
+
+button down1 {
+	editmode none
+	stdmode nonewline image
+	label "-1"
+	display {
+		if {[cgi get mode] != 3} {
+			cgi return done
+		}
+	}
+	submit {
+	   txpower 1 -1
+	}
+}
+
+button up1 {
+	editmode none
+	stdmode newline image
+	label "+1"
+	display {
+		if {[cgi get mode] != 3} {
+			cgi return done
+		}
+	}
+	submit {
+	   txpower 1 1
+	}
+}
+
+text {
+	display {
+		if {[cgi mode std] && [cgi storage get mode.modem2]} {
+			html tag hr
+			html eval div class=warningmsg {
+				html str h2 "Link 2"
+				html str p "Rx Power"
+				html eval div class=bar_outer {
+					html eval div id=prx2 class=bar_inner "style=width: 0px" {
+						html str p id=vrx2 class=bar_label ""
+					}
+				}
+
+				if {[cgi get mode] != 0} {
+					html str p "Signal Quality"
+					html eval div class=bar_outer {
+						html eval div id=psq2 class=bar_inner "style=width: 0px" {
+							html str p id=vsq2 class=bar_label ""
+						}
+					}
+				}
+
+				html str p id=locked2 "-"
+			}
+		}
+	}
+}
+
+field txpower2 {
+	label "Tx2 Power"
+	stdmode nonewline
+	editmode none
+	type number
+	default 0
+	storage none
+	display {
+		if {[cgi get mode] != 3 || ![cgi storage get mode.modem2]} {
+			cgi return done
+		}
+	}
+}
+
+button down2 {
+	editmode none
+	stdmode nonewline image
+	label "-1"
+	display {
+		if {[cgi get mode] != 3 || ![cgi storage get mode.modem2]} {
+			cgi return done
+		}
+	}
+	submit {
+		txpower 2 -1
+	}
+}
+
+button up2 {
+	editmode none
+	stdmode newline image
+	label "+1"
+	display {
+		if {[cgi get mode] != 3 || ![cgi storage get mode.modem2]} {
+			cgi return done
+		}
+	}
+	submit {
+	   txpower 2 1
+	}
+}
+
+# Implement 'submit -onget' rather than 'display' so
+# we can control the http headers and output raw data
+submit -onget {
+	if {[cgi get get] == 1} {
+		# Running as the background fetch, so just return the value
+		# First output the headers
+		# Don't let IE cache this page
+		cgi http header Pragma no-cache
+		cgi http header Cache-Control max-age=0,no-cache,no-store
+		cgi http response 200
+
+		# No standard html should be produced
+		cgi nodisplay
+
+		proc convpow {link rawval} {
+			set per [expr {int($rawval+100)}]
+			set val ${rawval}dBm
+			return "prx$link:$per vrx$link:$val"
+		}
+
+		proc convsq {link rawval} {
+			set per [expr {$rawval * 4}]
+			set val [format %d%% $per]
+			return "psq$link:$per vsq$link:$val"
+		}
+
+		proc dofetch {link} {
+			try {
+				set result [exec installer-mode fetch $link]
+			} on error error {
+				syslog -ident installmode error "Failed to execute installer-mode: $error"
+				set result ""
+			}
+
+			return $result
+		}
+
+		set result ""
+		foreach i [range 1 3] {
+			if {[cgi storage get mode.modem$i]} {
+				set res [dofetch $i]
+				if { $res ne "" } {
+					append result "[convpow $i [lindex $res 0]] [convsq $i [lindex $res 1]] locked$i:[lindex $res 2] "
+				}
+			}
+		}
+
+		puts -nonewline $result
+		cgi return done
+	}
+}
+
+display {
+
+	# Get values from saved state into page fields
+	set cf [conf $conffile]
+	set mode [$cf get mode 0]
+
+	# Ignore special factory modes
+	if {$mode > 3} {
+		set mode 0
+	}
+
+	cgi set mode $mode
+
+	cgi set txpower1 [$cf get txpower1 \
+		[expr {[cgi storage get link1.txpower]/10}]]
+	cgi set txpower2 [$cf get txpower2 \
+		[expr {[cgi storage get link2.txpower]/10}]]
+	$cf close
+
+	javascript script {
+		function getStatus() {
+			xmlhttpGet('installmode?get=1', updateStatus);
+		}
+		function updateStatus(result) {
+
+			if (result.indexOf('HTML') >= 0) {
+				location.replace('installmode');
+				return;
+			}
+
+			var data = result.split(' ');
+
+			for (var i = 0; i < data.length; i++) {
+				var val = data[i].split(':');
+				var elem = document.getElementById(val[0]);
+
+				if (!elem) {
+					continue;
+				}
+
+				if (val[0].match(/^locked/)) {
+					var text = (val[1] == 1) ? 'Yes' : 'No';
+					elem.innerHTML = 'Locked: <strong>' + text + '</strong>';
+				}
+				else if (val[0].match(/^p/)) {
+
+					/* IE does not like a zero width */
+					var width = (val[1] == 0) ? 1 : (val[1] * 4);
+
+					elem.setAttribute('style', 'width: ' + width + 'px');
+					if (val[1] > 20) {
+						elem.setAttribute('class', 'bar_inner');
+					}
+					else {
+						elem.setAttribute('class', 'bar_innerlow');
+					}
+				}
+				else if (val[0].match(/^v/)) {
+					elem.innerHTML = val[1];
+				}
+			}
+
+			/* Update progress every second */
+			setTimeout(getStatus, 1000);
+		}
+
+		getStatus();
+	}
+}
+
+# vim: se ts=4:

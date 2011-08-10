@@ -1,0 +1,216 @@
+label "Network"
+title "Network Settings"
+help "Configure the site name and management network settings for this device"
+
+accesslevel status
+
+init {
+	package require network
+	proc setrowstatus {{field ""}} {
+		if {[cgi mode std]} {
+			if {[cgi get link] == 0} {
+				cgi addattrs -container class="linkdown"
+				if {$field ne ""} {
+					cgi set $field ""
+				}
+			}
+		}
+	}
+}
+
+ifmodified_message
+
+bar "Network Settings"
+
+text {
+	display display_page_help
+}
+
+field name {
+	label "Site Name"
+	type text
+	storagename system.id
+	default "unknown"
+	help {Name to identify this site}
+	display display_field_help
+}
+
+field ipaddr {
+	label "IP Address"
+	type ipaddr
+	storagename net.ipaddr
+	help {IP address of this terminal}
+	display display_field_help
+}
+
+field netmask {
+	label Subnet
+	type {number 0 32} ipaddr
+	storagename net.netmask
+	help {Subnet or netmask for the network.<br>The default of 255.255.255.0 (24) is usually a good choice}
+	default "255.255.255.0"
+	display display_field_help
+}
+
+field gateway {
+	label "Default Gateway"
+	type ipaddr blank
+	help {Default gateway (optional)}
+	storagename net.gateway
+	display {
+		display_unset
+		display_field_help
+	}
+}
+
+field dns_servers {
+	label "DNS Servers"
+	help {List of DNS servers (IP Addresses) that can be used, separated by
+	spaces.<br>If none are specified, the default gateway is used.}
+	type ipaddrlist blank
+	storagename net.dnsservers
+	editmode size=60
+	display {
+		display_unset
+		display_field_help
+	}
+}
+
+button edit {
+	label Edit
+	editmode none
+	setmode edit
+}
+
+button submit {
+	label Submit
+	stdmode none
+	submit {
+		# is subnet a netmask
+		set x [cgi get netmask]
+		if {[catch {expr {$x + 0}}]} {
+			# Must be a netmask
+			set subnet [subnet $x]
+			set netmask [netmask $subnet]
+			if {$x != $netmask} {
+				cgi error "Not a valid netmask" netmask
+				return
+			}
+		} else {
+			# Must be a subnet
+			set netmask [netmask $x]
+			set subnet [subnet $netmask]
+			if {$x != $subnet} {
+				cgi error "Not a valid subnet" netmask
+				return
+			}
+			cgi set netmask $netmask
+		}
+
+		# Check local and remote IP addresses are on same subnet
+		set ipaddr [ipv4_int [cgi get ipaddr]]
+		set netmask [ipv4_int [cgi get netmask]]
+		set gateway [ipv4_int [cgi get gateway]]
+
+		# Check default gateway on same subnet also
+		if {$gateway != 0 && ($netmask & $ipaddr) != ($netmask & $gateway)} {
+			cgi error "Default gateway is not on same subnet"
+		}
+		save_config
+	}
+}
+
+button cancel {
+	label Cancel
+	stdmode none
+}
+
+bar -std "Network Link Status"
+
+table {
+	field port {
+		label "Port"
+		editmode none
+		display {
+			setrowstatus
+		}
+	}
+
+	field media {
+		label "Media"
+		editmode none
+		display {
+			setrowstatus
+		}
+	}
+
+	field link {
+		label "Link"
+		editmode none
+		stdmode {enum 0 Down 1 Up}
+		display {
+			setrowstatus
+		}
+	}
+
+	field speed {
+		label "Speed"
+		editmode none
+		stdmode {enum "" - 0 Unknown 10 10 100 100 1000 1000}
+		display {
+			setrowstatus $field
+		}
+	}
+
+	field duplex {
+		label "Duplex"
+		editmode none
+		stdmode {enum "" - 0 Half 1 Full}
+		display {
+			setrowstatus $field
+		}
+	}
+	field pause {
+		label "Pause"
+		editmode none
+		stdmode {enum "" - 0 None 1 Pause}
+		display {
+			setrowstatus $field
+		}
+	}
+}
+
+display {
+	package require common
+	package require config
+	set base [root]/proc/switch
+
+	# Iterate over each port ..
+	foreach i {0 1 2 3} {
+		cgi row $i
+		set port [expr $i + 1]
+		cgi set port $port
+
+		# Indicate type of media
+		if {[string match "*x" [cgi storage get switch.port$port]]} {
+			cgi set media "Fibre"
+			set phy 13
+		} else {
+			cgi set media "Copper"
+			set phy [expr $port + 16]
+		}
+
+		# Iterate over each field ..
+		foreach {field default} {link 0 speed "" duplex "" pause ""} {
+			cgi set $field [readfile $base/$phy/$field $default]
+		}
+
+	}
+}
+
+button refresh {
+	label Refresh
+	editmode none
+}
+
+# vim: se ts=4:

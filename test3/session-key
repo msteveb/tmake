@@ -1,0 +1,155 @@
+#!/usr/bin/env cgitclsh
+# vim: se ts=4 syn=tcl:
+#
+# Usage: session-key -create [-expiry seconds] var value ...
+#
+#        Creates a new session with the given exiry time, or 1 year
+#        if not specified
+#        Stores the var=value pairs with the session.
+#        Returns the unique session key on stdout
+#
+# Usage: session-key -check [-show|-delete] session-key var value ...
+#
+#        Checks that the session key is valid, has not expired and that
+#        any given var=value pairs match what was stored during create.
+#
+#        Returns 0 if OK or 1 if the check fails
+#
+#        If -delete is specified and the check is OK, the session is deleted.
+#
+#        If -show is specified and the check is OK, returns a (Tcl) list of
+#        var value ... on stdout
+#
+# Usage: session-key -delete session-key
+#
+#        Immediately deletes the given session. No error if the session doesn't exist.
+#
+# Usage: session-key -cleanup
+#
+#        Examines all session files and deletes any which have expired
+#
+#        Returns 0 if OK or 1 if the check fails
+#
+# Usage: session-key -list
+#
+#        Lists current sessions
+
+package require getopt
+package require auth
+
+proc dputs {msg} {
+	if {$::opt_debug} {
+		puts $msg
+	}
+}
+
+proc usage {} {
+	puts "Usage: session-key -create \[-expiry seconds\] var value ..."
+	puts "       session-key -check \[-show|-delete\] session-key var value ..."
+	puts "       session-key -delete session-key"
+	puts "       session-key -cleanup"
+	puts "       session-key -list"
+}
+
+file mkdir [auth_session_dir]
+
+set opt_debug 0
+set opt_show 0
+set opt_delete 0
+set cmd -unknown
+set expiry [expr {3600 * 24 * 365}]
+
+getopt {
+	-create {
+		set cmd $arg
+	}
+	-check {
+		set cmd $arg
+	}
+	-cleanup {
+		set cmd $arg
+	}
+	-list {
+		set cmd $arg
+	}
+	-expiry {
+		set expiry [nextarg]
+	}
+	-debug {
+		incr opt_debug
+	}
+	-show {
+		incr opt_show
+	}
+	-delete {
+		incr opt_delete
+	}
+}
+
+proc do-create {args} {
+	puts [auth_create_session $::expiry {*}$args]
+	return 0
+}
+
+proc do-check {key args} {
+	set action check
+	if {$::opt_delete} {
+		set action delete
+	}
+	set session [auth_check_session $action $key {*}$args]
+	if {[info exists session(-error)]} {
+		dputs $session(-error)
+		return 1
+	}
+	if {$::opt_show} {
+		puts $session
+	}
+	return 0
+}
+
+proc do-cleanup {args} {
+	# Do a check on each file. Expired sessions will be deleted.
+	foreach file [glob -nocomplain [auth_session_dir]/*] {
+		do-check [file tail $file]
+	}
+	return 0
+}
+
+proc do-delete {args} {
+	# Delete the given session
+	auth_check_session delete {*}$args
+	return 0
+}
+
+proc pad {str width} {
+	incr width -[string length $str]
+	return $str[string repeat " " $width]
+}
+
+proc do-list {args} {
+	# Do a check on each file. Expired sessions will be deleted.
+	set now [os.uptime]
+	foreach file [glob -nocomplain [auth_session_dir]/*] {
+		set info {username ? ipaddr ? -expiry 0}
+		foreach {n v} [readfile $file] {
+			set info($n) $v
+		}
+		set remaining [expr {$info(-expiry) - $now}]
+		if {$remaining <= 0} {
+			set remaining "expired"
+		} elseif {$remaining > 3600} {
+			set remaining [format "%d hours" [expr {$remaining / 3600}]]
+		} else {
+			set remaining [format "%d mins" [expr {$remaining / 60}]]
+		}
+		puts "[pad $info(username) 20] [pad $info(ipaddr) 15] $remaining"
+	}
+	return 0
+}
+
+proc do-unknown {args} {
+	usage
+	return 1
+}
+
+exit [do$cmd {*}$argv]

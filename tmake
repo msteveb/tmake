@@ -1,17 +1,42 @@
 #!/usr/bin/env jimsh
 
 # ==================================================================
+# Initialiation
+# ==================================================================
+
+set tmake(debug) 0
+set tmake(verbose) 0
+set tmake(norun) 0
+set tmake(current) {}
+set tmake(targets) {}
+
+# ==================================================================
 # LOW LEVEL RULES
 # ==================================================================
 
-proc xset {name args} {
+proc dputs {msg} {
+	if {$::tmake(debug)} {
+		puts $msg
+	}
+}
+
+proc define {name args} {
 	upvar #0 $name n
 	set n [join $args]
 }
 
-proc xset? {name args} {
+proc define? {name args} {
 	upvar #0 $name n
 	if {![info exists n] || $n eq ""} {
+		set n [join $args]
+	}
+}
+
+proc define-append {name args} {
+	upvar #0 $name n
+	if {[info exists n] && $n ne ""} {
+		append n " " [join $args]
+	} else {
 		set n [join $args]
 	}
 }
@@ -35,15 +60,27 @@ proc prefix {pre args} {
 }
 
 proc is-target? {target} {
-	info exists ::maketargets($target)
+	dict exists $::tmake(targets) $target
+}
+
+proc get-target {target} {
+	dict get $::tmake(targets) $target
+}
+
+proc set-target {target value} {
+	dict set ::tmake(targets) $target $value
 }
 
 proc target {target args} {
-	set info(source) [lrange [info frame 1] 1 end]
+	set info(source) [lrange [info frame 0] 1 end]
+	#puts "XXX: @[join $info(source) :] target $target [join $args]"
+	set -inputs {}
 	set -depends {}
 	set -clean {}
 	set -rules {}
 	set -onfail {}
+	set -msg {}
+	set -vars {}
 	foreach a $args {
 		if {[string match -* $a]} {
 			if {![info exists $a]} {
@@ -54,33 +91,47 @@ proc target {target args} {
 			lappend $current $a
 		}
 	}
-	# Hmmm. we really want to capture the local variables in our caller's scope
-	foreach v [uplevel 1 info locals] {
+
+	# Capture any specified local variables
+	foreach v ${-vars} {
 		dict set info(vars) $v [uplevel 1 set $v]
 	}
+	set info(inputs) [join ${-inputs}]
 	set info(depends) [join ${-depends}]
 	set info(clean) ${-clean}
 	set info(rules) [lindex ${-rules} 0]
-	#puts "Doing subst of: <<<${-rules}>>> ==> ((($info(rules))))"
 	set info(onfail) ${-onfail}
+	set info(msg) [lindex ${-msg} 0]
 	set info(target) $target
+	if {$info(rules) eq "" && [llength $info(inputs)]} {
+		error "Inputs but no rules for $target at $info(source)"
+	}
+	if {$info(rules) eq "" && $info(msg) ne ""} {
+		error "Message but no rules for $target at $info(source)"
+	}
 
-	if {[info exists ::maketargets($target)]} {
-		set orig $::maketargets($target)
+	if {[is-target? $target]} {
+		set orig [get-target $target]
 		if {$info(rules) ne "" && $orig(rules) ne ""} {
 			error "Duplicate rules for $target at $info(source) and $orig(source)"
 		}
 		lappend info(depends) {*}$orig(depends)
+		lappend info(inputs) {*}$orig(inputs)
 		lappend info(clean) {*}$orig(clean)
 		append info(onfail) \n$orig(onfail)
 		if {$info(rules) eq ""} {
 			set info(rules) $orig(rules)
+			# Inputs go with the rules
+			set info(inputs) $orig(inputs)
+			set info(msg) $orig(inputs)
 		}
 	}
-	dict set info(vars) T $info(target)
-	dict set info(vars) D $info(depends)
+	set info(depends) [concat $info(depends) $info(inputs)]
+	dict set info(vars) target $info(target)
+	dict set info(vars) depends $info(depends)
+	dict set info(vars) inputs $info(inputs)
 
-	set ::maketargets($target) $info
+	set-target $target $info
 }
 
 proc showrules {rules} {
@@ -93,8 +144,8 @@ proc showrules {rules} {
 }
 
 proc dumptarget {target} {
-	if {[info exists ::maketargets($target)]} {
-		set t $::maketargets($target)
+	if {[is-target? $target]} {
+		set t [get-target $target]
 		puts "$target: $t(depends)"
 		showrules $t(rules)
 		#set V $t(vars)
@@ -105,7 +156,9 @@ proc dumptarget {target} {
 }
 
 proc dumptargets {} {
-	foreach i [lsort [array names ::maketargets]] {
+	parray ::tmake
+	foreach i [lsort [dict keys $::tmake(targets)]] {
+		puts "dumptarget $i"
 		dumptarget $i
 		puts ""
 	}
@@ -115,42 +168,50 @@ proc needbuild? {target source} {
 	if {[file exists $target]} {
 		if {[file exists $source]} {
 			if {[file mtime $target] >= [file mtime $source]} {
-				puts "Not building $target because it is newer than $source"
+				dputs "Not building $target because it is newer than $source"
 				return 0
 			}
 		}
-		puts "Building $target because it is older than $source or $source does not exist"
+		dputs "Building $target because it is older than $source or $source does not exist"
 		return 1
 	} else {
-		puts "Building $target because it does not exist"
+		dputs "Building $target because it does not exist"
 		return 1
 	}
 }
 
-proc subst-rules {_v _r} {
-	foreach _ [dict keys $::X] {
-		set $_ [dict get $::X $_]
+# Sets target-local variables. e.g. $inputs, $depends and $target
+proc set-target-vars {vars} {
+	foreach {n v} $vars {
+		uplevel #0 [list set $n $v]
 	}
-	foreach _ [dict keys $_v] {
-		set $_ [dict get $_v $_]
+}
+
+proc note {args} {
+	if {$::tmake(verbose) == 0} {
+		puts "[join $args]"
 	}
-	subst $_r
 }
 
 proc run {args} {
-	puts "[join $args]"
+	if {$::tmake(verbose)} {
+		puts "[join $args]"
+	}
 	exec {*}[join $args]
 }
 
-proc build {target {making unknown}} {
-	if {![info exists ::maketargets($target)]} {
+proc build {target} {
+	global tmake
+	set current $tmake(current)
+	lappend current $target
+	if {![is-target? $target]} {
 		if {[file exists $target]} {
 			return 1
 		}
-		puts stderr "Don't know how to build $target, while making $making"
+		puts stderr "Don't know how to build [join [lreverse $current] { <= }]"
 		return -1
 	}
-	set t $::maketargets($target)
+	set t [get-target $target]
 	set needbuild 0
 	set nobuild 0
 	if {[file exists $target]} {
@@ -164,22 +225,30 @@ proc build {target {making unknown}} {
 		incr needbuild
 	}
 
+	set oldcurrent $tmake(current)
+	set tmake(current) $current
 	if {$needbuild} {
 		# First make sure dependencies are up to date
-		puts "Building dependencies of $target"
+		dputs "Building dependencies of $target"
 		foreach i $t(depends) {
 			#puts "Building $i"
 			#dumptarget $i
-			if {[build $i $target] < 0} {
-				puts "Failed to build $i"
+			if {[build $i] < 0} {
+				dputs "Failed to build $i"
 				set nobuild 1
 			}
 		}
 		if {!$nobuild && $t(rules) ne ""} {
-			puts "Running rules for $target"
-			showrules $t(rules)
+			#puts "Running rules for $target"
+			dputs "Building [join [lreverse $current] { <= }] with rule @[join $t(source) :]"
 			try {
-				uplevel #0 [subst-rules $t(vars) $t(rules)]
+				set-target-vars $t(vars)
+				uplevel #0 $t(msg)
+				if {$tmake(norun)} {
+					showrules [uplevel #0 [list subst $t(rules)]]
+				} else {
+					uplevel #0 $t(rules)
+				}
 			} on error {msg opts} {
 				puts $msg
 				file delete $target {*}$t(clean)
@@ -188,8 +257,9 @@ proc build {target {making unknown}} {
 			#puts "Not running rules for $target [expr {$nobuild ? "because dependency failed" : "because no rules"}]"
 		}
 	} else {
-		puts "No need to build $target"
+		dputs "No need to build $target"
 	}
+	set tmake(current) $oldcurrent
 	return 0
 }
 
@@ -197,17 +267,33 @@ proc find {filename} {
 	return $filename
 }
 
-proc make {argv} {
-	if {$argv eq ""} {
-		set argv all
-	}
-	foreach a $argv {
-		if {$a eq "-P"} {
-			dumptargets
-			exit 0
+proc make {args} {
+	set targets 0
+	foreach a $args {
+		if {[regexp {([^=]*)=(.*)} $a -> n v]} {
+			if {$n eq "V"} {
+				set ::tmake(verbose) $v
+			} elseif {$n eq "D"} {
+				set ::tmake(debug) $v
+			} elseif {$n eq "P"} {
+				dumptargets
+			} elseif {$n eq "N"} {
+				incr ::tmake(norun)
+			} else {
+				define $n $v
+			}
+		} else {
+			build $a
+			incr targets
 		}
-		build $a
 	}
+	if {!$targets} {
+		build all
+	}
+}
+
+proc Clean {type {args files}} {
+	lappend ::CLEAN($type) {*}$files
 }
 
 # ==================================================================
@@ -219,20 +305,22 @@ proc Executable {target {args srcs}} {
 		set srcs [lassign $srcs target]
 		# XXX: Do something with test here
 	}
-	Link $target {*}[Objects {*}$srcs]
+	Link $target {*}[Objects {*}[join $srcs]]
 	target all -depends $target
 }
 
 # Link an executable from objects
 proc Link {target {args objs}} {
-	target $target -depends {*}$objs -rules $::EXERULE
-	lappend ::cleanfiles $target
+	target $target -inputs {*}$objs $::LOCAL_LIBS -rules $::EXERULE -msg {note Link $target}
+	Clean clean $target
 }
 
 proc ArchiveLib {base {args srcs}} {
 	set libname lib$base.a
-	target $libname -depends {*}[Objects {*}$srcs] $::ARRULE
+	target $libname -inputs {*}[Objects {*}[join $srcs]] -rules $::ARRULE -msg {note Ar $target}
 	target all -depends $libname
+	Clean clean $libname
+	define-append LOCAL_LIBS $libname
 }
 
 proc Phony {target {args deps}} {
@@ -247,22 +335,34 @@ proc Objects {{args srcs}} {
 	foreach src $srcs {
 		set obj [change-ext .o $src]
 		lappend objs $obj
-		target $obj -depends $src -rules $::OBJRULES([file ext $src])
-		lappend ::cleanfiles $obj
+		target $obj -inputs $src -rules $::OBJRULES([file ext $src]) -msg $::OBJMSG([file ext $src])
+		Clean clean $obj
 	}
 	return $objs
 }
 
 proc CFlags {{args flags}} {
-	lappend ::X(CFLAGS) {*}$flags
+	define-append CFLAGS {*}$flags
 }
 
 proc C++Flags {{args flags}} {
-	lappend ::X(CXXFLAGS) {*}$flags
+	define-append CXXFLAGS {*}$flags
 }
 
 proc LinkFlags {{args flags}} {
-	lappend ::X(LDFLAGS) {*}$flags
+	define-append LDFLAGS {*}$flags
+}
+
+proc Load {filename} {
+	if {![file exists $filename]} {
+		puts "Warning: $filename does not yet exist"
+	} else {
+		uplevel #0 [list source $filename]
+	}
+}
+
+proc UseSystemLibs {{args libs}} {
+	define-append LDLIBS {*}$libs
 }
 
 proc PublishIncludes {{args includes}} {
@@ -277,29 +377,81 @@ proc RunTest {{args cmd}} {
 	#target 
 }
 
-set cleanfiles {}
+proc Generate {target script inputs rules} {
+	target $target -inputs {*}$inputs -depends $script -vars script -rules $rules -msg {note Generate $target}
+	Clean clean $target
+}
+
+proc Depends {target {args depends}} {
+	target $target -depends {*}$depends
+}
+
 target clean -rules {
-	file delete {*}$::cleanfiles
+	note "Clean clean"
+	if {[info exists ::CLEAN(clean)]} {
+		dputs "rm $::CLEAN(clean)"
+		file delete {*}$::CLEAN(clean)
+	}
+}
+
+target distclean -depends clean -rules {
+	note "Clean distclean"
+	if {[info exists ::CLEAN(distclean)]} {
+		dputs "rm $::CLEAN(distclean)"
+		file delete {*}$::CLEAN(distclean)
+	}
+}
+
+# ==================================================================
+# Experimental
+# ==================================================================
+
+proc ifconfig {symbol {code {}} {else {}} {elsecode {}}} {
+	global $symbol
+	if {$else ni {"" else}} {
+		error "Usage: ifconfig symbol ?code? ?else code?"
+	}
+	if {[info exists $symbol]} {
+		if {[set $symbol] ni {"" 0}} {
+			uplevel 1 $code
+			return 1
+		}
+	}
+	if {$else eq "else"} {
+		uplevel 1 $elsecode
+	}
+	return 0
 }
 
 # ==================================================================
 # DEFAULT RULE BASE
 # ==================================================================
 
-set X(CC) cc
-set X(CXX) c++
-set X(AR) ar
-set X(ARFLAGS) cr
-set X(CFLAGS) ""
-set X(CXXFLAGS) ""
-set X(SH_LINKFLAGS) ""
-set X(LDFLAGS) ""
+set CCACHE ""
+set CC cc
+set CXX c++
+set AR ar
+set ARFLAGS cr
+set CFLAGS ""
+set CXXFLAGS ""
+set SH_LINKFLAGS ""
+set LDFLAGS ""
+set LDLIBS ""
+set LOCAL_LIBS ""
 
-set OBJRULES(.c) {run $CC $CFLAGS -c $D -o $T}
-set OBJRULES(.cpp) {run $CXX $CXXFLAGS -c $D -o $T}
-set EXERULE {run $CC $CFLAGS $SH_LINKFLAGS $LDFLAGS -o $T $D}
-set ARRULE {run $AR $ARFLAGS $T $D}
+set OBJRULES(.c) {run $CCACHE $CC $CFLAGS -c $inputs -o $target}
+set OBJMSG(.c) {note Cc $target}
+set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS -c $inputs -o $target}
+set OBJMSG(.cpp) {note C++ $target}
+set EXERULE {run $CC $CFLAGS $SH_LINKFLAGS $LDFLAGS -o $target $inputs $LDLIBS}
+set ARRULE {run $AR $ARFLAGS $target $inputs}
 
+# Loaded in the global scope 
 source build.spec
 
-make $argv
+if {[info exists env(MAKEFLAGS)]} {
+	# Running under make
+	set argv [list {*}$env(MAKEFLAGS) {*}$argv]
+}
+
+make {*}$argv

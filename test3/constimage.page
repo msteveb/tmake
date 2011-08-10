@@ -1,0 +1,66 @@
+storage none
+pageformat raw
+
+# Even lowly 'user' has write access in order to fetch the constellation
+accesslevel admin user rw
+
+# Note that all fields have a validation type to
+# avoid passing unvalidated values to exec
+
+field size {
+	stdmode none
+	default 512
+}
+
+field modn {
+	stdmode none
+	default auto
+}
+
+field num {
+	stdmode none
+	default 5
+}
+
+field modem {
+	stdmode none
+	default 1
+}
+
+# Use submit -onget rather than display so that validation will occur
+submit -onget {
+	cgi nodisplay
+
+	foreach field {size num modem} {
+		if {![is_valid_number [cgi get $field]]} {
+			cgi http response 404
+			puts "Invalid arguments"
+			return
+		}
+	}
+	set modn [cgi get modn]
+	switch -- $modn {
+		auto {
+			set axes -1
+			set modn -1
+		}
+		all {
+			set axes 1
+			set modn -1
+		}
+		0 - 1 - 2 - 3 {
+			set axes $modn
+		}
+		default {
+			cgi http response 404
+			puts "Invalid arguments"
+			return
+		}
+	}
+
+	cgi http header Content-Type image/jpeg
+	#cgi http header Content-Length ...
+	cgi http response 200
+
+	catch {exec constellationclient -m [cgi get modem] -n [cgi get num] | const-to-ppm -n [cgi get num] -s [cgi get size] -x $axes -m $modn - | cjpeg -quality 90 >@stdout}
+}

@@ -1,0 +1,128 @@
+label "Application Log"
+title "Application Event Log"
+summary "Application Event Log"
+storage none
+
+accesslevel status
+
+bar "Application Event Log"
+
+field full {
+	storage page
+	stdmode hidden
+	default 0
+}
+
+text {
+	display {
+		cgi display row {
+
+			# Number of lines we want to show in shortened form
+			set lastn 20
+
+			# Get log entries into a list
+			append logs [readfile [root]/settings/logging/applog.0] [readfile [root]/settings/logging/applog]
+			set logfull [split $logs "\n"]
+			set loglast [lrange $logfull end-[expr $lastn-1] end]
+			set totlen [llength $logfull]
+
+			if {$totlen == [llength $loglast]} {
+				cgi set full 1
+			}
+
+			html eval p {
+				if {$totlen <= 0} {
+					html puts "<i>No log data available.</i>"
+				} elseif {![cgi get full]} {
+					html puts "Showing last <b>$lastn</b> log messages. "
+					html eval a href=[cgi href $page full 1] {
+						html puts "Show all <b>$totlen</b> log messages."
+					}
+
+					set logfull $loglast
+				} else {
+					html puts "Showing all <b>$totlen</b> log messages."
+				}
+			}
+
+			html eval table class=applog {
+
+				# Read each log record ..
+				set prevdate ""
+				foreach line $logfull {
+					if {[catch {
+						foreach {stamp pri subsystem msg} $line break
+					} error]} {
+						html eval tr {
+							html eval td colspan=4 {
+								html str i $error
+							}
+						}
+						continue
+					}
+
+					# Format each field in a table
+					set date [clock format $stamp -format "%a, %d %b %Y"]
+					set time [clock format $stamp -format "%H:%M"]
+					if {$date ne $prevdate} {
+						set prevdate $date
+						html eval tr class=header {
+							html eval td colspan=4 {
+								html str b $date
+							}
+						}
+					}
+
+					set class $pri
+					if {[string match "System booted*" $msg]} {
+						set class boot
+					} elseif {[string match "Log mark*" $msg]} {
+						set class mark
+					}
+
+					html eval tr class=$class {
+						html str td $time
+						html str td $pri
+						html str td $subsystem
+						html str td $msg
+					}
+				}
+			}
+		}
+	}
+}
+
+button clear {
+	label "Clear Log"
+	stdmode {onclick=return confirm('Are you sure you want to clear the log?')}
+	display {
+		if {[cgi auth role] ni {factory support}} {
+			cgi return done
+		}
+	}
+	submit {
+		if {[cgi auth role] in {factory support}} {
+			catch {
+				kill -USR1 [readfile /var/run/app-logd.pid]
+				# Give it a moment to take effect
+				sleep 1
+				cgi success "Application log cleared"
+			}
+		}
+	}
+}
+
+button mark {
+	label "Insert Mark"
+	submit {
+		package require logging
+		log_init web
+		log_info "Log mark inserted by [cgi auth username]"
+		# Give it a moment to take effect
+		sleep 1
+	}
+}
+
+auto_refresh_page full
+
+# vim: se ts=4:

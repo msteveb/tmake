@@ -1,0 +1,431 @@
+img {
+	border: none;
+}
+
+div#titlebar {
+	/* For IE */
+	zoom: 1;
+	*display: inline;
+}
+
+div#toolbar div {
+	/* For IE */
+	zoom: 1;
+	*display: inline;
+}
+
+td#menu {
+	width: 184px;
+}
+
+div.logo {
+	width: 184px;
+	height: 74px;
+	margin-left: 5px;
+	padding-bottom: 5px;
+	background-image: url("/img/emclarity-logo.png");
+	background-repeat: no-repeat;
+}
+
+
+div.modified img {
+	border-style: none;
+}
+
+/* The menu header */
+h3.menu {
+	background-color: #822;
+	-moz-border-radius-topleft: 8px;
+	-moz-border-radius-topright: 8px;
+	-webkit-border-top-left-radius: 8px;
+	-webkit-border-top-right-radius: 8px;
+}
+
+/* The container for the menu items */
+ul.menu li:last-child * {
+	-moz-border-radius-bottomleft: 8px;
+	-moz-border-radius-bottomright: 8px;
+	-webkit-border-bottom-left-radius: 8px;
+	-webkit-border-bottom-right-radius: 8px;
+	padding-bottom: 8px;
+	border-bottom: none;
+}
+
+/* The container for the menu items */
+ul.menu {
+	-moz-border-radius-bottomleft: 8px;
+	-moz-border-radius-bottomright: 8px;
+	-webkit-border-bottom-left-radius: 8px;
+	-webkit-border-bottom-right-radius: 8px;
+	border: solid 1px #333;
+	padding-bottom: 0px;
+}
+
+/* Needed for the help link */
+
+td.elemtext p {
+	margin: 4px;
+	padding: 4px;
+}
+
+/* Application-specific formatting */
+td.page {
+	border-color: #c88;
+	background: #ffe;
+}
+
+td#norecfooter {
+	background: none;
+	text-align: center;
+}
+
+.sortarrow {
+	float: right;
+	vertical-align: middle;
+	width: 16px;
+	height: 16px;
+	display: inline;
+}
+
+.sortarrow#up {
+	background: url("/img/up.png") no-repeat;
+}
+
+.sortarrow#down {
+	background: url("/img/down.png") no-repeat;
+}
+
+div.anyvalue {
+	float: left;
+}
+
+/* These rows are much wider, for the benefit of help text */
+body#device div.helpelemrowwide div.elemvalue,
+body#device div.helpelemrowwidefirst div.elemvalue {
+	width: 28em;
+}
+
+/* Underline special column headings */
+body#device #modem1_label, body#device #modem2_label, body#quick #modem1_label, body#quick #modem2_label, body#device #odu1_label, body#device #odu2_label {
+	border-bottom: solid 1px black;
+}
+
+/* Rounded corners for these column headings */
+body#modem th#mod1, body#modem th#mod2, body#rf th#odu1, body#rf th#odu2 {
+	-moz-border-radius-topleft: 4px;
+	-moz-border-radius-topright: 4px;
+	-webkit-border-top-left-radius: 4px;
+	-webkit-border-top-right-radius: 4px;
+	text-align: center;
+	width: 35%;
+}
+
+/* No background for these column headings */
+body#modem th#attribute, body#rf th#attribute {
+	background: none;
+}
+
+div.elemvalue {
+	padding-top: 2px;
+}
+
+ul.tabmenu li a {
+	-moz-border-radius-topleft: 4px;
+	-moz-border-radius-topright: 4px;
+	-webkit-border-top-left-radius: 4px;
+	-webkit-border-top-right-radius: 4px;
+}
+
+/* Tabs inside the left menu */
+ul.menu div#tabmenu {
+	display: none;
+}
+
+tr.elemtable td.customplan {
+	background: lightgrey;
+	font: bold;
+}
+
+tr.elemtable td.linkdown {
+	background: lightgrey;
+	font: bold;
+}
+tr.elemtable td.alarmon {
+	background: #d86;
+	font: bold;
+}
+tr.elemtable td.alarmoff {
+	background: lightgrey;
+	font: bold;
+}
+tr.elemtable td {
+	background: #ADD8E6;
+}
+tr.elemtable th {
+	background: #6D98C6;
+}
+
+/* Application log */
+table.applog tr td {
+	background: #ddd;
+	padding: 2px;
+}
+table.applog tr.header td {
+	background: #6D98C6;
+	padding: 4px 0px 2px 4px;
+}
+table.applog tr.warn td {
+	background: #ffd39b;
+}
+table.applog tr.err td {
+	background: #d86;
+}
+table.applog tr.boot td {
+	background: #bbb;
+}
+table.applog tr.mark td {
+	background: #dbe;
+}
+
+/* Alarm log */
+table.alarms tr td {
+	background: #ddd;
+	padding: 3px 5px 3px 5px;
+}
+table.alarms tr.header td {
+	background: #6D98C6;
+	padding: 4px 0px 2px 4px;
+}
+table.alarms tr.major td {
+	background: #d86;
+}
+table.alarms tr td.value {
+	text-align: center;
+}
+
+/* Generic Table */
+table.anytable {
+	white-space: nowrap;
+}
+table.anytable th {
+	background: #6d98c6;
+	padding: 4px 2px 2px 4px;
+	text-align: center;
+}
+table.anytable th.attribute {
+	background: #fff;
+}
+table.anytable th.rounded {
+	-moz-border-radius-topleft: 4px;
+	-moz-border-radius-topright: 4px;
+	-webkit-border-top-left-radius: 4px;
+	-webkit-border-top-right-radius: 4px;
+	width: 10em;
+}
+table.anytable td {
+	/*background: #ddd;*/
+	padding: 3px 2px 2px 3px;
+	text-align: center;
+}
+table.anytable tr {
+	background: #ddd;
+}
+table.anytable tr.row1 {
+	background: #eee;
+}
+
+table.anytable td.label {
+	text-align: left;
+}
+table.anytable td.num {
+	text-align: right;
+	padding-right: 6px;
+}
+table.anytable td.failed {
+	filter:alpha(opacity=50);
+	-moz-opacity:0.5;
+	-khtml-opacity: 0.5;
+	opacity: 0.5;
+}
+table.anytable td.alarmon {
+	background: #d86 !important;
+}
+
+/* Special per-page overrides */
+body#ethstats table.anytable th.rounded {
+	width: 6em;
+}
+
+.elemtext .bar {
+	border: solid 1px orange;
+	background: lightyellow;
+	padding: 2px 0px 2px 5px;
+	margin-bottom: 5px;
+	font-weight: bold;
+}
+
+ul.menu li.menulabel {
+	border-top: 2px solid white;
+	/*border-bottom: 1px solid black;*/
+	display: block;
+}
+
+ul.menu li.menulabel div.menulabel {
+	font-style: italic;
+	font-weight: bold;
+	font-size: 12px;
+	border-top: 1px solid #444;
+	padding: 5px 3px 3px 10px;
+	margin: 0px;
+	text-align: left;
+	height: 14px;
+	background: #E6CF58;
+}
+
+input#copy {
+	/* Common settings for IE (image) buttons */
+	cursor: pointer; /* hand-shaped cursor */
+	border: none;
+	margin: 0;
+	padding: 0;
+	width: 16px;
+	height: 16px;
+	background: transparent no-repeat center;
+}
+
+input#modify {
+	background: url("/img/edit.png") no-repeat;
+}
+input#copy {
+	background: url("/img/copy.png") no-repeat;
+}
+
+ul.menu li.menu_selected a {
+	background: silver;
+}
+
+div#toolbar div.backupinfo {
+	color: blue;
+	font-weight: bold;
+	font-size: larger;
+	bottom: 45px;
+}
+
+div#toolbar div.alarmtoolitem a {
+	color: red;
+	font-weight: bold;
+	font-size: larger;
+	bottom: 45px;
+}
+
+
+div#toolbar div.installmodeinfo a {
+	color: red;
+	font-weight: bold;
+	font-size: larger;
+	bottom: 45px;
+}
+
+div#toolbar div.terminalid {
+	color: black;
+	font-weight: bold;
+	font-size: larger;
+	bottom: 45px;
+}
+
+p.noteheading img {
+	vertical-align: bottom;
+	padding-right: 5px;
+}
+
+p.noteheading span {
+	font-size: larger;
+	font-weight: bold;
+	position: relative;
+	bottom: 3px;
+}
+
+p.modified img {
+	vertical-align: bottom;
+	padding-right: 5px;
+}
+
+p.modified span {
+	position: relative;
+	bottom: 4px;
+}
+
+.modified a:hover img {
+	filter:alpha(opacity=50);
+	-moz-opacity:0.5;
+	-khtml-opacity: 0.5;
+	opacity: 0.5;
+}
+
+.helpelemrow, .helpelemrowfirst, .helpelemrowwide, .helpelemrowwidefirst {
+	margin: 0px;
+	padding: 0px;
+}
+
+.helpelemrow, .helpelemrowwide {
+	border-top: solid 1px #aaa;
+}
+
+.inlinepagehelp {
+	background: #f0f0ff;
+	border: 1px solid #aaf;
+	padding: 2px 4px 0px 6px;
+	margin-bottom: 8px;
+	font-style: italic;
+}
+
+.inlinepagehelp .header {
+	font-weight: bold;
+	font-size: larger;
+	font-style: italic;
+	margin-top: 4px;
+}
+
+.subhelp {
+	font-size: smaller;
+	color: #33a;
+	/*border: dotted 1px #333;*/
+	margin: 2px 0px 0px 0px;
+	padding: 2px 4px 1px 2px;
+}
+
+#help_link {
+}
+
+#help_link.help_link_disabled img {
+	filter:alpha(opacity=30);
+	-moz-opacity:0.3;
+	-khtml-opacity: 0.3;
+	opacity: 0.3;
+}
+
+table#upgrade {
+	border: solid 1px black;
+	width: 400px;
+	margin-bottom: 5px;
+	vertical-align: middle;
+	padding: 0;
+	height: 8px;
+	margin: 8px 2px 6px 6px;
+}
+
+table#upgrade td#done {
+	background: #3C3;
+	padding: 2px;
+}
+
+table#upgrade td#togo {
+	background: white;
+	padding: 0;
+}
+div[alarm=on] div.elemvalue span.rotext {
+	padding: 2px;
+	background: #d86;
+}
+
+/* vim: se ts=4: */

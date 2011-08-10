@@ -1,0 +1,22 @@
+storage none
+pageformat raw
+
+accesslevel status
+
+field type {
+	stdmode hidden
+	default hour
+}
+
+display {
+	package require rrdgraph
+
+	set r [rrdgraph env rx [cgi get type]]
+	$r stdinit
+	$r title "RX Power"
+	$r ylabel "dBm"
+	$r line rf1 rf1rxpwr -label "RFU 1" -format "%5.1lf" -units "dBm"
+	$r line rf2 rf2rxpwr -label "RFU 2" -format "%5.1lf" -units "dBm"
+	$r output
+	$r close
+}

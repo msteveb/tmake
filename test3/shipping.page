@@ -1,0 +1,113 @@
+label "Shipping"
+title "Shipping Configuration"
+
+accesslevel support
+
+storage none
+
+head {
+<style>
+span#seconds { color: red; }
+</style>
+}
+
+init {
+	package require fileutil
+	package require javascript
+
+	set upgrading 0
+	if {[catch {exec /sbin/setlock -d 0 /var/run/upgradebackup.lock true}]} {
+		# Failed, so must stil be in progress
+		set upgrading 1
+	}
+
+	proc disable_if_upgrading {} {
+		if {$::upgrading} {
+			cgi addattrs disabled
+		}
+	}
+}
+
+# Display the upgrading status
+text {
+	display {
+		if {$upgrading} {
+			html eval div class=warningmsg {
+				html str h2 id=upgradeheader "Upgrading Backup"
+
+				# The device takes about the following secs to update the
+				# backup image. Measured by hand.
+				html eval p {
+					html puts {The system is upgrading the backup firmware image ... <span id="seconds">50</span>}
+				}
+			}
+
+			# Javascript snippet to do a countdown
+			html eval script type=text/javascript {
+				html puts {
+					function update_countdown() {
+						var remaining = document.getElementById('seconds').innerHTML;
+						if (--remaining > 0) {
+							document.getElementById('seconds').innerHTML = remaining;
+							setTimeout(update_countdown, 1000);
+						}
+						else
+							window.location = window.location.href;
+					}
+					update_countdown();
+				}
+			}
+		}
+	}
+}
+
+bar "System Details"
+
+text {
+	display {
+		cgi display row {
+			if {$upgrading} {
+				html str p "Upgrade in progress..."
+			} else {
+				html str pre [exec show-shipping-info]
+			}
+		}
+	}
+}
+
+bar "Pre-Shipping Actions"
+
+text {
+	str {<p>Press the <b>Upgrade Backup</b> button to upgrade the backup
+	firmware image from the currently loaded image.</p>}
+}
+
+button upgrade_backup {
+	label "Upgrade Backup"
+	display {
+		disable_if_upgrading
+	}
+	submit {
+		set pid [exec /sbin/setlock -d 0 /var/run/upgradebackup.lock /usr/libexec/do-update-backup </dev/null >/dev/null 2>&1 &]
+		sleep 1
+		lassign [os.wait -nohang $pid] p status code
+		if {$status ne "none"} {
+			cgi error "Update is already in progress, please wait"
+			return
+		}
+
+		set upgrading 1
+	}
+}
+
+button factory_reset {
+	label "Factory Reset"
+	stdmode {onclick=return confirm('Reset everything except network settings?')}
+	display {
+		disable_if_upgrading
+	}
+	submit {
+		exec reset-factory-config
+		reboot_system "Resetting and Rebooting"
+	}
+}

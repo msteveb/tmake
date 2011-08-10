@@ -1,0 +1,264 @@
+# Miscellaneous emsolutions specific routines
+
+package require fileutil
+
+# Help with host testing
+proc root {} {
+	return [env HOST ""]
+}
+
+proc set_modified {} {
+	writefile [root]/var/run/config.modified 1
+}
+
+proc is_modified {} {
+	file exists [root]/var/run/config.modified
+}
+
+proc clear_modified {} {
+	file delete [root]/var/run/config.modified
+}
+
+proc set_rebooting {reason} {
+	writefile [root]/tmp/rebooting $reason
+}
+
+proc reboot_system {reason} {
+	set_rebooting $reason
+	exec reboot -d 2 </dev/null >/dev/null &
+	cgi nextpage reboot
+}
+
+# Returns 1 if the device is rebooting, and stores a message in reasonvar if given
+proc is_rebooting {{reasonvar {}}} {
+	if {$reasonvar ne ""} {
+		upvar $reasonvar reason
+	}
+	set reason [readfile [root]/tmp/rebooting]
+	expr {$reason ne ""}
+}
+
+# Given a raw value and a mapping specification,
+# returns a new value which is transformed/formatted
+#
+# spec is a list of type params ..., where the known types are:
+#
+# type   params       description
+# -----  -------      -----------
+# eval   script       Evaluates the script with the current value set to as "$value".
+#                     The new value is the result of the script. return will prevent further
+#                     types being processed.
+# expr   expression   Evaluates the expression with the current value set to as "$value".
+#                     The new value is the result of the expression.
+# enum   dictionary   maps the value from the key to the value in the dictionary.
+#                     If the value doesn't exist in the dictionary, an error is thrown.
+# format formatstr    Uses 'format' with the value as the single argument. Returns the result.
+#
+# Transformations are handled in the order they are given in the list.
+# The input to one transformation is the output from the previous one.
+#
+proc mapvalue {value speclist} {
+	foreach {type spec} $speclist {
+		if {$value eq "-"} {
+			break
+		}
+		switch -- $type {
+			eval {set value [eval $spec]}
+			expr {set value [expr $spec]}
+			enum {set value [expr {[dict exists $spec $value] ? [dict get $spec $value] : $value}]}
+			format {set value [format $spec $value]}
+			append {append value $spec}
+			default {return "unknown type: $type"}
+		}
+	}
+	return $value
+}
+
+# Output the given field with the given current
+# value as a select list (dropdown list)
+#
+# $pairs is a list of label, value. e.g. {One 1 Two 2}
+proc cgi_select_list {field current pairs {attrs {}}} {
+	html eval select id=$field name=$field {*}$attrs {
+		foreach {label value} $pairs {
+			if {$value == $current} {
+				html str option value=$value selected $label
+			} else {
+				html str option value=$value $label
+			}
+		}
+	}
+}
+
+# If help.show is 1, or if in edit mode, display the current
+# field as normal, but also output the field help.
+#
+# Takes optional name/value args as follows:
+#     class - class for the row (default: helprow)
+#     row - list of row options (default: {start end})
+#     help  - custom help text (default: field help)
+#     modes - list of modes in which help may be shown (default: {std edit})
+#     display - code to evaluate to output value (default: {cgi display stdvalue})
+#
+proc display_field_help {args} {{first 1}} {
+	upvar field field
+
+	# Do do any display processing for tables
+	if {[string first "table" [cgi displaymode]] == 0} {
+		return
+	}
+
+	# Default values
+	set class [lindex {elemrow elemrowfirst} $first]
+	set row {start end}
+	set help [cgi help $field]
+	set modes {std edit}
+	set display {cgi display stdvalue}
+
+	# Set any specified values in the local context
+	foreach {n v} $args {
+		set $n $v
+	}
+
+	set label 1
+	if {[lsearch $modes [cgi mode]] < 0} {
+		set help ""
+		set label 0
+	}
+	if {[cgi storage get help.show] eq "0" && [cgi mode std]} {
+		set help ""
+	}
+
+	if {$help ne ""} {
+		set class help$class
+	}
+
+	if {[lsearch $row start] >= 0} {
+		cgi display startrow $class
+		if {$label} {
+			cgi display label
+		}
+	}
+	cgi display value {
+		uplevel 1 $display
+		if {$help ne ""} {
+			html eval div class=subhelp id=${field}_help {
+				# Note the use of puts since the help can contain html
+				html puts $help
+			}
+		}
+	}
+	if {[lsearch $row end] >= 0} {
+		cgi display endrow $class
+	}
+	cgi return done
+	set first 0
+}
+
+# If help.show is 1 and in std mode, display the page help.
+#
+proc display_page_help {} {
+	if {[cgi storage get help.show] eq "0" || [cgi mode edit]} {
+		return
+	}
+	html eval div class=inlinepagehelp {
+		# The summary tends to duplicate the title and 'bar' info
+		#html eval div class=header {
+		#	html puts [cgi summary]
+		#}
+		html eval p {
+			# Note the use of puts since the help can contain html
+			html puts [cgi help]
+		}
+	}
+}
+
+# If the field is unset, it's display value is set to "-none-"
+#
+proc display_unset {} {
+	upvar field field
+	if {[cgi get $field] eq ""} {
+		cgi setdisplay value "-none-"
+	}
+}
+
+# Toggles value through a list of possible values.
+# If none match, returns the first value in the list
+#
+proc toggle {list value} {
+	set i [lsearch $list $value]
+	set i [expr {($i + 1) % [llength $list]}]
+	return [lindex $list $i]
+}
+
+# Saves the config, and if changes were made, sets $::config_modified
+#
+# Should be called at the end of 'submit' if any config values are stored.
+#
+# This is used by display_ifmodified_bar
+proc save_config {} {
+	if {[cgi save] == 1} {
+		if {[cgi storage get options.immediate]} {
+			# They have the immediate save option on, so apply the changes immediately
+			exec config-apply-changes -agent "[cgi auth username] via web"
+			cgi success "Changes successfully applied"
+		} else {
+			set ::config_modified 1
+		}
+	}
+}
+
+# If the config was modified (according to save_config),
+# displays a message indictating this.
+#
+# This is used from page.macros ifmodified_message
+proc display_ifmodified_message {} {
+	if {[info exists ::config_modified]} {
+		html eval div class=successmsg {
+			html eval p class=modified {
+				html eval a href=[cgi href changes page $::page] "title=Configuration Modified" {
+					html tag img src=/img/modified.png
+				}
+				html eval span {
+					html puts "Configuration Modified."
+					html str a href=[cgi href changes page $::page] "Apply or Discard"
+					html puts "changes."
+				}
+			}
+		}
+	}
+}
+
+# Decomposes an integer into a series of coeffients.
+# $list contains the multipliers from least significant to most significant
+# and the result is in the same order.
+#
+# e.g. 'decompose_int n {a b}' returns a list 'x y z' such that:
+#
+#      n = x + y.a + z.(a.b)
+#
+# e.g. To convert a value in seconds into days, hours, minutes, seconds:
+#
+# . decompose_int 234412 {60 60 24}
+# 52 6 17 2
+#
+# Representing 2 days, 17 hours 6 minutes and 52 seconds
+#
+proc decompose_int {value list} {
+	foreach b $list {
+		lappend result [expr {$value % $b}]
+		set value [expr {$value / $b}]
+	}
+	lappend result $value
+}
+
+proc is_valid_number {x} {
+	catch -noreturn {
+		if {$x + 0 == $x} {
+			return 1
+		}
+	}
+	return 0
+}
+
+# vim: se ts=4:

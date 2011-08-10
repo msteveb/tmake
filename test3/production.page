@@ -1,0 +1,19 @@
+label "Production Info"
+title "Production Info"
+
+accesslevel support
+
+storage none
+
+summary {Displays Production-related information}
+
+text {
+	display {
+		cgi display row {
+			html str div class=bar "Production Information Settings"
+		}
+		cgi display row {
+			html str pre [exec info-list]
+		}
+	}
+}

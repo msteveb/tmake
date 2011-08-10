@@ -1,0 +1,158 @@
+label "Factory"
+title "Factory Test Mode"
+help {Enable factory test mode for this device}
+
+accesslevel support
+
+ifmodified_message
+
+storage none
+setmode edit
+
+init {
+	set conffile [root]/var/run/installmode
+	package require modulations
+
+	# Append our special modulation mode
+	lappend modn_codes CW
+	set modn_by_code(CW) {CW "CW Mode"}
+
+	# And build a list of modulation names and codes for the select list
+	foreach n $modn_codes {
+		lappend modn_name_code_list [lindex $modn_by_code($n) 1] $n
+	}
+}
+
+bar "Factory Test Mode Settings"
+
+text {
+	display display_page_help
+}
+
+field mode {
+	# Cordinate these enum values with installmode.page:mode.
+	label "Factory Mode"
+	type {enum 0 1 2 3 4}
+	editmode {select 0 "Off" 1 "Modem Loopback Mode" 4 "External Loopback Mode"} {onchange=javascript:set_mode()}
+	default 0
+	help {Set the modem or external loopback mode}
+	storage none
+	display display_field_help
+}
+
+field modulation {
+	label "Tx Modulation"
+	help {Select the TX modulation}
+	default 0
+	display {
+		display_field_help display {
+			html eval div class=elemvalue {
+				cgi_select_list $field [cgi get $field] $::modn_name_code_list {onchange=javascript:this.form.submit.click()}
+			}
+		}
+	}
+}
+
+field status {
+	label "Rx Status"
+	editmode {enum 0 "Not Locked" 1 "Locked"}
+	help {Indicates whether the modem is locked}
+	display display_field_help
+}
+
+button submit {
+	label Submit
+	stdmode none
+	submit {
+		set newmode [cgi get mode]
+
+		# Save new mode
+		set cf [conf $conffile]
+		$cf set mode $newmode
+		$cf close -save
+
+		# Action new mode
+		exec installer-mode setmode [lindex {none modem 2 3 external} $newmode]
+
+		if {$newmode != 0} {
+			exec installer-mode setmodulation [cgi get modulation]
+		}
+	}
+}
+
+text {
+	display {
+		if {[cgi mode std]} {
+			return
+		}
+
+		html eval script type=text/javascript {
+			html puts {
+				function set_mode() {
+					var src = document.getElementById('mode');
+					var tgt = document.getElementById('modulation');
+					tgt.disabled = (src.value == 0)
+				}
+
+				set_mode();
+			}
+		}
+	}
+}
+
+button edit {
+	label Change
+	editmode none
+	setmode edit
+}
+
+button refresh {
+	label Refresh
+}
+
+text {
+	display {
+		html str p ""
+	}
+}
+
+bar "Constellation View"
+
+text {
+	display {
+		set modem 1
+		set size 384
+		set samples 10
+
+		html tag img src=[cgi href constimage modem $modem modn auto \
+		size $size num $samples] width=$size height=$size
+	}
+}
+
+display {
+	set cf [conf $conffile]
+	set mode [$cf get mode 0]
+	$cf close
+
+	# Ignore special installer modes
+	if {$mode == 2 || $mode == 3} {
+		set mode 0
+	}
+
+	cgi set mode $mode
+
+	# Read the modulation mode. Look first for test mode.
+	set modn [readfile [root]/supervisory/modem1/test_txmode 0]
+
+	if {$modn != 0} {
+		set modn CW
+	} else {
+		set modn [readfile [root]/supervisory/modem1/tx_modulation 0]
+	}
+
+	cgi set modulation $modn
+
+	# Is it locked?
+	cgi set status [readfile [root]/supervisory/modem1/frame_lock 0]
+}
+# vim: se ts=4:
