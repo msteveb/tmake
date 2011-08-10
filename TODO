@@ -1,0 +1,24 @@
+Add support for per-directory rules. Probably need something like Jam's <grist>
+
+Read project.spec and build.spec in subdirs
+
+Have a 'tmake -init' which will generate stub Makefiles
+
+Allow detection of build rule dependencies (project.spec, build.spec, settings.conf)
+and reload rules.
+
+Work out a good arrangement for the distribution of:
+- low level rules
+- high level rules
+- default rule base
+- local customisations
+
+How to add rules for new Object types?
+
+Add parallel build support.
+
+Add -q to quit after the first failure.
+
+Better debug levels
+
+Support Install, Test, Publish

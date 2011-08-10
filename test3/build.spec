@@ -1,4 +1,6 @@
 define? UWEB /usr/local/uweb
+define? DESTDIR _install
+define? CONFIG_DIR $DESTDIR/etc/config
 
 define COMMON $UWEB/common
 define THEMES $UWEB/themes
@@ -38,38 +40,18 @@ foreach i [glob *.page *.app *.menus] {
 
 Executable web auth.c customstorage.c init.c main.c tclcustom.c $srcs
 
-if 0 {
-install: all install_dirs install_basic_theme install_tcl install_help
-	install $(PROGRAM) $(DESTDIR)/home/httpd/cgi-bin/$(PROGRAM)
-	install *.css $(DESTDIR)/home/httpd/css
-	install $(IMGS) $(DESTDIR)/home/httpd/img
-	install *.js $(DESTDIR)/home/httpd/javascript
-	install *.tcl $(DESTDIR)/lib/tcl6
+Install --bin /home/httpd/cgi-bin web
+Install /home/httpd/css [glob *.css] $THEMES/basic.css=basic1.css
+Install /home/httpd/javascript [glob *.js]
+Install /home/httpd/img [glob -nocomplain img/*.{png,gif,ico,jp*}] [glob $THEMES/black_icons/*checked.png]
+Install /lib/tcl6 [glob $UWEB/lib/tcl6/*.tcl *.tcl]
 
-install_dirs:
-	install -d $(DESTDIR)/home/httpd/cgi-bin
-	install -d $(DESTDIR)/home/httpd/css
-	install -d $(DESTDIR)/home/httpd/img
-	install -d $(DESTDIR)/home/httpd/javascript
-	install -d $(DESTDIR)/bin
-
-# May need to install any local tcl packages here too - to $(DESTDIR)/lib/tcl6
-install_tcl:
-	install -d $(DESTDIR)/lib/tcl6
-	install $(UWEB)/lib/tcl6/*.tcl $(DESTDIR)/lib/tcl6
-
-install_help: install_dirs
-	install $(COMMON)/help.png $(DESTDIR)/home/httpd/img
-
-install_basic_theme: install_dirs
-	install $(THEMES)/basic.css $(DESTDIR)/home/httpd/css/basic1.css
-	install $(THEMES)/black_icons/*.png $(DESTDIR)/home/httpd/img
-
-server run:
-	mkdir -p $(CONFIG_DIR)
-	UWEB_CONFIG_DIR=$(CONFIG_DIR) TCLLIBPATH=$(DESTDIR)/lib/tcl6 $(DESTDIR)/home/httpd/cgi-bin/$(PROGRAM) server 8000
-
-clean:
-	rm -f *.o lib*.a *.page.c *.app.c *.menus.c $(PROGRAM)
-	rm -rf _install
+target run -depends install -rules {
+	file mkdir $CONFIG_DIR
+	set env(UWEB_CONFIG_DIR) $CONFIG_DIR
+	set env(TCLLIBPATH) $DESTDIR/lib/tcl6 
+	puts "Point your browser to http://localhost:8000/"
+	run $DESTDIR/home/httpd/cgi-bin/web server 8000
 }
+
+Alias server run

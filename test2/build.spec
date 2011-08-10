@@ -1,18 +1,10 @@
 Load settings.conf
 
 set extrasrcs {}
+define? DESTDIR _install
 
 CFlags -I.
 
-ifconfig JIM_MATH_FUNCTIONS {
-	UseSystemLibs -lm
-}
-ifconfig JIM_O2 {
-	CFlags -O2 -fomit-frame-pointer 
-}
-ifconfig JIM_REGEX {
-	CFlags -DJIM_REGEXP
-}
 ifconfig USE_LINENOISE {
 	define-append extrasrcs linenoise.c
 }
@@ -21,16 +13,19 @@ ifconfig USE_LINENOISE {
 #PublishIncludes jim.h jim-subcmd.h jim-win32compat.h
 #Install /include jim.h jim-subcmd.h jim-win32compat.h
 
-set JIM_MOD_EXTENSIONS {}
-set JIM_REFERENCES 1
-set JIM_STATIC_C_EXTS {aio array clock eventloop exec file load package posix readdir regexp signal syslog}
-set JIM_STATIC_TCL_EXTS {glob stdlib tclcompat}
+#set JIM_MOD_EXTENSIONS {clock syslog}
+#set JIM_STATIC_C_EXTS {aio array eventloop exec file load package posix readdir regexp signal}
+#set JIM_STATIC_TCL_EXTS {glob stdlib tclcompat}
+#set JIM_TCL_EXTENSIONS glob
 
 # C extensions can either be static or dynamic
 foreach pkg $JIM_STATIC_C_EXTS {
-	lappend extrasrcs jim-$pkg.c
+	define-append extrasrcs jim-$pkg.c
 }
-
+foreach pkg $JIM_MOD_EXTENSIONS {
+	SharedObject $pkg.so jim-$pkg.c
+	Install --bin $prefix/lib/jim $pkg.so
+}
 foreach pkg $JIM_STATIC_TCL_EXTS {
 	set src _jim$pkg.c 
 	Generate $src make-c-ext.tcl $pkg.tcl {
@@ -38,6 +33,8 @@ foreach pkg $JIM_STATIC_TCL_EXTS {
 	}
 	define-append extrasrcs $src
 }
+
+Install $prefix/lib/jim [suffix .tcl $JIM_TCL_EXTENSIONS]
 
 Generate _initjimsh.c make-c-ext.tcl initjimsh.tcl {
 	run $tclsh $script $inputs >$target
@@ -55,6 +52,7 @@ ifconfig JIM_UTF8 {
 ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $extrasrcs
 
 Executable jimsh jimsh.c
+Install --bin $exec_prefix jimsh
 
 ifconfig JIM_UNIT_TESTS {
 	Test --runwith=jimsh regtest.tcl

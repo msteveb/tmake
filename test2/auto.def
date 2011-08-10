@@ -382,8 +382,11 @@ make-config-header jim-config.h -auto {HAVE_LONG_LONG* JIM_UTF8} -none *
 make-config-header jimautoconf.h -auto {jim_ext_* TCL_PLATFORM_* TCL_LIBRARY USE_* JIM_*}
 #make-template Makefile.in
 
+set d [all-defines]
 set f [open settings.conf w]
-foreach {n v} [all-defines] {
+foreach n [lsort [dict keys $d]] {
+    set v [dict get $d $n]
+    set v [string map [list \${prefix} [get-define prefix] \${exec_prefix} [get-define prefix]] $v]
     puts $f "set $n [list $v]"
 }
 close $f

@@ -1,4 +1,5 @@
 #!/usr/bin/env jimsh
+# vim:set syntax=tcl:
 
 # ==================================================================
 # Initialiation
@@ -9,6 +10,13 @@ set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(current) {}
 set tmake(targets) {}
+set tmake(clean) {clean {} distclean {} uninstall {}}
+set tmake(install) {}
+set tmake(installbin) {}
+set tmake(installdirs) {}
+set tmake(start) [clock millis]
+set tmake(numtargets) 0
+
 
 # ==================================================================
 # LOW LEVEL RULES
@@ -71,9 +79,32 @@ proc set-target {target value} {
 	dict set ::tmake(targets) $target $value
 }
 
+proc get-clean {type} {
+	dict get $::tmake(clean) $type
+}
+
+proc add-clean {type args} {
+	set list [get-clean $type]
+	lappend list {*}$args
+	dict set ::tmake(clean) $type $list
+}
+
+proc install-file {dest src {bin 0}} {
+	dict set ::tmake(installdirs) [file dirname $dest] 1
+	if {[dict exists $::tmake(install) $dest]} {
+		puts "Warning: Duplicate install rule for $dest"
+	}
+	dict set ::tmake(install) $dest $src
+	dict set ::tmake(installbin) $dest $bin
+	add-clean uninstall $dest
+}
+
+proc get-installdirs {} {
+	prefix $::DESTDIR [lsort [dict keys $::tmake(installdirs)]]
+}
+
 proc target {target args} {
 	set info(source) [lrange [info frame 0] 1 end]
-	#puts "XXX: @[join $info(source) :] target $target [join $args]"
 	set -inputs {}
 	set -depends {}
 	set -clean {}
@@ -150,6 +181,7 @@ proc dumptarget {target} {
 		showrules $t(rules)
 		#set V $t(vars)
 		#parray V
+		parray t
 	} else {
 		puts "No rule to make $target"
 	}
@@ -208,7 +240,6 @@ proc build {target} {
 		if {[file exists $target]} {
 			return 1
 		}
-		puts stderr "Don't know how to build [join [lreverse $current] { <= }]"
 		return -1
 	}
 	set t [get-target $target]
@@ -234,7 +265,8 @@ proc build {target} {
 			#puts "Building $i"
 			#dumptarget $i
 			if {[build $i] < 0} {
-				dputs "Failed to build $i"
+				puts stderr "Don't know how to build $i: [join [lreverse $current] { <= }] @[join $t(source) :]"
+				dumptarget $target
 				set nobuild 1
 			}
 		}
@@ -247,11 +279,17 @@ proc build {target} {
 				if {$tmake(norun)} {
 					showrules [uplevel #0 [list subst $t(rules)]]
 				} else {
+					incr tmake(numtargets)
 					uplevel #0 $t(rules)
 				}
 			} on error {msg opts} {
-				puts $msg
 				file delete $target {*}$t(clean)
+				try {
+					uplevel #0 $t(onfail)
+					puts stderr [errorInfo $msg]
+				} on error {fmsg fopts} {
+					puts stderr [errorInfo $fmsg]
+				}
 			}
 		} else {
 			#puts "Not running rules for $target [expr {$nobuild ? "because dependency failed" : "because no rules"}]"
@@ -292,8 +330,58 @@ proc make {args} {
 	}
 }
 
-proc Clean {type {args files}} {
-	lappend ::CLEAN($type) {*}$files
+target clean -rules {
+	note "Clean clean"
+	set files [get-clean clean]
+	if {[llength $files]} {
+		dputs "rm $files"
+		file delete {*}$files
+	}
+}
+
+target distclean -rules {
+	note "Clean distclean"
+	set files [concat [get-clean clean] [get-clean distclean]]
+	if {[llength $files]} {
+		dputs "rm $files"
+		file delete {*}$files
+	}
+}
+
+target install -rules {
+	# First create all the directories
+	file mkdir {*}[get-installdirs]
+
+	set prevdir ""
+
+	foreach dest [lsort [dict keys $::tmake(install)]] {
+		set src [dict get $::tmake(install) $dest]
+		set bin [dict exists $::tmake(installbin) $dest]
+		set dest $::DESTDIR$dest
+		if {![file exists $dest] || [file mtime $dest] < [file mtime $src]} {
+			set dir [file dirname $dest]
+			if {$dir ne $prevdir} {
+				note "Install $dir"
+				set prevdir $dir
+			}
+			file copy -force $src $dest
+			if {$bin} {
+				exec chmod +x $dest
+			}
+		}
+	}
+}
+
+target uninstall -rules {
+	note "Clean uninstall"
+	set files [prefix $::DESTDIR [get-clean uninstall]]
+	if {[llength $files]} {
+		dputs "rm $files"
+		file delete {*}$files
+	}
+	foreach i [get-installdirs] {
+		file delete -force $i
+	}
 }
 
 # ==================================================================
@@ -306,7 +394,7 @@ proc Executable {target {args srcs}} {
 		# XXX: Do something with test here
 	}
 	Link $target {*}[Objects {*}[join $srcs]]
-	target all -depends $target
+	Depends all $target
 }
 
 # Link an executable from objects
@@ -323,8 +411,21 @@ proc ArchiveLib {base {args srcs}} {
 	define-append LOCAL_LIBS $libname
 }
 
+proc SharedObject {target {args srcs}} {
+	# XXX: Should build objects with -fpic, etc.
+	SharedObjectLink $target {*}[Objects {*}[join $srcs]]
+	Depends all $target
+}
+
+# Link an executable from objects
+proc SharedObjectLink {target {args objs}} {
+	# Note that we only link against local shared libs, not archive libs
+	target $target -inputs {*}$objs -rules $::SHAREDOBJRULE -msg {note SharedObject $target}
+	Clean clean $target
+}
+
 proc Phony {target {args deps}} {
-	target all -depends {*}$deps
+	Depends all {*}$deps
 }
 
 # Create an object file from each source file
@@ -362,7 +463,7 @@ proc Load {filename} {
 }
 
 proc UseSystemLibs {{args libs}} {
-	define-append LDLIBS {*}$libs
+	define-append SYSLIBS {*}$libs
 }
 
 proc PublishIncludes {{args includes}} {
@@ -377,6 +478,38 @@ proc RunTest {{args cmd}} {
 	#target 
 }
 
+proc Install {dest {args files}} {
+	set bin 0
+	set files [join $files]
+	if {$dest eq "--bin"} {
+		incr bin
+		set files [lassign $files dest]
+	}
+
+	# pairs of src dest
+	set srcs {}
+	foreach i $files {
+		if {[string match {*[*?]*} $i]} {
+			foreach j [glob $i] {
+				lappend srcs $j
+				install-file [file join $dest [file tail $j]] $j $bin
+			}
+		} elseif {[string match *=* $i]} {
+			lassign [split $i =] src target
+			lappend srcs $src
+			install-file [file join $dest $target] $src $bin
+		} else {
+			lappend srcs $i
+			install-file [file join $dest [file tail $i]] $i $bin
+		}
+	}
+	Depends install {*}$srcs
+}
+
+proc Clean {type {args files}} {
+	add-clean $type {*}$files
+}
+
 proc Generate {target script inputs rules} {
 	target $target -inputs {*}$inputs -depends $script -vars script -rules $rules -msg {note Generate $target}
 	Clean clean $target
@@ -386,20 +519,12 @@ proc Depends {target {args depends}} {
 	target $target -depends {*}$depends
 }
 
-target clean -rules {
-	note "Clean clean"
-	if {[info exists ::CLEAN(clean)]} {
-		dputs "rm $::CLEAN(clean)"
-		file delete {*}$::CLEAN(clean)
-	}
+proc Alias {target other} {
+	target $target -depends $other
 }
 
-target distclean -depends clean -rules {
-	note "Clean distclean"
-	if {[info exists ::CLEAN(distclean)]} {
-		dputs "rm $::CLEAN(distclean)"
-		file delete {*}$::CLEAN(distclean)
-	}
+proc Action {target rules} {
+	target $target -rules $rules
 }
 
 # ==================================================================
@@ -436,15 +561,25 @@ set CFLAGS ""
 set CXXFLAGS ""
 set SH_LINKFLAGS ""
 set LDFLAGS ""
-set LDLIBS ""
+set SYSLIBS ""
 set LOCAL_LIBS ""
+set DESTDIR ""
+
+define SH_CFLAGS -dynamic
+define SH_LDFLAGS "-dynamiclib"
+define SHOBJ_CFLAGS "-dynamic -fno-common"
+define SHOBJ_LDFLAGS "-bundle -undefined dynamic_lookup"
 
 set OBJRULES(.c) {run $CCACHE $CC $CFLAGS -c $inputs -o $target}
 set OBJMSG(.c) {note Cc $target}
 set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS -c $inputs -o $target}
 set OBJMSG(.cpp) {note C++ $target}
-set EXERULE {run $CC $CFLAGS $SH_LINKFLAGS $LDFLAGS -o $target $inputs $LDLIBS}
-set ARRULE {run $AR $ARFLAGS $target $inputs}
+set EXERULE {run $CC $CFLAGS $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS}
+set SHAREDOBJRULE {run $CC $CFLAGS $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
+set ARRULE {
+	run $AR $ARFLAGS $target $inputs
+	run $RANLIB $target
+}
 
 # Loaded in the global scope 
 source build.spec
@@ -455,3 +590,7 @@ if {[info exists env(MAKEFLAGS)]} {
 }
 
 make {*}$argv
+
+if {$tmake(numtargets)} {
+	puts "Built $tmake(numtargets) target(s) in [format %.1f $(([clock millis] - $tmake(start)) / 1000.0)] seconds"
+}
