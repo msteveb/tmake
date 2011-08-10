@@ -138,6 +138,7 @@ proc target {target args} {
 		dict set info(vars) $v [uplevel 1 set $v]
 	}
 	set info(result) 0
+	set info(building) 0
 	set info(inputs) [join ${-inputs}]
 	set info(depends) [join ${-depends}]
 	set info(clean) ${-clean}
@@ -291,6 +292,11 @@ proc build {target} {
 		dputs "$target has previously been built"
 		return 1
 	}
+	if {$t(building)} {
+		puts stderr "Recursive definition for [join [lreverse $current] { <= }] @[join $t(source) {, }]"
+		exit 1
+	}
+	dict set tmake(targets) $target building 1
 	if {[file exists $target]} {
 		dputs "$target exists, so check dependencies"
 		foreach i $t(depends) {
@@ -364,6 +370,7 @@ proc build {target} {
 		}
 	}
 	set tmake(current) $oldcurrent
+	dict set tmake(targets) $target building 0
 	return $result
 }
 
@@ -483,6 +490,8 @@ proc ArchiveLib {base {args srcs}} {
 	Clean clean $libname
 	define-append LOCAL_LIBS $libname
 }
+
+alias Lib ArchiveLib
 
 proc SharedObject {target {args srcs}} {
 	# XXX: Should build objects with -fpic, etc.
