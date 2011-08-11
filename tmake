@@ -455,7 +455,8 @@ proc make {args} {
 					incr ::tmake(quickstop)
 				}
 				default {
-					error "Unknown option $a"
+					# Ignore unknown options
+					#error "Unknown option $a"
 				}
 			}
 		} else {
@@ -529,26 +530,46 @@ proc show-reason {targets} {
 	}
 }
 
+proc show-this-rule {} {
+	#dputs [info level -1]
+}
+
 # ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================
 
 proc Executable {target {args srcs}} {
-	if {$target eq "--test"} {
+	show-this-rule
+	set test 0
+	while {[string match --* $target]} {
+		if {[regexp {^--install=(.*)} $target -> installdir} {
+			# Will install to $installdir
+		} elseif {$target eq "--test"} {
+			incr test
+		} else {
+			error "Uknown option $target"
+		}
 		set srcs [lassign $srcs target]
-		# XXX: Do something with test here
 	}
 	Link $target {*}[Objects {*}[join $srcs]]
 	Depends all $target
+	if {[exists installdir]} {
+		Install $installdir $target
+	}
+	if {$test} {
+		# XXX: RunTest $target
+	}
 }
 
 # Link an executable from objects
 proc Link {target {args objs}} {
+	show-this-rule
 	target $target -inputs {*}$objs $::LOCAL_LIBS -rules $::EXERULE -msg {note Link $target}
 	Clean clean $target
 }
 
 proc ArchiveLib {base {args srcs}} {
+	show-this-rule
 	set libname lib$base.a
 	target $libname -inputs {*}[Objects {*}[join $srcs]] -rules $::ARRULE -msg {note Ar $target}
 	target all -depends $libname
@@ -559,6 +580,7 @@ proc ArchiveLib {base {args srcs}} {
 alias Lib ArchiveLib
 
 proc SharedObject {target {args srcs}} {
+	show-this-rule
 	# XXX: Should build objects with -fpic, etc.
 	SharedObjectLink $target {*}[Objects {*}[join $srcs]]
 	Depends all $target
@@ -566,6 +588,7 @@ proc SharedObject {target {args srcs}} {
 
 # Link an executable from objects
 proc SharedObjectLink {target {args objs}} {
+	show-this-rule
 	# Note that we only link against local shared libs, not archive libs
 	target $target -inputs {*}$objs -rules $::SHAREDOBJRULE -msg {note SharedObject $target}
 	Clean clean $target
@@ -579,10 +602,14 @@ proc Phony {target {args deps}} {
 # Uses $OBJSRULES(.ext) to determine the build rule
 # Returns a list of objects
 proc Objects {{args srcs}} {
+	show-this-rule
 	set objs {}
 	foreach src $srcs {
 		set obj [change-ext .o $src]
 		lappend objs $obj
+		if {![info exists ::OBJRULES([file ext $src])} {
+			error "Don't know how to build object from $src"
+		}
 		target $obj -inputs $src -rules $::OBJRULES([file ext $src]) -msg $::OBJMSG([file ext $src])
 		Clean clean $obj
 	}
@@ -591,6 +618,7 @@ proc Objects {{args srcs}} {
 
 # Set object-specific CFLAGS
 proc ObjectCFlags {srcs {args flags}} {
+	show-this-rule
 	foreach src $srcs {
 		set obj [change-ext .o $src]
 		set OBJCFLAGS [join $flags]
@@ -635,6 +663,7 @@ proc RunTest {{args cmd}} {
 }
 
 proc Install {dest {args files}} {
+	show-this-rule
 	set bin 0
 	set files [join $files]
 	if {$dest eq "--bin"} {
@@ -710,6 +739,7 @@ proc ifconfig {symbol {code {}} {else {}} {elsecode {}}} {
 
 set CCACHE ""
 set CC cc
+set CC_FOR_BUILD cc
 set CXX c++
 set AR ar
 set RANLIB ranlib

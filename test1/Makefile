@@ -1,9 +1,11 @@
-# Warning: Automatically created by automf v0.5.1 -- do not edit
+# Avoid built-in rules and variables
+MAKEFLAGS += rR
+
+all clean distclean:
+	+@jimsh ../tmake $(MFLAGS) $@
+
+%:
+	+@jimsh ../tmake $(MFLAGS) $(MAKECMDGOALS)
 
 .EXPORT_ALL_VARIABLES:
 
-all:
-	@jimsh ../tmake $(MAKECMDGOALS)
-
-%:
-	@jimsh ../tmake $(MAKECMDGOALS)

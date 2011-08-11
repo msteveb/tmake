@@ -51,8 +51,7 @@ ifconfig JIM_UTF8 {
 
 ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $extrasrcs
 
-Executable jimsh jimsh.c
-Install --bin $exec_prefix jimsh
+Executable --install=$exec_prefix jimsh jimsh.c
 
 ifconfig JIM_UNIT_TESTS {
 	Test --runwith=jimsh regtest.tcl
@@ -61,7 +60,7 @@ ifconfig JIM_UNIT_TESTS {
 Generate Tcl.html make-index jim_tcl.txt {
 	run $tclsh $script $inputs | asciidoc -o $target -d manpage -
 }
-#Install /docs Tcl.html
+Install $prefix/docs Tcl.html
 
 Depends docs Tcl.html
 

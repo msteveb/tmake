@@ -1,34 +1,47 @@
-Add support for per-directory rules. Probably need something like Jam's <grist>
-
-Read project.spec and build.spec in subdirs
-
-Have a 'tmake -init' which will generate stub Makefiles
-
-Allow detection of build rule dependencies (project.spec, build.spec, settings.conf)
-and reload rules.
-
-Work out a good arrangement for the distribution of:
-- low level rules
-- high level rules
-- default rule base
-- local customisations
-
-How to add rules for new Object types?
-
-Add parallel build support.
-
-Better debug levels
-
-Support Test, Publish
-
-Add getopt and use it like automf for Executable --test --install=/blah ...
-
-Do proper getopt processing in tmake
-
-Use source location even when unable to build something to show what rules
-were used to determine that something was needed. Perhaps look back along
-tmake(current). This is done, but could be formatted better.
-
-Add a version number
-
-Add user errors and internal errors like autosetup
+tmake TODO
+----------
+* Add support for per-directory rules. Probably need something like Jam's <grist>
+* Read project.spec and build.spec in subdirs
+* Have a 'tmake -init' which will generate stub Makefiles (if they don't exist)
+  - This should probably be run by configure
+* Allow detection of build rule dependencies (project.spec, build.spec, settings.conf)
+  and reload rules.
+* Work out a good arrangement for the distribution of:
+  - low level rules
+  - high level rules
+  - default rule base
+  - local customisations
+* How to add rules for new Object types?
+* Add parallel build support.
+  - With exec &, and os.wait
+* Better debug levels
+* Support Test, Publish*
+* Support shared libraries
+* Add getopt and use it like automf for Executable --test --install=/blah ...
+* Do proper getopt processing in tmake
+* Use source location even when unable to build something to show what rules
+  were used to determine that something was needed. Perhaps look back along
+  tmake(current). This is done, but could be formatted better.
+* Add a version number
+* Add user errors and internal errors like autosetup/automf
+* Scan for header file dependencies
+  - How to only notice headers we care about?
+  - Just before building abc.c, scan for headers
+  - If we have a rule for making a found header, mark it as a dependency
+  - Otherwise ignore it
+  - Note that Jam uses NOCARE to ignore these dependencies if they file doesn't exist
+    - But that causes problems when the headers are generated...
+* Record commands used to build targets in a cache
+* Publish includes, libs, bins to a dir as ungristed
+* Need support for host executables with (at least):
+  - HostExecutable
+  - HostCFlags
+  - Use CC_FOR_BUILD
+* rename the project to autoproj or autoproject when it is nearing the capabilities
+  for automake (although there are projects by both of those names)
+* Need a way to specify that a single command creates multiple targets.
+  - something like: target {t1 t2 t3} ...
+  - then create an "aliases" table which points to the target: aliases(t1) -> targets(t1 t2 t3)
+    and when the rules are run, mark all the aliases as built
+  - in fact we are separating the target/rules (inputs, vars, depends, etc.) from the products (result, etc.)
+  - maybe just use a hash or id for the targets() key
