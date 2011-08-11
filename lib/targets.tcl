@@ -179,9 +179,7 @@ proc note {args} {
 }
 
 proc run {args} {
-	if {$::tmake(verbose)} {
-		puts "[join $args]"
-	}
+	vputs [string trim [join $args]]
 	try {
 		exec {*}[join $args]
 	} on error msg {

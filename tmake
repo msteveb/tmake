@@ -21,6 +21,8 @@ set tmake(modules) {}
 
 proc make {argv} {
 	global tmake
+	#puts "make $argv"
+	#parray ::env
 
 	# 'misc' is needed before we can do anything, so set a temporary libdir
 	# in case this is the development version
@@ -78,6 +80,8 @@ proc make {argv} {
 		}
 	}
 
+	#parray tmake
+
 	use rulebase
 
 	# Loaded in the global scope 
@@ -115,9 +119,9 @@ proc use {args} {
 # DEFAULT RULE BASE
 # ==================================================================
 
-if {[info exists env(MFLAGS)]} {
+if {[info exists env(MAKEFLAGS)]} {
 	# Running under make
-	set argv [list {*}$env(MFLAGS) {*}$argv]
+	set argv [list {*}"-$env(MAKEFLAGS)" {*}$argv]
 }
 
 make $argv

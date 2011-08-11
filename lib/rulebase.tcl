@@ -49,7 +49,7 @@ target clean -rules {
 	note "Clean clean"
 	set files [get-clean clean]
 	if {[llength $files]} {
-		dputs "rm $files"
+		vputs "rm $files"
 		file delete {*}$files
 	}
 }
@@ -58,7 +58,7 @@ target distclean -rules {
 	note "Clean distclean"
 	set files [concat [get-clean clean] [get-clean distclean]]
 	if {[llength $files]} {
-		dputs "rm $files"
+		vputs "rm $files"
 		file delete {*}$files
 	}
 }
@@ -79,8 +79,10 @@ target install -rules {
 				note "Install $dir"
 				set prevdir $dir
 			}
+			vputs "Copy $src $dest"
 			file copy -force $src $dest
 			if {$bin} {
+				vputs "chmod +x $dest"
 				exec chmod +x $dest
 			}
 		}
@@ -91,7 +93,7 @@ target uninstall -rules {
 	note "Clean uninstall"
 	set files [prefix $::DESTDIR [get-clean uninstall]]
 	if {[llength $files]} {
-		dputs "rm $files"
+		vputs "rm $files"
 		file delete {*}$files
 	}
 	foreach i [get-installdirs] {

@@ -30,6 +30,12 @@ proc dev-error {msg} {
 	exit 1
 }
 
+proc vputs {msg} {
+	if {$::tmake(verbose)} {
+		puts $msg
+	}
+}
+
 proc dputs {msg} {
 	if {$::tmake(debug)} {
 		puts [dbg-msg-indent]$msg
