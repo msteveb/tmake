@@ -61,6 +61,11 @@ proc find-rule-source {} {
 
 proc target {target args} {
 	set info(source) [find-rule-source]
+	set info(result) 0
+	set info(building) 0
+	set info(target) $target
+	set info(phony) 0
+	set info(vars) {}
 	set -inputs {}
 	set -depends {}
 	set -clean {}
@@ -68,7 +73,12 @@ proc target {target args} {
 	set -onfail {}
 	set -msg {}
 	set -vars {}
+
 	foreach a $args {
+		if {$a eq "-phony"} {
+			incr info(phony)
+			continue
+		}
 		if {[string match -* $a]} {
 			if {![info exists $a]} {
 				error "Unknown option to target: $a"
@@ -80,19 +90,15 @@ proc target {target args} {
 	}
 
 	# Capture any specified local variables
-	set info(vars) {}
 	foreach v ${-vars} {
 		dict set info(vars) $v [uplevel 1 set $v]
 	}
-	set info(result) 0
-	set info(building) 0
 	set info(inputs) [join ${-inputs}]
 	set info(depends) [join ${-depends}]
 	set info(clean) ${-clean}
-	set info(rules) [lindex ${-rules} 0]
 	set info(onfail) ${-onfail}
+	set info(rules) [lindex ${-rules} 0]
 	set info(msg) [lindex ${-msg} 0]
-	set info(target) $target
 	if {$info(rules) eq "" && [llength $info(inputs)]} {
 		error "Inputs but no rules for $target at $info(source)"
 	}
@@ -118,6 +124,7 @@ proc target {target args} {
 			set info(inputs) $orig(inputs)
 			set info(msg) $orig(inputs)
 		}
+		incr info(phony) $orig(phony)
 	}
 	set info(depends) [concat $info(depends) $info(inputs)]
 
@@ -214,7 +221,10 @@ proc build {target} {
 		exit 1
 	}
 	dict set tmake(targets) $target building 1
-	if {[file exists $target]} {
+	if {$t(phony)} {
+		dputs "$target is phony, so rebuilding"
+		incr result
+	} elseif {[file exists $target]} {
 		dputs "$target exists, so check dependencies"
 		foreach i $t(depends) {
 			incr result [needbuild? $target $i]

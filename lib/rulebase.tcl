@@ -42,66 +42,6 @@ set ARRULE {
 }
 
 # ==================================================================
-# Built-in targets
-# ==================================================================
-
-target clean -rules {
-	note "Clean clean"
-	set files [get-clean clean]
-	if {[llength $files]} {
-		vputs "rm $files"
-		file delete {*}$files
-	}
-}
-
-target distclean -rules {
-	note "Clean distclean"
-	set files [concat [get-clean clean] [get-clean distclean]]
-	if {[llength $files]} {
-		vputs "rm $files"
-		file delete {*}$files
-	}
-}
-
-target install -rules {
-	# First create all the directories
-	file mkdir {*}[get-installdirs]
-
-	set prevdir ""
-
-	foreach dest [lsort [dict keys $::tmake(install)]] {
-		set src [dict get $::tmake(install) $dest]
-		set bin [dict exists $::tmake(installbin) $dest]
-		set dest $::DESTDIR$dest
-		if {![file exists $dest] || [file mtime $dest] < [file mtime $src]} {
-			set dir [file dirname $dest]
-			if {$dir ne $prevdir} {
-				note "Install $dir"
-				set prevdir $dir
-			}
-			vputs "Copy $src $dest"
-			file copy -force $src $dest
-			if {$bin} {
-				vputs "chmod +x $dest"
-				exec chmod +x $dest
-			}
-		}
-	}
-}
-
-target uninstall -rules {
-	note "Clean uninstall"
-	set files [prefix $::DESTDIR [get-clean uninstall]]
-	if {[llength $files]} {
-		vputs "rm $files"
-		file delete {*}$files
-	}
-	foreach i [get-installdirs] {
-		file delete -force $i
-	}
-}
-
-# ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================
 
@@ -139,7 +79,7 @@ proc ArchiveLib {base {args srcs}} {
 	show-this-rule
 	set libname lib$base.a
 	target $libname -inputs {*}[Objects {*}[join $srcs]] -rules $::ARRULE -msg {note Ar $target}
-	target all -depends $libname
+	Depends all $libname
 	Clean clean $libname
 	define-append LOCAL_LIBS $libname
 }
@@ -159,10 +99,6 @@ proc SharedObjectLink {target {args objs}} {
 	# Note that we only link against local shared libs, not archive libs
 	target $target -inputs {*}$objs -rules $::SHAREDOBJRULE -msg {note SharedObject $target}
 	Clean clean $target
-}
-
-proc Phony {target {args deps}} {
-	Depends all {*}$deps
 }
 
 # Create an object file from each source file
@@ -258,8 +194,8 @@ proc Install {dest {args files}} {
 	Depends install {*}$srcs
 }
 
-proc Clean {type {args files}} {
-	add-clean $type {*}$files
+proc Clean {type args} {
+	add-clean $type {*}$args
 }
 
 proc Generate {target script inputs rules} {
@@ -267,15 +203,73 @@ proc Generate {target script inputs rules} {
 	Clean clean $target
 }
 
-proc Depends {target {args depends}} {
-	target $target -depends {*}$depends
+proc Depends {target args} {
+	target $target -depends {*}$args
 }
 
-proc Alias {target other} {
-	target $target -depends $other
+proc Phony {target args} {
+	Depends $target -phony -depends {*}$args
 }
 
-proc Action {target rules} {
-	target $target -rules $rules
+# ==================================================================
+# Built-in targets
+# ==================================================================
+
+Phony clean -rules {
+	note "Clean clean"
+	set files [get-clean clean]
+	if {[llength $files]} {
+		vputs "rm $files"
+		file delete {*}$files
+	}
 }
 
+Phony distclean -rules {
+	note "Clean distclean"
+	set files [concat [get-clean clean] [get-clean distclean]]
+	if {[llength $files]} {
+		vputs "rm $files"
+		file delete {*}$files
+	}
+}
+
+Phony install -rules {
+	# First create all the directories
+	file mkdir {*}[get-installdirs]
+
+	set prevdir ""
+
+	foreach dest [lsort [dict keys $::tmake(install)]] {
+		set src [dict get $::tmake(install) $dest]
+		set bin [dict exists $::tmake(installbin) $dest]
+		set dest $::DESTDIR$dest
+		if {![file exists $dest] || [file mtime $dest] < [file mtime $src]} {
+			set dir [file dirname $dest]
+			if {$dir ne $prevdir} {
+				note "Install $dir"
+				set prevdir $dir
+			}
+			vputs "Copy $src $dest"
+			file copy -force $src $dest
+			if {$bin} {
+				vputs "chmod +x $dest"
+				exec chmod +x $dest
+			}
+		}
+	}
+}
+
+Phony uninstall -rules {
+	note "Clean uninstall"
+	set files [prefix $::DESTDIR [get-clean uninstall]]
+	if {[llength $files]} {
+		vputs "rm $files"
+		file delete {*}$files
+	}
+	foreach i [get-installdirs] {
+		file delete -force $i
+	}
+}
+
+Phony all
+Phony test
