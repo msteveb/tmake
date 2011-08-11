@@ -47,10 +47,19 @@ proc dbg-msg-indent {} {
 }
 
 proc showrules {rules} {
-	foreach j [split $rules \n] {
-		set r [string trim $j]
+	set lines [split $rules \n]
+	set first [lindex $lines 0]
+	if {$first eq ""} {
+		set lines [lrange $lines 1 end]
+		set first [lindex $lines 0]
+	}
+	regexp {^(\s*)} $first -> space
+	set trim [string length $space]
+	set prefix \t
+	foreach j $lines {
+		set r [string trimright [string range $j $trim end]]
 		if {$r ne ""} {
-			puts "\t$r"
+			puts $prefix$r
 		}
 	}
 }
@@ -58,20 +67,52 @@ proc showrules {rules} {
 proc dumptarget {target} {
 	if {[is-target? $target]} {
 		set t [get-target $target]
+		set flags {}
+		set lines {}
+		foreach n [lsort [dict keys $t]] {
+			set v [dict get $t $n]
+			switch -- $n {
+				rules - depends - inputs - building - msg - target {}
+				source {
+					if {$v ne "unknown"} {
+						puts @[join $v {, }]
+					}
+				}
+				phony {
+					if {$v} {
+						lappend flags $n
+					}
+				}
+				result {
+					if {$v < 0} {
+						lappend flags failed
+					} elseif {$v > 0} {
+						lappend flags built
+					}
+				}
+				default {
+					if {$v ne ""} {
+						lappend lines "$n='$v'"
+					}
+				}
+			}
+		}
+		if {[llength $flags]} {
+			append target " \[$flags\]"
+		}
 		puts "$target: $t(depends)"
+		if {[llength $lines]} {
+			puts [join $lines \n]
+		}
 		showrules $t(rules)
-		#set V $t(vars)
-		#parray V
-		parray t
 	} else {
 		puts "No rule to make $target"
 	}
 }
 
 proc dumptargets {} {
-	parray ::tmake
 	foreach i [lsort [dict keys $::tmake(targets)]] {
-		puts "dumptarget $i"
+		puts "-------------------------------------------"
 		dumptarget $i
 		puts ""
 	}

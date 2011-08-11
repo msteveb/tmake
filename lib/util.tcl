@@ -11,11 +11,11 @@ proc define? {name args} {
 }
 
 # If &n is not set or is "", sets it to $value
-# Otherise appends $value with a space separator
+# Otherise appends $value with a space separator (or $space)
 #
-proc append-with-space {&n value} {
+proc append-with-space {&n value {space " "}} {
 	if {[info exists n] && $n ne ""} {
-		append n " " $value
+		append n $space $value
 	} else {
 		set n $value
 	}

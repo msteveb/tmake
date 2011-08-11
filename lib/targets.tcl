@@ -114,10 +114,14 @@ proc target {target args} {
 		lappend info(depends) {*}$orig(depends)
 		lappend info(inputs) {*}$orig(inputs)
 		lappend info(clean) {*}$orig(clean)
-		lappend info(source) {*}$orig(source)
+		if {$info(source) eq "unknown"} {
+			set info(source) $orig(source)
+		} elseif {$orig(source) ne "unknown"} {
+			lappend info(source) {*}$orig(source)
+		}
 		# Need to append to any vars which exist
 		set info(vars) [merge-vars $orig(vars) $info(vars)]
-		append info(onfail) \n$orig(onfail)
+		append-with-space info(onfail) $orig(onfail) \n
 		if {$info(rules) eq ""} {
 			set info(rules) $orig(rules)
 			# Inputs go with the rules
@@ -210,10 +214,10 @@ proc build {target} {
 	}
 	set t [get-target $target]
 	if {$t(result) < 0} {
-		dputs "$target has previously failed to build"
+		#dputs "$target has previously failed to build"
 		return -1
 	} elseif {$t(result) > 0} {
-		dputs "$target has previously been built"
+		#dputs "$target has previously been built"
 		return 1
 	}
 	if {$t(building)} {
@@ -221,32 +225,22 @@ proc build {target} {
 		exit 1
 	}
 	dict set tmake(targets) $target building 1
+
 	if {$t(phony)} {
 		dputs "$target is phony, so rebuilding"
-		incr result
-	} elseif {[file exists $target]} {
-		dputs "$target exists, so check dependencies"
-		foreach i $t(depends) {
-			incr result [needbuild? $target $i]
-			if {$result} {
-				break
-			}
-		}
-	} else {
+		set result 1
+	} elseif {![file exists $target]} {
 		dputs "$target doesn't exist, so rebuilding"
-		incr result
-	}
-
-	if {$result == 0} {
-		dputs "$target not forced by dependencies"
-		#return 0
+		set result 1
+	} else {
+		dputs "$target exists, so checking dependencies"
+		set result 0
 	}
 
 	set oldcurrent $tmake(current)
 	set tmake(current) $current
 
 	# First make sure dependencies are up to date
-	dputs "Building dependencies of $target"
 	foreach i $t(depends) {
 		#puts "Building $i"
 		#dumptarget $i
@@ -261,9 +255,13 @@ proc build {target} {
 			if {$tmake(quickstop)} {
 				break
 			}
-		} elseif {$rc > 0} {
-			dputs "For $target, $i was built so rebuilding $target"
-			set result 1
+		} elseif {$result == 0} {
+			if {$rc > 0} {
+				dputs "Rebuilding $target because $i was built"
+				set result 1
+			} elseif {[needbuild? $target $i]} {
+				set result 1
+			}
 		}
 	}
 	if {$result > 0 && $t(rules) ne ""} {

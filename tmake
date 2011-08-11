@@ -17,6 +17,7 @@ set tmake(installdirs) {}
 set tmake(numtargets) 0
 set tmake(showtime) 0
 set tmake(quickstop) 0
+set tmake(showrules) 0
 set tmake(modules) {}
 
 proc make {argv} {
@@ -39,36 +40,39 @@ proc make {argv} {
 	foreach a $argv {
 		if {[regexp {([^=]*)=(.*)} $a -> n v]} {
 			if {$n eq "V"} {
-				set ::tmake(verbose) $v
+				set tmake(verbose) $v
 			} elseif {$n eq "D"} {
-				set ::tmake(debug) $v
+				set tmake(debug) $v
 			} elseif {$n eq "P"} {
-				dumptargets
+				set tmake(showrules) 1
 			} elseif {$n eq "N"} {
-				incr ::tmake(norun)
+				incr tmake(norun)
 			} elseif {$n eq "T"} {
-				incr ::tmake(showtime)
+				incr tmake(showtime)
 			} elseif {$n eq "Q"} {
-				incr ::tmake(quickstop)
+				incr tmake(quickstop)
 			} else {
 				define $n $v
 			}
 		} elseif {[string match -* $a]} {
 			switch -glob -- $a {
 				--debug - -d {
-					set ::tmake(debug) 1
+					set tmake(debug) 1
 				}
 				--verbose - -v {
-					set ::tmake(verbose) 1
+					set tmake(verbose) 1
 				}
 				--dry-run - --just-print - -n {
-					set ::tmake(norun) 1
+					set tmake(norun) 1
 				}
 				--tim* - -t {
-					incr ::tmake(showtime)
+					incr tmake(showtime)
 				}
 				-q - --quickstop {
-					incr ::tmake(quickstop)
+					incr tmake(quickstop)
+				}
+				-p - --print* {
+					incr tmake(showrules)
 				}
 				default {
 					# Ignore unknown options
@@ -96,6 +100,11 @@ proc make {argv} {
 	if {[llength $targets] == 0} {
 		set targets all
 	}
+
+	if {$tmake(showrules)} {
+		dumptargets
+	}
+
 	build $targets
 }
 
