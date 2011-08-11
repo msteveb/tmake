@@ -14,413 +14,27 @@ set tmake(clean) {clean {} distclean {} uninstall {}}
 set tmake(install) {}
 set tmake(installbin) {}
 set tmake(installdirs) {}
-set tmake(start) [clock millis]
 set tmake(numtargets) 0
 set tmake(showtime) 0
 set tmake(quickstop) 0
+set tmake(modules) {}
 
-
-# ==================================================================
-# LOW LEVEL RULES
-# ==================================================================
-
-proc dputs {msg} {
-	if {$::tmake(debug)} {
-		puts [msg-indent]$msg
-	}
-}
-
-proc define {name args} {
-	upvar #0 $name n
-	set n [join $args]
-}
-
-proc define? {name args} {
-	upvar #0 $name n
-	if {![info exists n] || $n eq ""} {
-		set n [join $args]
-	}
-}
-
-# If &n is not set or is "", sets it to $value
-# Otherise appends $value with a space separator
-#
-proc append-with-space {&n value} {
-	if {[info exists n] && $n ne ""} {
-		append n " " $value
-	} else {
-		set n $value
-	}
-}
-
-proc define-append {name args} {
-	upvar #0 $name n
-	append-with-space ::$name [join $args]
-}
-
-proc suffix {suf args} {
-	lmap p [join $args] {
-		append p $suf
-	}
-}
-
-proc change-ext {new args} {
-	lmap p [join $args] {
-		set x [file rootname $p]$new
-	}
-}
-
-proc prefix {pre args} {
-	lmap p [join $args] {
-		set x $pre$p
-	}
-}
-
-proc is-target? {target} {
-	dict exists $::tmake(targets) $target
-}
-
-proc get-target {target} {
-	dict get $::tmake(targets) $target
-}
-
-proc set-target {target value} {
-	dict set ::tmake(targets) $target $value
-}
-
-proc get-clean {type} {
-	dict get $::tmake(clean) $type
-}
-
-proc add-clean {type args} {
-	set list [get-clean $type]
-	lappend list {*}$args
-	dict set ::tmake(clean) $type $list
-}
-
-proc install-file {dest src {bin 0}} {
-	dict set ::tmake(installdirs) [file dirname $dest] 1
-	if {[dict exists $::tmake(install) $dest]} {
-		puts "Warning: Duplicate install rule for $dest"
-	}
-	dict set ::tmake(install) $dest $src
-	dict set ::tmake(installbin) $dest $bin
-	add-clean uninstall $dest
-}
-
-proc get-installdirs {} {
-	prefix $::DESTDIR [lsort [dict keys $::tmake(installdirs)]]
-}
-
-proc find-rule-source {} {
-	foreach i [range [info level]] {
-		lassign [info frame $i] proc file line
-		if {[string match *.spec $file]} {
-			return $file:$line
-		}
-	}
-	return unknown
-}
-
-# Merges target variables.
-# These are stored in dictionaries, where $dict1 is the current vars
-# and the new vars $dict2 need to be merged.
-# Where there is no overlap, the dictionaries are simply merged.
-# Where a var exists in both, the values are combined with a space separator.
-proc merge-vars {dict1 dict2} {
-	if {[dict size $dict2]} {
-		if {[dict size $dict1] == 0} {
-			return $dict2
-		}
-		foreach {n v} $dict2 {
-			append-with-space dict1($n) $v
-		}
-	}
-	return $dict1
-}
-
-proc target {target args} {
-	set info(source) [find-rule-source]
-	set -inputs {}
-	set -depends {}
-	set -clean {}
-	set -rules {}
-	set -onfail {}
-	set -msg {}
-	set -vars {}
-	foreach a $args {
-		if {[string match -* $a]} {
-			if {![info exists $a]} {
-				error "Unknown option to target: $a"
-			}
-			set current $a
-		} else {
-			lappend $current $a
-		}
-	}
-
-	# Capture any specified local variables
-	set info(vars) {}
-	foreach v ${-vars} {
-		dict set info(vars) $v [uplevel 1 set $v]
-	}
-	set info(result) 0
-	set info(building) 0
-	set info(inputs) [join ${-inputs}]
-	set info(depends) [join ${-depends}]
-	set info(clean) ${-clean}
-	set info(rules) [lindex ${-rules} 0]
-	set info(onfail) ${-onfail}
-	set info(msg) [lindex ${-msg} 0]
-	set info(target) $target
-	if {$info(rules) eq "" && [llength $info(inputs)]} {
-		error "Inputs but no rules for $target at $info(source)"
-	}
-	if {$info(rules) eq "" && $info(msg) ne ""} {
-		error "Message but no rules for $target at $info(source)"
-	}
-
-	if {[is-target? $target]} {
-		set orig [get-target $target]
-		if {$info(rules) ne "" && $orig(rules) ne ""} {
-			error "Duplicate rules for $target at $info(source) and $orig(source)"
-		}
-		lappend info(depends) {*}$orig(depends)
-		lappend info(inputs) {*}$orig(inputs)
-		lappend info(clean) {*}$orig(clean)
-		lappend info(source) {*}$orig(source)
-		# Need to append to any vars which exist
-		set info(vars) [merge-vars $orig(vars) $info(vars)]
-		append info(onfail) \n$orig(onfail)
-		if {$info(rules) eq ""} {
-			set info(rules) $orig(rules)
-			# Inputs go with the rules
-			set info(inputs) $orig(inputs)
-			set info(msg) $orig(inputs)
-		}
-	}
-	set info(depends) [concat $info(depends) $info(inputs)]
-
-	set-target $target $info
-}
-
-proc showrules {rules} {
-	foreach j [split $rules \n] {
-		set r [string trim $j]
-		if {$r ne ""} {
-			puts "\t$r"
-		}
-	}
-}
-
-proc dumptarget {target} {
-	if {[is-target? $target]} {
-		set t [get-target $target]
-		puts "$target: $t(depends)"
-		showrules $t(rules)
-		#set V $t(vars)
-		#parray V
-		parray t
-	} else {
-		puts "No rule to make $target"
-	}
-}
-
-proc dumptargets {} {
-	parray ::tmake
-	foreach i [lsort [dict keys $::tmake(targets)]] {
-		puts "dumptarget $i"
-		dumptarget $i
-		puts ""
-	}
-}
-
-proc needbuild? {target source} {
-	set result [get-target-result $target]
-	if {$result} {
-		return $result
-	}
-	if {[file exists $target]} {
-		if {[file exists $source]} {
-			if {[file mtime $target] >= [file mtime $source]} {
-				dputs "$target is newer than $source, so not forcing rebuild"
-				return 0
-			}
-		}
-		dputs "$target is older than $source, so forcing rebuild"
-		return 1
-	} else {
-		dputs "$target does not exist, so forcing build"
-		return 1
-	}
-}
-
-# Sets target-local variables. e.g. $inputs, $depends and $target
-proc set-target-vars {info} {
-	foreach {n v} $info(vars) {
-		set ::$n $v
-	}
-	foreach n {target depends inputs} {
-		set ::$n $info($n)
-	}
-}
-proc clear-target-vars {info} {
-	foreach n [dict keys $info(vars)] {
-		set ::$n ""
-	}
-}
-
-proc get-target-result {target} {
-	if {![is-target? $target]} {
-		return -1
-	}
-	dict get $::tmake(targets) $target result
-}
-
-proc set-target-result {target result} {
-	if {[get-target-result $target] == 0} {
-		dict set ::tmake(targets) $target result $result
-	}
-}
-
-proc note {args} {
-	if {$::tmake(verbose) == 0} {
-		puts "[join $args]"
-	}
-}
-
-proc run {args} {
-	if {$::tmake(verbose)} {
-		puts "[join $args]"
-	}
-	try {
-		exec {*}[join $args]
-	} on error msg {
-		puts stderr \n\t[join $args]\n
-		puts stderr $msg\n
-		return -code break
-	}
-}
-
-proc msg-indent {} {
-	string repeat "  " [llength $::tmake(current)]
-}
-
-proc build {target} {
+proc make {argv} {
 	global tmake
-	set current $tmake(current)
-	lappend current $target
-	if {![is-target? $target]} {
-		if {[file exists $target]} {
-			dputs "$target is not a target, but exists"
-			return 0
-		}
-		dputs "$target is not a target and does not exist"
-		return -1
-	}
-	set t [get-target $target]
-	if {$t(result) < 0} {
-		dputs "$target has previously failed to build"
-		return -1
-	} elseif {$t(result) > 0} {
-		dputs "$target has previously been built"
-		return 1
-	}
-	if {$t(building)} {
-		puts stderr "Recursive definition for [join [lreverse $current] { <= }] @[join $t(source) {, }]"
-		exit 1
-	}
-	dict set tmake(targets) $target building 1
-	if {[file exists $target]} {
-		dputs "$target exists, so check dependencies"
-		foreach i $t(depends) {
-			incr result [needbuild? $target $i]
-			if {$result} {
-				break
-			}
-		}
-	} else {
-		dputs "$target doesn't exist, so rebuilding"
-		incr result
-	}
 
-	if {$result == 0} {
-		dputs "$target not forced by dependencies"
-		#return 0
-	}
+	# 'misc' is needed before we can do anything, so set a temporary libdir
+	# in case this is the development version
+	set tmake(dir) [file dirname $::argv0]
+	set tmake(libdir) $tmake(dir)/lib
 
-	set oldcurrent $tmake(current)
-	set tmake(current) $current
+	use compat
+	set tmake(start) [clock-millis]
 
-	# First make sure dependencies are up to date
-	dputs "Building dependencies of $target"
-	foreach i $t(depends) {
-		#puts "Building $i"
-		#dumptarget $i
-		set rc [build $i]
-		if {$rc < 0} {
-			if {[get-target-result $target] >= 0} {
-				puts stderr "Don't know how to build $i: [join [lreverse $current] { <= }] @[join $t(source) {, }]"
-			}
-			#dumptarget $target
-			#show-reason $current
-			set result -1
-			if {$tmake(quickstop)} {
-				break
-			}
-		} elseif {$rc > 0} {
-			dputs "For $target, $i was built so rebuilding $target"
-			set result 1
-		}
-	}
-	if {$result > 0 && $t(rules) ne ""} {
-		#puts "Running rules for $target"
-		dputs "Building [join [lreverse $current] { <= }] with rule @[join $t(source) {, }]"
-		try {
-			set-target-vars $t
-			uplevel #0 $t(msg)
-			if {$tmake(norun)} {
-				showrules [uplevel #0 [list subst $t(rules)]]
-				#parray t
-			} else {
-				uplevel #0 $t(rules)
-				incr tmake(numtargets)
-			}
-		} on {error break} {msg opts} {
-			file delete $target {*}$t(clean)
-			try {
-				uplevel #0 $t(onfail)
-				if {[info returncode $opts(-code)] eq "error"} {
-					puts stderr [errorInfo $msg]
-				}
-			} on error {fmsg fopts} {
-				puts stderr [errorInfo $fmsg]
-			}
-			set result -1
-		} finally {
-			clear-target-vars $t
-		}
-	}
+	use debug util getopt targets config
 
-	# For each target, mark it as made (> 0) or unmakeable(< 0)
-	if {$result != 0} {
-		#puts "Marking target result=$result for $current"
-		foreach t $current {
-			set-target-result $t $result
-		}
-	}
-	set tmake(current) $oldcurrent
-	dict set tmake(targets) $target building 0
-	return $result
-}
-
-proc find {filename} {
-	return $filename
-}
-
-proc make {args} {
-	set targets 0
-	foreach a $args {
+	# Parse the user options
+	set targets {}
+	foreach a $argv {
 		if {[regexp {([^=]*)=(.*)} $a -> n v]} {
 			if {$n eq "V"} {
 				set ::tmake(verbose) $v
@@ -460,329 +74,54 @@ proc make {args} {
 				}
 			}
 		} else {
-			build $a
-			incr targets
+			lappend targets $a
 		}
 	}
-	if {!$targets} {
-		build all
-	}
-}
 
-target clean -rules {
-	note "Clean clean"
-	set files [get-clean clean]
-	if {[llength $files]} {
-		dputs "rm $files"
-		file delete {*}$files
-	}
-}
+	use rulebase
 
-target distclean -rules {
-	note "Clean distclean"
-	set files [concat [get-clean clean] [get-clean distclean]]
-	if {[llength $files]} {
-		dputs "rm $files"
-		file delete {*}$files
-	}
-}
-
-target install -rules {
-	# First create all the directories
-	file mkdir {*}[get-installdirs]
-
-	set prevdir ""
-
-	foreach dest [lsort [dict keys $::tmake(install)]] {
-		set src [dict get $::tmake(install) $dest]
-		set bin [dict exists $::tmake(installbin) $dest]
-		set dest $::DESTDIR$dest
-		if {![file exists $dest] || [file mtime $dest] < [file mtime $src]} {
-			set dir [file dirname $dest]
-			if {$dir ne $prevdir} {
-				note "Install $dir"
-				set prevdir $dir
-			}
-			file copy -force $src $dest
-			if {$bin} {
-				exec chmod +x $dest
-			}
-		}
-	}
-}
-
-target uninstall -rules {
-	note "Clean uninstall"
-	set files [prefix $::DESTDIR [get-clean uninstall]]
-	if {[llength $files]} {
-		dputs "rm $files"
-		file delete {*}$files
-	}
-	foreach i [get-installdirs] {
-		file delete -force $i
-	}
-}
-
-proc show-reason {targets} {
-	foreach t $targets {
-		set p [get-target $t]
-		puts "[join $p(source) {, }] $t"
-	}
-}
-
-proc show-this-rule {} {
-	#dputs [info level -1]
-}
-
-# ==================================================================
-# HIGH LEVEL RULES
-# ==================================================================
-
-proc Executable {target {args srcs}} {
-	show-this-rule
-	set test 0
-	while {[string match --* $target]} {
-		if {[regexp {^--install=(.*)} $target -> installdir} {
-			# Will install to $installdir
-		} elseif {$target eq "--test"} {
-			incr test
-		} else {
-			error "Uknown option $target"
-		}
-		set srcs [lassign $srcs target]
-	}
-	Link $target {*}[Objects {*}[join $srcs]]
-	Depends all $target
-	if {[exists installdir]} {
-		Install $installdir $target
-	}
-	if {$test} {
-		# XXX: RunTest $target
-	}
-}
-
-# Link an executable from objects
-proc Link {target {args objs}} {
-	show-this-rule
-	target $target -inputs {*}$objs $::LOCAL_LIBS -rules $::EXERULE -msg {note Link $target}
-	Clean clean $target
-}
-
-proc ArchiveLib {base {args srcs}} {
-	show-this-rule
-	set libname lib$base.a
-	target $libname -inputs {*}[Objects {*}[join $srcs]] -rules $::ARRULE -msg {note Ar $target}
-	target all -depends $libname
-	Clean clean $libname
-	define-append LOCAL_LIBS $libname
-}
-
-alias Lib ArchiveLib
-
-proc SharedObject {target {args srcs}} {
-	show-this-rule
-	# XXX: Should build objects with -fpic, etc.
-	SharedObjectLink $target {*}[Objects {*}[join $srcs]]
-	Depends all $target
-}
-
-# Link an executable from objects
-proc SharedObjectLink {target {args objs}} {
-	show-this-rule
-	# Note that we only link against local shared libs, not archive libs
-	target $target -inputs {*}$objs -rules $::SHAREDOBJRULE -msg {note SharedObject $target}
-	Clean clean $target
-}
-
-proc Phony {target {args deps}} {
-	Depends all {*}$deps
-}
-
-# Create an object file from each source file
-# Uses $OBJSRULES(.ext) to determine the build rule
-# Returns a list of objects
-proc Objects {{args srcs}} {
-	show-this-rule
-	set objs {}
-	foreach src $srcs {
-		set obj [change-ext .o $src]
-		lappend objs $obj
-		if {![info exists ::OBJRULES([file ext $src])} {
-			error "Don't know how to build object from $src"
-		}
-		target $obj -inputs $src -rules $::OBJRULES([file ext $src]) -msg $::OBJMSG([file ext $src])
-		Clean clean $obj
-	}
-	return $objs
-}
-
-# Set object-specific CFLAGS
-proc ObjectCFlags {srcs {args flags}} {
-	show-this-rule
-	foreach src $srcs {
-		set obj [change-ext .o $src]
-		set OBJCFLAGS [join $flags]
-		target $obj -vars OBJCFLAGS
-	}
-}
-
-proc CFlags {{args flags}} {
-	define-append CFLAGS {*}$flags
-}
-
-proc C++Flags {{args flags}} {
-	define-append CXXFLAGS {*}$flags
-}
-
-proc LinkFlags {{args flags}} {
-	define-append LDFLAGS {*}$flags
-}
-
-proc Load {filename} {
-	if {![file exists $filename]} {
-		puts "Warning: $filename does not yet exist"
+	# Loaded in the global scope 
+	if {[file exists build.spec]} {
+		uplevel #0 source build.spec
 	} else {
-		uplevel #0 [list source $filename]
-	}
-}
-
-proc UseSystemLibs {{args libs}} {
-	define-append SYSLIBS {*}$libs
-}
-
-proc PublishIncludes {{args includes}} {
-	#target 
-}
-
-proc PublishArchiveLibs {{args libs}} {
-	#target 
-}
-
-proc RunTest {{args cmd}} {
-	#target 
-}
-
-proc Install {dest {args files}} {
-	show-this-rule
-	set bin 0
-	set files [join $files]
-	if {$dest eq "--bin"} {
-		incr bin
-		set files [lassign $files dest]
+		user-error "No build.spec in the current directory"
 	}
 
-	# pairs of src dest
-	set srcs {}
-	foreach i $files {
-		if {[string match {*[*?]*} $i]} {
-			foreach j [glob $i] {
-				lappend srcs $j
-				install-file [file join $dest [file tail $j]] $j $bin
-			}
-		} elseif {[string match *=* $i]} {
-			lassign [split $i =] src target
-			lappend srcs $src
-			install-file [file join $dest $target] $src $bin
-		} else {
-			lappend srcs $i
-			install-file [file join $dest [file tail $i]] $i $bin
+	# Now build the targets
+
+	if {[llength $targets] == 0} {
+		set targets all
+	}
+	build $targets
+}
+
+proc use {args} {
+	foreach m $args {
+		if {[dict exists $::tmake(modules) $m]} {
+			continue
 		}
-	}
-	Depends install {*}$srcs
-}
+		dict set ::tmake(modules) $m 1
 
-proc Clean {type {args files}} {
-	add-clean $type {*}$files
-}
-
-proc Generate {target script inputs rules} {
-	target $target -inputs {*}$inputs -depends $script -vars script -rules $rules -msg {note Generate $target}
-	Clean clean $target
-}
-
-proc Depends {target {args depends}} {
-	target $target -depends {*}$depends
-}
-
-proc Alias {target other} {
-	target $target -depends $other
-}
-
-proc Action {target rules} {
-	target $target -rules $rules
-}
-
-# ==================================================================
-# Experimental
-# ==================================================================
-
-proc ifconfig {symbol {code {}} {else {}} {elsecode {}}} {
-	global $symbol
-	if {$else ni {"" else}} {
-		error "Usage: ifconfig symbol ?code? ?else code?"
-	}
-	if {[info exists $symbol]} {
-		if {[set $symbol] ni {"" 0}} {
-			uplevel 1 $code
-			return 1
+		set source $::tmake(libdir)/${m}.tcl
+		if {![file exists $source]} {
+			dev-error "use: No such module: $m"
 		}
+		uplevel #0 [list source $source]
+		#lappend ::automf(makefiledeps) $source
 	}
-	if {$else eq "else"} {
-		uplevel 1 $elsecode
-	}
-	return 0
 }
 
 # ==================================================================
 # DEFAULT RULE BASE
 # ==================================================================
 
-set CCACHE ""
-set CC cc
-set CC_FOR_BUILD cc
-set CXX c++
-set AR ar
-set RANLIB ranlib
-set ARFLAGS cr
-set CFLAGS ""
-set CXXFLAGS ""
-set SH_LINKFLAGS ""
-set LDFLAGS ""
-set SYSLIBS ""
-set LOCAL_LIBS ""
-set DESTDIR ""
-set OBJCFLAGS ""
-
-define SH_CFLAGS -dynamic
-define SH_LDFLAGS "-dynamiclib"
-define SHOBJ_CFLAGS "-dynamic -fno-common"
-define SHOBJ_LDFLAGS "-bundle -undefined dynamic_lookup"
-
-set OBJRULES(.c) {run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target}
-set OBJMSG(.c) {note Cc $target}
-set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS $OBJCFLAGS -c $inputs -o $target}
-set OBJMSG(.cpp) {note C++ $target}
-set EXERULE {run $CC $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS}
-set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
-set ARRULE {
-	run $AR $ARFLAGS $target $inputs
-	run $RANLIB $target
-}
-
-# Loaded in the global scope 
-if {[file exists build.spec]} {
-	source build.spec
-} else {
-	puts stderr "No build.spec in the current directory"
-}
-
-if {[info exists env(MAKEFLAGS)]} {
+if {[info exists env(MFLAGS)]} {
 	# Running under make
-	set argv [list {*}$env(MAKEFLAGS) {*}$argv]
+	set argv [list {*}$env(MFLAGS) {*}$argv]
 }
 
-make {*}$argv
+make $argv
 
 if {$tmake(numtargets) || $tmake(showtime)} {
-	puts "Built $tmake(numtargets) target(s) in [format %.2f $(([clock millis] - $tmake(start)) / 1000.0)] seconds"
+	puts "Built $tmake(numtargets) target(s) in [format %.2f $(([clock-millis] - $tmake(start)) / 1000.0)] seconds"
 }
