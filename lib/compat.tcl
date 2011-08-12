@@ -86,6 +86,75 @@ proc file-normalize {path} {
 	return $result
 }
 
+##################################################################
+#
+# Directory/path handling
+#
+
+proc realdir {dir} {
+	set oldpwd [pwd]
+	cd $dir
+	set pwd [pwd]
+	cd $oldpwd
+	return $pwd
+}
+
+# Follow symlinks until we get to something which is not a symlink
+proc realpath {path} {
+	while {1} {
+		if {[catch {
+			set path [file link $path]
+		}]} {
+			# Not a link
+			break
+		}
+	}
+	return $path
+}
+
+# Convert absolute path, $path into a path relative
+# to the given directory (or the current dir, if not given).
+#
+proc relative-path {path {pwd {}}} {
+	set diff 0
+	set same 0
+	set newf {}
+	set prefix {}
+	set path [file-normalize $path]
+	if {$pwd eq ""} {
+		set pwd [pwd]
+	} else {
+		set pwd [file-normalize $pwd]
+	}
+
+	if {$path eq $pwd} {
+		return .
+	}
+
+	# Try to make the filename relative to the current dir
+	foreach p [split $pwd /] f [split $path /] {
+		if {$p ne $f} {
+			incr diff
+		} elseif {!$diff} {
+			incr same
+		}
+		if {$diff} {
+			if {$p ne ""} {
+				# Add .. for sibling or parent dir
+				lappend prefix ..
+			}
+			if {$f ne ""} {
+				lappend newf $f
+			}
+		}
+	}
+	if {$same == 1 || [llength $prefix] > 3} {
+		return $path
+	}
+
+	file join [join $prefix /] [join $newf /]
+}
+
 # If everything is working properly, the only errors which occur
 # should be generated in user code (e.g. auto.def).
 # By default, we only want to show the error location in user code.
@@ -97,14 +166,14 @@ proc error-location {msg} {
 	if {$::tmake(debug)} {
 		return -code error $msg
 	}
-	# Search back through the stack trace for the first error in a .def file
+	# Search back through the stack trace for the first error in a .spec file
 	for {set i 1} {$i < [info level]} {incr i} {
 		if {$::compat(istcl)} {
 			array set info [info frame -$i]
 		} else {
 			lassign [info frame -$i] info(caller) info(file) info(line)
 		}
-		if {[string match *.def $info(file)]} {
+		if {[string match *.spec $info(file)]} {
 			return "[relative-path $info(file)]:$info(line): Error: $msg"
 		}
 		#puts "Skipping $info(file):$info(line)"

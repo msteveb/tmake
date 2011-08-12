@@ -71,14 +71,14 @@ proc Executable {target {args srcs}} {
 # Link an executable from objects
 proc Link {target {args objs}} {
 	show-this-rule
-	target $target -inputs {*}$objs $::LOCAL_LIBS -rules $::EXERULE -msg {note Link $target}
+	target $target -inputs {*}$objs $::LOCAL_LIBS -do $::EXERULE -msg {note Link $target}
 	Clean clean $target
 }
 
 proc ArchiveLib {base {args srcs}} {
 	show-this-rule
 	set libname lib$base.a
-	target $libname -inputs {*}[Objects {*}[join $srcs]] -rules $::ARRULE -msg {note Ar $target}
+	target $libname -inputs {*}[Objects {*}[join $srcs]] -do $::ARRULE -msg {note Ar $target}
 	Depends all $libname
 	Clean clean $libname
 	define-append LOCAL_LIBS $libname
@@ -97,7 +97,7 @@ proc SharedObject {target {args srcs}} {
 proc SharedObjectLink {target {args objs}} {
 	show-this-rule
 	# Note that we only link against local shared libs, not archive libs
-	target $target -inputs {*}$objs -rules $::SHAREDOBJRULE -msg {note SharedObject $target}
+	target $target -inputs {*}$objs -do $::SHAREDOBJRULE -msg {note SharedObject $target}
 	Clean clean $target
 }
 
@@ -113,7 +113,7 @@ proc Objects {{args srcs}} {
 		if {![info exists ::OBJRULES([file ext $src])} {
 			error "Don't know how to build object from $src"
 		}
-		target $obj -inputs $src -rules $::OBJRULES([file ext $src]) -msg $::OBJMSG([file ext $src])
+		target $obj -inputs $src -do $::OBJRULES([file ext $src]) -msg $::OBJMSG([file ext $src])
 		Clean clean $obj
 	}
 	return $objs
@@ -124,8 +124,7 @@ proc ObjectCFlags {srcs {args flags}} {
 	show-this-rule
 	foreach src $srcs {
 		set obj [change-ext .o $src]
-		set OBJCFLAGS [join $flags]
-		target $obj -vars OBJCFLAGS
+		target $obj -vars OBJCFLAGS [join $flags]
 	}
 }
 
@@ -180,15 +179,15 @@ proc Install {dest {args files}} {
 		if {[string match {*[*?]*} $i]} {
 			foreach j [glob $i] {
 				lappend srcs $j
-				install-file [file join $dest [file tail $j]] $j $bin
+				add-install-file [file join $dest [file tail $j]] $j $bin
 			}
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] src target
 			lappend srcs $src
-			install-file [file join $dest $target] $src $bin
+			add-install-file [file join $dest $target] $src $bin
 		} else {
 			lappend srcs $i
-			install-file [file join $dest [file tail $i]] $i $bin
+			add-install-file [file join $dest [file tail $i]] $i $bin
 		}
 	}
 	Depends install {*}$srcs
@@ -199,7 +198,7 @@ proc Clean {type args} {
 }
 
 proc Generate {target script inputs rules} {
-	target $target -inputs {*}$inputs -depends $script -vars script -rules $rules -msg {note Generate $target}
+	target $target -inputs {*}$inputs -depends $script -vars script $script -do $rules -msg {note Generate $target}
 	Clean clean $target
 }
 
@@ -215,7 +214,7 @@ proc Phony {target args} {
 # Built-in targets
 # ==================================================================
 
-Phony clean -rules {
+Phony clean -do {
 	note "Clean clean"
 	set files [get-clean clean]
 	if {[llength $files]} {
@@ -224,7 +223,7 @@ Phony clean -rules {
 	}
 }
 
-Phony distclean -rules {
+Phony distclean -do {
 	note "Clean distclean"
 	set files [concat [get-clean clean] [get-clean distclean]]
 	if {[llength $files]} {
@@ -233,7 +232,7 @@ Phony distclean -rules {
 	}
 }
 
-Phony install -rules {
+Phony install -do {
 	# First create all the directories
 	file mkdir {*}[get-installdirs]
 
@@ -259,7 +258,7 @@ Phony install -rules {
 	}
 }
 
-Phony uninstall -rules {
+Phony uninstall -do {
 	note "Clean uninstall"
 	set files [prefix $::DESTDIR [get-clean uninstall]]
 	if {[llength $files]} {

@@ -1,3 +1,4 @@
+error "do not use"
 # Copyright (c) 2007 WorkWare Systems http://www.workware.net.au/
 # All rights reserved
 

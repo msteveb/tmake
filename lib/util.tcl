@@ -1,3 +1,4 @@
+error "do not use"
 proc define {name args} {
 	upvar #0 $name n
 	set n [join $args]

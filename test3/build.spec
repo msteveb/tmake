@@ -37,7 +37,7 @@ Install /home/httpd/javascript *.js
 Install /home/httpd/img img/*.{png,gif,ico,jp*} $THEMES/black_icons/*checked.png
 Install /lib/tcl6 $UWEB/lib/tcl6/*.tcl *.tcl
 
-Phony run install -rules {
+Phony run install -do {
 	file mkdir $CONFIG_DIR
 	set ::env(UWEB_CONFIG_DIR) [file join [pwd] $CONFIG_DIR]
 	set ::env(TCLLIBPATH) [file join [pwd] $DESTDIR/lib/tcl6]

@@ -1,3 +1,5 @@
+error "do not use"
+
 ##################################################################
 #
 # User and system warnings and errors
