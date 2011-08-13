@@ -5,11 +5,13 @@
 # Initialiation
 # ==================================================================
 
+set tmake(version) 0.1
 set tmake(debug) 0
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(current) {}
-set tmake(targets) {}
+set tmake(rules) {}
+set tmake(aliases) {}
 set tmake(clean) {clean {} distclean {} uninstall {}}
 set tmake(install) {}
 set tmake(installbin) {}
@@ -67,6 +69,16 @@ proc make {argv} {
 				--verbose - -v {
 					set tmake(verbose) 1
 				}
+				--version {
+					use help
+					puts [show-version]
+					exit 0
+				}
+				--help - -h {
+					use help
+					show-help $argv
+					exit 0
+				}
 				--dry-run - --just-print - -n {
 					set tmake(norun) 1
 				}
@@ -82,6 +94,9 @@ proc make {argv} {
 				-C* {
 					# XXX: Should be "-C dir" but that is waiting for getopt
 					cd [string range $a 2 end]
+				}
+				--* {
+					user-error "Unknown option $a"
 				}
 				default {
 					# Ignore unknown options
@@ -272,7 +287,7 @@ proc show-rule {target} {
 }
 
 proc show-all-rules {} {
-	foreach i [lsort [dict keys $::tmake(targets)]] {
+	foreach i [lsort [dict keys $::tmake(rules)]] {
 		puts "-------------------------------------------"
 		show-rule $i
 		puts ""
@@ -391,16 +406,27 @@ proc dict-lappend {dictname key args} {
 # Rule Handling
 # ==================================================================
 
+# Returns 1 if the target is a rule target or an alias
 proc is-target? {target} {
-	dict exists $::tmake(targets) $target
+	if {[dict exists $::tmake(rules) $target]} {
+		return 1
+	}
+	dict exists $::tmake(aliases) $target
 }
 
+# Returns the rule for a rule target or alias
 proc get-target-rule {target} {
-	dict get $::tmake(targets) $target
+	if {[dict exists $::tmake(aliases) $target]} {
+		set target [dict get $::tmake(aliases) $target]
+	}
+	dict get $::tmake(rules) $target
 }
 
 proc set-target-rule {target dict} {
-	dict set ::tmake(targets) $target $dict
+	dict set ::tmake(rules) $target $dict
+	foreach t $target {
+		dict set ::tmake(aliases) $t $target
+	}
 }
 
 proc show-this-rule {} {
@@ -633,12 +659,13 @@ proc get-target-result {target} {
 	if {![is-target? $target]} {
 		return -1
 	}
-	dict get $::tmake(targets) $target result
+	set t [get-target-rule $target]
+	dict get $t result
 }
 
 proc set-target-result {target result} {
 	if {[get-target-result $target] == 0} {
-		dict set ::tmake(targets) $target result $result
+		dict set ::tmake(rules) $target result $result
 	}
 }
 
@@ -683,7 +710,7 @@ proc build {target} {
 		puts stderr "Recursive definition for [join [lreverse $current] { <= }] @[join $t(source) {, }]"
 		exit 1
 	}
-	dict set tmake(targets) $target building 1
+	dict set tmake(rules) $target building 1
 
 	if {$t(phony)} {
 		dputs "$target is phony, so rebuilding"
@@ -776,6 +803,16 @@ proc build {target} {
 				#parray t
 			} else {
 				uplevel #0 $t(do)
+				# Did the rule make the targets?
+				if {!$t(phony)} {
+					foreach f $target {
+						if {![file exists $f]} {
+							build-error "Rule for $target @[join $t(source) {, }] failed to build target(s)"
+							set result -1
+							break
+						}
+					}
+				}
 				incr tmake(numtargets)
 			}
 		} on {error break} {msg opts} {
@@ -802,7 +839,7 @@ proc build {target} {
 		}
 	}
 	set tmake(current) $oldcurrent
-	dict set tmake(targets) $target building 0
+	dict set tmake(rules) $target building 0
 	return $result
 }
 
