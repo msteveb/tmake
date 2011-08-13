@@ -11,7 +11,7 @@ set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(current) {}
 set tmake(rules) {}
-set tmake(aliases) {}
+set tmake(targets) {}
 set tmake(clean) {clean {} distclean {} uninstall {}}
 set tmake(install) {}
 set tmake(installbin) {}
@@ -406,18 +406,18 @@ proc dict-lappend {dictname key args} {
 # Rule Handling
 # ==================================================================
 
-# Returns 1 if the target is a rule target or an alias
+# Returns 1 if the target is a rule target or an individual target
 proc is-target? {target} {
 	if {[dict exists $::tmake(rules) $target]} {
 		return 1
 	}
-	dict exists $::tmake(aliases) $target
+	dict exists $::tmake(targets) $target
 }
 
-# Returns the rule for a rule target or alias
+# Returns the rule for a rule target or individual target
 proc get-target-rule {target} {
-	if {[dict exists $::tmake(aliases) $target]} {
-		set target [dict get $::tmake(aliases) $target]
+	if {[dict exists $::tmake(targets) $target]} {
+		set target [dict get $::tmake(targets) $target]
 	}
 	dict get $::tmake(rules) $target
 }
@@ -425,7 +425,7 @@ proc get-target-rule {target} {
 proc set-target-rule {target dict} {
 	dict set ::tmake(rules) $target $dict
 	foreach t $target {
-		dict set ::tmake(aliases) $t $target
+		dict set ::tmake(targets) $t $target
 	}
 }
 
@@ -483,14 +483,26 @@ proc target {target args} {
 
 	show-this-rule
 
+	set replace $info(replace)
+	unset info(replace)
+
 	# And -inputs are also -depends
 	set info(depends) [concat $info(depends) $info(inputs)]
 
 	if {[is-target? $target]} {
+		array set orig [get-target-rule $target]
+	}
+	if {$replace} {
+		if {[info exists orig]} {
+			dputs "Replacing existing rule for $target @$orig(source)"
+			unset orig
+		} else {
+			dputs "Rule for $target with -replace but not existing target @$info(source)"
+		}
+	}
+	if {[info exists orig]} {
 		# There is already a rule for this target, so attempt
 		# to merge the two rules
-
-		array set orig [get-target-rule $target]
 
 		if {$info(do) ne "" && $orig(do) ne ""} {
 			dev-error "$target already has '-do' @$orig(source)"
@@ -539,6 +551,7 @@ proc parse-target-rule {target arglist} {
 	set info(add-do) {}
 	set info(vars) {}
 	set info(dyndep) {}
+	set info(replace) 0
 
 	set -inputs {}
 	set -depends {}
@@ -551,6 +564,7 @@ proc parse-target-rule {target arglist} {
 
 	set skip 0
 	set add 0
+	set replace 0
 
 	foreach a $arglist {
 		if {$a eq "-phony"} {
@@ -559,6 +573,10 @@ proc parse-target-rule {target arglist} {
 		}
 		if {$a eq "-add"} {
 			incr add
+			continue
+		}
+		if {$a eq "-replace"} {
+			incr replace
 			continue
 		}
 		if {$skip == 0 && [string match -* $a]} {
@@ -589,6 +607,9 @@ proc parse-target-rule {target arglist} {
 	if {[llength ${-dyndep}] > 1} {
 		dev-error "Rule for $target has more than one '-dyndep' parameter"
 	}
+	if {$add && $replace} {
+		dev-error "Rule for $target has both '-add' and '-replace'"
+	}
 	if {$add} {
 		if {![llength ${-do}]} {
 			dev-error "Rule for $target has '-add' but no '-do'"
@@ -606,6 +627,7 @@ proc parse-target-rule {target arglist} {
 	set info(do) [lindex ${-do} 0]
 	set info(msg) [lindex ${-msg} 0]
 	set info(dyndep) [lindex ${-dyndep} 0]
+	set info(replace) $replace
 
 	if {$info(do) eq "" && [llength $info(inputs)]} {
 		dev-error "Rule for $target has '-inputs' but no '-do'"
