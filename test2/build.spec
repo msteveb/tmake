@@ -9,14 +9,7 @@ ifconfig USE_LINENOISE {
 	define-append SRCS linenoise.c
 }
 
-#PublishIncludes jimautoconf.h=jimautoconf.h.automf
-#PublishIncludes jim.h jim-subcmd.h jim-win32compat.h
-#Install /include jim.h jim-subcmd.h jim-win32compat.h
-
-#set JIM_MOD_EXTENSIONS {clock syslog}
-#set JIM_STATIC_C_EXTS {aio array eventloop exec file load package posix readdir regexp signal}
-#set JIM_STATIC_TCL_EXTS {glob stdlib tclcompat}
-#set JIM_TCL_EXTENSIONS glob
+Install $prefix/include jim.h jim-config.h jim-subcmd.h jim-win32compat.h jim-eventloop.h jim-nvp.h jim-signal.h
 
 # C extensions can either be static or dynamic
 foreach pkg $JIM_STATIC_C_EXTS {
@@ -39,13 +32,17 @@ Generate _initjimsh.c make-c-ext.tcl initjimsh.tcl {
 	run $tclsh $script $inputs >$target
 }
 
-Generate _loadstatic.c make-load-static-exts.tcl {} "run \$tclsh \$script $JIM_STATIC_TCL_EXTS $JIM_STATIC_C_EXTS >\$target"
+Generate _loadstatic.c make-load-static-exts.tcl {} {
+	run $tclsh $script $exts >$target
+}
+target _loadstatic.c -vars exts "$JIM_STATIC_TCL_EXTS $JIM_STATIC_C_EXTS"
 
 ifconfig JIM_UTF8 {
 	Generate _unicode_mapping.c parse-unidata.tcl UnicodeData.txt {
 		run $tclsh $script $inputs >$target
 	}
-	Depends utf8.o _unicode_mapping.c
+	# This should be found by the dynamic dependency rules
+	#Depends utf8.o _unicode_mapping.c
 }
 
 ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $SRCS
@@ -61,6 +58,7 @@ Generate Tcl.html make-index jim_tcl.txt {
 }
 Install $prefix/docs Tcl.html
 
-Depends docs Tcl.html
+Phony docs Tcl.html
 
 Clean distclean jim-config.h jimautoconf.h config.log settings.conf
+Clean clean [glob -nocomplain *.o *.a. *.so]

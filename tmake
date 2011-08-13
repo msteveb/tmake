@@ -699,8 +699,25 @@ proc build {target} {
 	set oldcurrent $tmake(current)
 	set tmake(current) $current
 
-	# First make sure dependencies are up to date
-	foreach i $t(depends) {
+	# First check dynamic dependencies
+	set depends $t(depends)
+	set dyndeps {}
+	if {$t(dyndep) ne ""} {
+		foreach i $t(depends) {
+			lappend dyndeps {*}[{*}$t(dyndep) $i]
+		}
+		dputs "Dynamic dependencies for $target: $dyndeps"
+
+		# Add anything which is a known target to the real dependencies
+		foreach i $dyndeps {
+			if {[is-target? $i]} {
+				lappend depends $i
+			}
+		}
+	}
+
+	# Make sure dependencies are up to date
+	foreach i $depends {
 		#puts "Building $i"
 		#dumptarget $i
 		set rc [build $i]
@@ -720,16 +737,11 @@ proc build {target} {
 				set result 1
 			} elseif {[needbuild? $target $i]} {
 				set result 1
-			} elseif {$rc == 0 && $t(dyndep) ne ""} {
-				#dputs "Rebuilding $target not forced by $i, but have dyndep, so checking"
-				set dyndeps [{*}$t(dyndep) $i]
-				dputs "Dynamic dependencies for $target: $dyndeps"
+			} elseif {$rc == 0} {
 				foreach d $dyndeps {
-					# Only care about this if it is a target or it exists.
+					# Only care about non-target dynamic dependencies if they exist
 					# XXX: Do we need to look in IncludePaths for this file?
-					#      Or has that already been taken care of?
-					#      Recursively add scanned headers?
-					if {[is-target? $d] || [file exists $d]} {
+					if {[file exists $d]} {
 						#puts "Is target or exists: $d"
 						# Do we need build here, or just needbuild?
 						if {[needbuild? $target $d]} {
@@ -740,10 +752,11 @@ proc build {target} {
 						#puts "Ignoring dyndep: $d"
 					}
 				}
-				#puts "Got dyndep for $target, rc=$rc, result=$result"
 			}
+			#puts "Got dyndep for $target, rc=$rc, result=$result"
 		}
 	}
+
 
 	if {$result > 0 && $t(do) ne ""} {
 		#puts "Running rules for $target"
@@ -797,7 +810,7 @@ proc build {target} {
 # Dynamic dependencies
 # ==================================================================
 
-# Note: stops scanning after 100 lines with no #include
+# Note: stops scanning after 200 lines with no #include
 proc header-scan-regexp {regex filename} {
 	set headers {}
 	set f [open $filename]
@@ -806,7 +819,7 @@ proc header-scan-regexp {regex filename} {
 		if {[regexp $regex $buf -> name]} {
 			lappend headers $name
 			set n 0
-		} elseif {[incr n] > 100} {
+		} elseif {[incr n] > 200} {
 			break
 		}
 	}
@@ -816,6 +829,9 @@ proc header-scan-regexp {regex filename} {
 
 # XXX: This could be done better
 proc header-scan-regexp-recursive {regex filename} {
+	if {![file exists $filename]} {
+		return {}
+	}
 	# XXX: Should we search the IncludePaths looking
 	# for the file?
 	array set deps {}
