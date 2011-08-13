@@ -34,8 +34,9 @@ set OBJRULES(.c) {run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target}
 set OBJMSG(.c) {note Cc $target}
 set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS $OBJCFLAGS -c $inputs -o $target}
 set OBJMSG(.cpp) {note C++ $target}
-set HDRSCAN(.c) {header-scan-regexp-recursive {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}}
-set HDRSCAN(.cpp) {header-scan-regexp-recursive {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}}
+set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
+set HDRSCAN(.c) {header-scan-regexp-recursive $HDRPATTERN}
+set HDRSCAN(.cpp) {header-scan-regexp-recursive $HDRPATTERN}
 
 set EXERULE {run $CC $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS}
 set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
@@ -211,7 +212,7 @@ proc Install {dest {args files}} {
 }
 
 proc Clean {type args} {
-	add-clean $type {*}$args
+	add-clean $type {*}[join $args]
 }
 
 proc Generate {target script inputs rules} {

@@ -1,5 +1,11 @@
 #!/bin/sh
 
+echo "In make-two"
+
+# Uncomment this to have time to send SIGINT to test cleanup processing
+#sleep 5
+
 echo "#include \"$1.h\"" >$1.c
 echo "int main() { return 1; }" >>$1.c
 echo "#define header" >include/$1.h
+echo done

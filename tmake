@@ -7,6 +7,14 @@
 
 set tmake(version) 0.1
 set tmake(debug) 0
+#  d = dynamic dependency
+#  b = reasons for building
+#  n = reasons for not building
+#  r = show rule for target being considered (combines with -db, -dn)
+#  t = target rule creation/update
+#  c = configuration checking
+#  g = graphical display of dependencies exuted
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(current) {}
@@ -67,7 +75,13 @@ proc make {argv} {
 			}
 		} elseif {[string match -* $a]} {
 			switch -glob -- $a {
-				--debug - -d {
+				-d* {
+					foreach i [split [string range $a 2 end] {}] {
+						dict-incr tmake(debugtypes) $i 1
+					}
+					set tmake(debug) 1
+				}
+				--debug {
 					set tmake(debug) 1
 				}
 				--verbose - -v {
@@ -205,11 +219,21 @@ proc vputs {msg} {
 	}
 }
 
+# Returns 1 if any of the debug types is set
+proc debug-is-set {types} {
+	foreach t $types {
+		if {[dict get $::tmake(debugtypes) $t]} {
+			return 1
+		}
+	}
+	return 0
+}
+
 # Output a message to stdout if --debug is set.
 #
-proc dputs {msg} {
-	if {$::tmake(debug)} {
-		puts [dbg-msg-indent]$msg
+proc dputs {types msg} {
+	if {[debug-is-set $types]} {
+		puts "[dbg-msg-indent]\[$types\] $msg"
 	}
 }
 
@@ -267,12 +291,12 @@ proc show-rule {target} {
 				}
 				vars {
 					foreach {vn vv} $v {
-						lappend lines "  var $vn=$vn"
+						lappend lines "  var $vn=$vv"
 					}
 				}
 				default {
 					if {$v ne ""} {
-						lappend lines "$n='$v'"
+						lappend lines "$n=$v"
 					}
 				}
 			}
@@ -406,6 +430,44 @@ proc dict-lappend {dictname key args} {
 	dict set d $key $list
 }
 
+# Increments a value in the dictionary
+proc dict-incr {dictname key {incr 1}} {
+	upvar $dictname d
+	set value [dict get $d $key]
+	incr value $incr
+	dict set d $key $value
+}
+
+# ==================================================================
+# File Utilities
+# ==================================================================
+
+# @readfile filename ?default=""?
+#
+# Return the contents of the file, without the trailing newline.
+# If the doesn't exist or can't be read, returns $default.
+#
+proc readfile {filename {default_value ""}} {
+	set result $default_value
+	catch {
+		set f [open $filename]
+		set result [read -nonewline $f]
+		close $f
+	}
+	return $result
+}
+
+# @writefile filename value
+#
+# Creates the given file containing $value.
+# Does not add an extra newline.
+#
+proc writefile {filename value} {
+	set f [open $filename w]
+	puts -nonewline $f $value
+	close $f
+}
+
 # ==================================================================
 # Rule Handling
 # ==================================================================
@@ -498,10 +560,10 @@ proc target {target args} {
 	}
 	if {$replace} {
 		if {[info exists orig]} {
-			dputs "Replacing existing rule for $target @$orig(source)"
+			dputs t "Replacing existing rule for $target @$orig(source)"
 			unset orig
 		} else {
-			dputs "Rule for $target with -replace but not existing target @$info(source)"
+			dputs t "Rule for $target with -replace but not existing target @$info(source)"
 		}
 	}
 	if {[info exists orig]} {
@@ -549,13 +611,9 @@ proc parse-target-rule {target arglist} {
 	set info(source) [find-rule-source]
 	set info(result) 0
 	set info(building) 0
-	set info(building) 0
 	set info(target) $target
 	set info(phony) 0
 	set info(add-do) {}
-	set info(vars) {}
-	set info(dyndep) {}
-	set info(replace) 0
 
 	set -inputs {}
 	set -depends {}
@@ -626,7 +684,7 @@ proc parse-target-rule {target arglist} {
 	set info(inputs) [join ${-inputs}]
 	set info(depends) [join ${-depends}]
 	set info(clean) ${-clean}
-	set info(onfail) ${-onfail}
+	set info(onfail) [lindex ${-onfail} 0]
 	set info(vars) ${-vars}
 	set info(do) [lindex ${-do} 0]
 	set info(msg) [lindex ${-msg} 0]
@@ -654,14 +712,14 @@ proc needbuild? {target source} {
 	if {[file exists $target]} {
 		if {[file exists $source]} {
 			if {[file mtime $target] >= [file mtime $source]} {
-				dputs "$target is newer than $source, so not forcing rebuild"
+				dputs n "$target is newer than $source, so not forcing rebuild"
 				return 0
 			}
 		}
-		dputs "$target is older than $source, so forcing rebuild"
+		dputs b "$target is older than $source, so forcing rebuild"
 		return 1
 	} else {
-		dputs "$target does not exist, so forcing build"
+		dputs b "$target does not exist, so forcing build"
 		return 1
 	}
 }
@@ -718,10 +776,10 @@ proc build {target} {
 	lappend current $target
 	if {![is-target? $target]} {
 		if {[file exists $target]} {
-			dputs "$target is not a target, but exists"
+			dputs n "$target is not a target, but exists"
 			return 0
 		}
-		dputs "$target is not a target and does not exist"
+		dputs b "$target is not a target and does not exist"
 		return -1
 	}
 	set t [get-target-rule $target]
@@ -738,14 +796,17 @@ proc build {target} {
 	}
 	dict set tmake(rules) $target building 1
 
+	set reason {}
 	if {$t(phony)} {
-		dputs "$target is phony, so rebuilding"
+		dputs b "$target is phony, so rebuilding"
+		lappend reason phony
 		set result 1
 	} elseif {![file exists $target]} {
-		dputs "$target doesn't exist, so rebuilding"
+		dputs b "$target doesn't exist, so rebuilding"
+		lappend reason noexist
 		set result 1
 	} else {
-		dputs "$target exists, so checking dependencies"
+		#dputs b "$target exists, so checking dependencies"
 		set result 0
 	}
 
@@ -757,9 +818,9 @@ proc build {target} {
 	set dyndeps {}
 	if {$t(dyndep) ne ""} {
 		foreach i $t(depends) {
-			lappend dyndeps {*}[{*}$t(dyndep) $i]
+			lappend dyndeps {*}[uplevel #0 $t(dyndep) $i]
 		}
-		dputs "Dynamic dependencies for $target: $dyndeps"
+		dputs d "Dynamic dependencies for $target: $dyndeps"
 
 		# Add anything which is a known target to the real dependencies
 		foreach i $dyndeps {
@@ -773,6 +834,9 @@ proc build {target} {
 	foreach i $depends {
 		#puts "Building $i"
 		#dumptarget $i
+		if {[dict get $::tmake(debugtypes) g]} {
+			#puts "\[g\] [join $current { --> }]"
+		}
 		set rc [build $i]
 		if {$rc < 0} {
 			if {[get-target-result $target] >= 0} {
@@ -786,9 +850,11 @@ proc build {target} {
 			}
 		} elseif {$result == 0} {
 			if {$rc > 0} {
-				dputs "Rebuilding $target because $i was built"
+				dputs b "Rebuilding $target because $i was built"
+				lappend reason depend $i
 				set result 1
 			} elseif {[needbuild? $target $i]} {
+				lappend reason older $i
 				set result 1
 			} elseif {$rc == 0} {
 				foreach d $dyndeps {
@@ -798,6 +864,7 @@ proc build {target} {
 						#puts "Is target or exists: $d"
 						# Do we need build here, or just needbuild?
 						if {[needbuild? $target $d]} {
+							lappend reason older $d
 							set result 1
 							break
 						}
@@ -810,13 +877,22 @@ proc build {target} {
 		}
 	}
 
+	if {$result > 0} {
+		if {[debug-is-set g]} {
+			puts "\[g\] [join $current { --> }] ($reason)"
+		}
+	}
 
 	if {$result > 0 && $t(do) ne ""} {
 		#puts "Running rules for $target"
-		dputs "Building [join [lreverse $current] { <= }] with rule @[join $t(source) {, }]"
-		try {
+		dputs b "Building [join [lreverse $current] { <= }] with rule @[join $t(source) {, }]"
+		try -signal {
+			signal handle SIGINT SIGTERM
 			set-target-vars $t
 			uplevel #0 $t(msg)
+			if {[dict get $tmake(debugtypes) r]} {
+				show-rule $target
+			}
 			if {$tmake(norun)} {
 				try {
 					set do [uplevel #0 [list subst $t(do)]]
@@ -826,7 +902,6 @@ proc build {target} {
 					set do $t(do)
 				}
 				show-rule-commands $do
-				#parray t
 			} else {
 				uplevel #0 $t(do)
 				# Did the rule make the targets?
@@ -841,9 +916,15 @@ proc build {target} {
 				}
 				incr tmake(numtargets)
 			}
-		} on {error break} {msg opts} {
+		} on {error signal break} {msg opts} {
+			set gotsignal 0
+			if {[info returncodes $opts(-code)] eq "signal"} {
+				puts ""
+				incr gotsignal
+			}
 			file delete $target {*}$t(clean)
 			try {
+				dputs b $t(onfail)
 				uplevel #0 $t(onfail)
 				if {[info returncode $opts(-code)] eq "error"} {
 					puts stderr [errorInfo $msg]
@@ -851,8 +932,12 @@ proc build {target} {
 			} on error {fmsg fopts} {
 				puts stderr [errorInfo $fmsg]
 			}
+			if {$gotsignal} {
+				exit 1
+			}
 			set result -1
 		} finally {
+			signal default SIGINT SIGTERM
 			clear-target-vars $t
 		}
 	}

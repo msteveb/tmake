@@ -43,19 +43,19 @@ proc ifconfig {expr args} {
 	# convert the simple expression into something we can evaluate
 	regsub -all {([A-Z0-9_]+)} $expr {[is-defined? \1]} tclexpr
 
-	dputs "ifconfig: expr='$expr' tclexpr='$tclexpr'"
+	dputs c "ifconfig: expr='$expr' tclexpr='$tclexpr'"
 
 	do_ifconfig ifconfig $tclexpr $args
 }
 
 proc do_if_else {level expr true false} {
 	if $expr {
-		dputs "Expression is true, so executing $true"
+		dputs c "Expression is true, so executing $true"
 		if {$true != ""} {
 			uplevel $level $true
 		}
 	} else {
-		dputs "Expression is false"
+		dputs c "Expression is false"
 		if {$false != ""} {
 			uplevel $level $false
 		}
