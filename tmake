@@ -82,7 +82,9 @@ proc make {argv} {
 					set tmake(debug) 1
 				}
 				--debug {
+					# Equivalent to -dg
 					set tmake(debug) 1
+					dict-incr tmake(debugtypes) g 1
 				}
 				--verbose - -v {
 					set tmake(verbose) 1
@@ -265,7 +267,7 @@ proc show-rule-commands {do} {
 #
 proc show-rule {target} {
 	if {[is-target? $target]} {
-		set t [get-target-rule $target]
+		array set t [get-target-rule $target]
 		set flags {}
 		set lines {}
 		foreach n [lsort [dict keys $t]] {
@@ -373,7 +375,7 @@ proc append-with-space {varname value {space " "}} {
 #
 proc suffix {suf args} {
 	set result {}
-	lmap p [join $args] {
+	foreach p [join $args] {
 		lappend result $p$suf
 	}
 	return $result
@@ -386,7 +388,7 @@ proc suffix {suf args} {
 #
 proc prefix {pre args} {
 	set result {}
-	lmap p [join $args] {
+	foreach p [join $args] {
 		lappend result $pre$p
 	}
 	return $result
@@ -399,7 +401,7 @@ proc prefix {pre args} {
 #
 proc change-ext {ext args} {
 	set result {}
-	lmap p [join $args] {
+	foreach p [join $args] {
 		lappend result [file rootname $p]$ext
 	}
 	return $result
@@ -526,20 +528,6 @@ proc get-installdirs {} {
 	prefix $::DESTDIR [lsort [dict keys $::tmake(installdirs)]]
 }
 
-# Look down the stack frame for the first location
-# which is in a *.spec file and return it.
-# Returns "unknown" if not known.
-#
-proc find-rule-source {} {
-	foreach i [range [info level]] {
-		lassign [info frame $i] proc file line
-		if {[string match *.spec $file]} {
-			return $file:$line
-		}
-	}
-	return unknown
-}
-
 # This is the only way to create a rule
 #
 # Parses the arguments and adds them to the rule base
@@ -608,7 +596,7 @@ proc target {target args} {
 # Returns a dictionary (list) representing the parsed target rule
 #
 proc parse-target-rule {target arglist} {
-	set info(source) [find-rule-source]
+	set info(source) [find-source-location]
 	set info(result) 0
 	set info(building) 0
 	set info(target) $target
@@ -743,7 +731,7 @@ proc get-target-result {target} {
 	if {![is-target? $target]} {
 		return -1
 	}
-	set t [get-target-rule $target]
+	array set t [get-target-rule $target]
 	dict get $t result
 }
 
@@ -782,7 +770,7 @@ proc build {target} {
 		dputs b "$target is not a target and does not exist"
 		return -1
 	}
-	set t [get-target-rule $target]
+	array set t [get-target-rule $target]
 	if {$t(result) < 0} {
 		#dputs "$target has previously failed to build"
 		return -1

@@ -51,7 +51,7 @@ set ARRULE {
 
 proc Executable {args} {
 	show-this-rule
-	set opts [getopt {test install:} args]
+	array set opts [getopt {test install:} args]
 	set args [lassign $args target]
 	Link $target {*}[Objects {*}[join $args]]
 	Depends all $target
@@ -64,16 +64,16 @@ proc Executable {args} {
 }
 
 # Link an executable from objects
-proc Link {target {args objs}} {
+proc Link {target args} {
 	show-this-rule
-	target $target -inputs {*}$objs $::LOCAL_LIBS -do $::EXERULE -msg {note Link $target}
+	target $target -inputs {*}$args $::LOCAL_LIBS -do $::EXERULE -msg {note Link $target}
 	Clean clean $target
 }
 
-proc ArchiveLib {base {args srcs}} {
+proc ArchiveLib {base args} {
 	show-this-rule
 	set libname lib$base.a
-	target $libname -inputs {*}[Objects {*}[join $srcs]] -do $::ARRULE -msg {note Ar $target}
+	target $libname -inputs {*}[Objects {*}[join $args]] -do $::ARRULE -msg {note Ar $target}
 	Depends all $libname
 	Clean clean $libname
 	define-append LOCAL_LIBS $libname
@@ -87,7 +87,7 @@ proc SharedObject {args} {
 	#          so we can produce a nice error message
 	# Like: getopt SharedObject {install: test} target srcs...
 	#
-	set opts [getopt {install:} args]
+	array set opts [getopt {install:} args]
 	set args [lassign $args target]
 	# XXX: Should build objects with -fpic, etc.
 	# Use -vars to do this
@@ -99,31 +99,31 @@ proc SharedObject {args} {
 }
 
 # Link an executable from objects
-proc SharedObjectLink {target {args objs}} {
+proc SharedObjectLink {target args} {
 	show-this-rule
 	# Note that we only link against local shared libs, not archive libs
-	target $target -inputs {*}$objs -do $::SHAREDOBJRULE -msg {note SharedObject $target}
+	target $target -inputs {*}$args -do $::SHAREDOBJRULE -msg {note SharedObject $target}
 	Clean clean $target
 }
 
 # Create an object file from each source file
 # Uses $OBJSRULES(.ext) to determine the build rule
 # Returns a list of objects
-proc Objects {{args srcs}} {
+proc Objects {args} {
 	show-this-rule
 	set objs {}
-	foreach src $srcs {
+	foreach src $args {
 		set obj [change-ext .o $src]
 		set ext [file ext $src]
 		lappend objs $obj
 		set extra {}
-		if {![info exists ::OBJRULES($ext)} {
+		if {![info exists ::OBJRULES($ext)]} {
 			dev-error "Don't know how to build Object from $src"
 		}
-		if {[info exists ::OBJMSG($ext)} {
+		if {[info exists ::OBJMSG($ext)]} {
 			lappend extra -msg $::OBJMSG($ext)} {
 		}
-		if {[info exists ::HDRSCAN($ext)} {
+		if {[info exists ::HDRSCAN($ext)]} {
 			lappend extra -dyndep $::HDRSCAN($ext)} {
 		}
 		target $obj -inputs $src -do $::OBJRULES($ext) {*}$extra
@@ -133,24 +133,24 @@ proc Objects {{args srcs}} {
 }
 
 # Set object-specific CFLAGS
-proc ObjectCFlags {srcs {args flags}} {
+proc ObjectCFlags {srcs args} {
 	show-this-rule
 	foreach src $srcs {
 		set obj [change-ext .o $src]
-		target $obj -vars OBJCFLAGS [join $flags]
+		target $obj -vars OBJCFLAGS [join $args]
 	}
 }
 
-proc CFlags {{args flags}} {
-	define-append CFLAGS {*}$flags
+proc CFlags {args} {
+	define-append CFLAGS {*}$args
 }
 
-proc C++Flags {{args flags}} {
-	define-append CXXFLAGS {*}$flags
+proc C++Flags {args} {
+	define-append CXXFLAGS {*}$args
 }
 
-proc LinkFlags {{args flags}} {
-	define-append LDFLAGS {*}$flags
+proc LinkFlags {args} {
+	define-append LDFLAGS {*}$args
 }
 
 proc IncludePaths {args} {
@@ -166,30 +166,27 @@ proc Load {filename} {
 	}
 }
 
-proc UseSystemLibs {{args libs}} {
-	define-append SYSLIBS {*}$libs
+proc UseSystemLibs {args} {
+	define-append SYSLIBS {*}$args
 }
 
-proc PublishIncludes {{args includes}} {
-	#target 
+proc PublishIncludes {args} {
+	error "not yet implemented"
 }
 
-proc PublishArchiveLibs {{args libs}} {
-	#target 
+proc PublishArchiveLibs {args} {
+	error "not yet implemented"
 }
 
 proc RunTest {{args cmd}} {
-	#target 
+	error "not yet implemented"
 }
 
-proc Install {dest {args files}} {
+proc Install {args} {
 	show-this-rule
-	set bin 0
-	set files [join $files]
-	if {$dest eq "--bin"} {
-		incr bin
-		set files [lassign $files dest]
-	}
+
+	array set opts [getopt {test bin} args]
+	set files [lassign $args dest]
 
 	# pairs of src dest
 	set srcs {}
@@ -197,15 +194,15 @@ proc Install {dest {args files}} {
 		if {[string match {*[*?]*} $i]} {
 			foreach j [glob $i] {
 				lappend srcs $j
-				add-install-file [file join $dest [file tail $j]] $j $bin
+				add-install-file [file join $dest [file tail $j]] $j $opts(bin)
 			}
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] src target
 			lappend srcs $src
-			add-install-file [file join $dest $target] $src $bin
+			add-install-file [file join $dest $target] $src $opts(bin)
 		} else {
 			lappend srcs $i
-			add-install-file [file join $dest [file tail $i]] $i $bin
+			add-install-file [file join $dest [file tail $i]] $i $opts(bin)
 		}
 	}
 	Depends install {*}$srcs

@@ -46,6 +46,12 @@ if {$compat(istcl)} {
 		}
 		return -code error "environment variable \"$name\" does not exist"
 	}
+	proc errorInfo {msg} {
+		return $::errorInfo
+	}
+	proc alias {new orig} {
+		interp alias {} $new {} $orig
+	}
 } elseif {$compat(iswin)} {
 	# On Windows, backslash convert all environment variables
 	# (Assume that Tcl does this for us)
@@ -166,19 +172,30 @@ proc error-location {msg} {
 	if {$::tmake(debug)} {
 		return -code error $msg
 	}
-	# Search back through the stack trace for the first error in a .spec file
+	set loc [find-source-location]
+	if {$loc ne "unknown"} {
+		return "$loc: Error: $msg"
+	}
+	return $msg
+}
+
+# Look down the stack frame for the first location
+# which is in a file matching the pattern and return it as file:line
+# Returns "unknown" if not known.
+#
+proc find-source-location {{pattern *.spec}} {
+	# Search back through the stack for the first loca in a .spec file
 	for {set i 1} {$i < [info level]} {incr i} {
 		if {$::compat(istcl)} {
 			array set info [info frame -$i]
 		} else {
 			lassign [info frame -$i] info(caller) info(file) info(line)
 		}
-		if {[string match *.spec $info(file)]} {
-			return "[relative-path $info(file)]:$info(line): Error: $msg"
+		if {[string match $pattern $info(file)]} {
+			return [relative-path $info(file)]:$info(line)
 		}
-		#puts "Skipping $info(file):$info(line)"
 	}
-	return $msg
+	return unknown
 }
 
 # Similar to error-location, but called when user code generates an error

@@ -12,13 +12,9 @@ tmake TODO
   - default rule base
   - local customisations
 * How to add rules for new Object types?
+  - Currently just OBJRULES etc.
 * Add parallel build support.
   - With exec &, and os.wait
-* Better debug levels
-  -dd = dynamic dependency
-  -db = reasons for building
-  -dn = reasons for not building
-  -dr = show rule for target being considered (combines with -db, -dn)
 * header scan should take include path(s) into consideration
 * Support Test, Publish*
 * Support shared libraries
