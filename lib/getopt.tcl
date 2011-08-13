@@ -16,7 +16,7 @@ proc getopt {optdef argvname} {
 	# String options are unset
 	foreach i $optdef {
 		if {![string match *: $i]} {
-			set opt($i) 0
+			set opts($i) 0
 		}
 	}
 

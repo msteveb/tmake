@@ -18,6 +18,7 @@ set tmake(numtargets) 0
 set tmake(showtime) 0
 set tmake(quickstop) 0
 set tmake(showrules) 0
+set tmake(exitcode) 0
 set tmake(modules) {}
 
 # ==================================================================
@@ -151,6 +152,18 @@ proc user-error {msg} {
 	exit 1
 }
 
+# @build-error msg
+#
+# Indicate that something failed to build
+# If --quickstop is set, exit.
+# Otherwise just note the error.
+proc build-error {msg} {
+	puts stderr "Error: $msg"
+	if {$::tmake(quickstop)} {
+		exit 1
+	}
+	set ::tmake(exitcode) 1
+}
 # @user-notice msg
 #
 # Output the given message to stderr.
@@ -442,6 +455,8 @@ proc find-rule-source {} {
 proc target {target args} {
 	array set info [parse-target-rule $target $args]
 
+	show-this-rule
+
 	# And -inputs are also -depends
 	set info(depends) [concat $info(depends) $info(inputs)]
 
@@ -454,9 +469,13 @@ proc target {target args} {
 		if {$info(do) ne "" && $orig(do) ne ""} {
 			dev-error "$target already has '-do' @$orig(source)"
 		}
+		if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
+			dev-error "$target already has '-dyndep' @$orig(source)"
+		}
 		lappend info(depends) {*}$orig(depends)
 		lappend info(inputs) {*}$orig(inputs)
 		lappend info(clean) {*}$orig(clean)
+		lappend info(dyndep) {*}$orig(dyndep)
 		incr info(phony) $orig(phony)
 		append-with-space info(onfail) $orig(onfail) \n
 		append-with-space orig(do) $info(add-do) \n
@@ -493,6 +512,7 @@ proc parse-target-rule {target arglist} {
 	set info(phony) 0
 	set info(add-do) {}
 	set info(vars) {}
+	set info(dyndep) {}
 
 	set -inputs {}
 	set -depends {}
@@ -501,6 +521,7 @@ proc parse-target-rule {target arglist} {
 	set -onfail {}
 	set -msg {}
 	set -vars {}
+	set -dyndep {}
 
 	set skip 0
 	set add 0
@@ -539,6 +560,9 @@ proc parse-target-rule {target arglist} {
 	if {[llength ${-msg}] > 1} {
 		dev-error "Rule for $target has more than one '-msg' parameter"
 	}
+	if {[llength ${-dyndep}] > 1} {
+		dev-error "Rule for $target has more than one '-dyndep' parameter"
+	}
 	if {$add} {
 		if {![llength ${-do}]} {
 			dev-error "Rule for $target has '-add' but no '-do'"
@@ -555,6 +579,7 @@ proc parse-target-rule {target arglist} {
 	set info(vars) ${-vars}
 	set info(do) [lindex ${-do} 0]
 	set info(msg) [lindex ${-msg} 0]
+	set info(dyndep) [lindex ${-dyndep} 0]
 
 	if {$info(do) eq "" && [llength $info(inputs)]} {
 		dev-error "Rule for $target has '-inputs' but no '-do'"
@@ -681,7 +706,7 @@ proc build {target} {
 		set rc [build $i]
 		if {$rc < 0} {
 			if {[get-target-result $target] >= 0} {
-				puts stderr "Don't know how to build $i: [join [lreverse $current] { <= }] @[join $t(source) {, }]"
+				build-error "Don't know how to build $i: [join [lreverse $current] { <= }] @[join $t(source) {, }]"
 			}
 			#dumptarget $target
 			#show-reason $current
@@ -695,9 +720,31 @@ proc build {target} {
 				set result 1
 			} elseif {[needbuild? $target $i]} {
 				set result 1
+			} elseif {$rc == 0 && $t(dyndep) ne ""} {
+				#dputs "Rebuilding $target not forced by $i, but have dyndep, so checking"
+				set dyndeps [{*}$t(dyndep) $i]
+				dputs "Dynamic dependencies for $target: $dyndeps"
+				foreach d $dyndeps {
+					# Only care about this if it is a target or it exists.
+					# XXX: Do we need to look in IncludePaths for this file?
+					#      Or has that already been taken care of?
+					#      Recursively add scanned headers?
+					if {[is-target? $d] || [file exists $d]} {
+						#puts "Is target or exists: $d"
+						# Do we need build here, or just needbuild?
+						if {[needbuild? $target $d]} {
+							set result 1
+							break
+						}
+					} else {
+						#puts "Ignoring dyndep: $d"
+					}
+				}
+				#puts "Got dyndep for $target, rc=$rc, result=$result"
 			}
 		}
 	}
+
 	if {$result > 0 && $t(do) ne ""} {
 		#puts "Running rules for $target"
 		dputs "Building [join [lreverse $current] { <= }] with rule @[join $t(source) {, }]"
@@ -713,7 +760,7 @@ proc build {target} {
 					set do $t(do)
 				}
 				show-rule-commands $do
-				parray t
+				#parray t
 			} else {
 				uplevel #0 $t(do)
 				incr tmake(numtargets)
@@ -747,6 +794,48 @@ proc build {target} {
 }
 
 # ==================================================================
+# Dynamic dependencies
+# ==================================================================
+
+# Note: stops scanning after 100 lines with no #include
+proc header-scan-regexp {regex filename} {
+	set headers {}
+	set f [open $filename]
+	set n 0
+	while {[gets $f buf] >= 0} {
+		if {[regexp $regex $buf -> name]} {
+			lappend headers $name
+			set n 0
+		} elseif {[incr n] > 100} {
+			break
+		}
+	}
+	close $f
+	return $headers
+}
+
+# XXX: This could be done better
+proc header-scan-regexp-recursive {regex filename} {
+	# XXX: Should we search the IncludePaths looking
+	# for the file?
+	array set deps {}
+	set scanned($filename) 1
+	set toscan [header-scan-regexp $regex $filename]
+	while {[llength $toscan]} {
+		set newscan {}
+		foreach d $toscan {
+			set deps($d) 1
+			if {![info exists scanned($d)] && [file exists $d]} {
+				lappend newscan {*}[header-scan-regexp $regex $d]
+			}
+			set scanned($d) 1
+		}
+		set toscan $newscan
+	}
+	array names deps
+}
+
+# ==================================================================
 # ENTRY POINT
 # ==================================================================
 
@@ -764,3 +853,5 @@ if {[catch {make $argv} msg opts]} {
 if {$tmake(numtargets) || $tmake(showtime)} {
 	puts "Built $tmake(numtargets) target(s) in [format %.2f $(([clock-millis] - $tmake(start)) / 1000.0)] seconds"
 }
+
+exit $tmake(exitcode)

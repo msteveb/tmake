@@ -1,12 +1,12 @@
 Load settings.conf
 
-set extrasrcs {}
+set SRCS {}
 define? DESTDIR _install
 
 CFlags -I.
 
 ifconfig USE_LINENOISE {
-	define-append extrasrcs linenoise.c
+	define-append SRCS linenoise.c
 }
 
 #PublishIncludes jimautoconf.h=jimautoconf.h.automf
@@ -20,18 +20,17 @@ ifconfig USE_LINENOISE {
 
 # C extensions can either be static or dynamic
 foreach pkg $JIM_STATIC_C_EXTS {
-	define-append extrasrcs jim-$pkg.c
+	define-append SRCS jim-$pkg.c
 }
 foreach pkg $JIM_MOD_EXTENSIONS {
-	SharedObject $pkg.so jim-$pkg.c
-	Install --bin $prefix/lib/jim $pkg.so
+	SharedObject --install=$prefix/lib/jim $pkg.so jim-$pkg.c
 }
 foreach pkg $JIM_STATIC_TCL_EXTS {
 	set src _jim$pkg.c 
 	Generate $src make-c-ext.tcl $pkg.tcl {
 		run $tclsh $script $inputs >$target
 	}
-	define-append extrasrcs $src
+	define-append SRCS $src
 }
 
 Install $prefix/lib/jim [suffix .tcl $JIM_TCL_EXTENSIONS]
@@ -49,7 +48,7 @@ ifconfig JIM_UTF8 {
 	Depends utf8.o _unicode_mapping.c
 }
 
-ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $extrasrcs
+ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $SRCS
 
 Executable --install=$exec_prefix jimsh jimsh.c
 

@@ -34,6 +34,9 @@ set OBJRULES(.c) {run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target}
 set OBJMSG(.c) {note Cc $target}
 set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS $OBJCFLAGS -c $inputs -o $target}
 set OBJMSG(.cpp) {note C++ $target}
+set HDRSCAN(.c) {header-scan-regexp-recursive {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}}
+set HDRSCAN(.cpp) {header-scan-regexp-recursive {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}}
+
 set EXERULE {run $CC $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS}
 set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
 set ARRULE {
@@ -45,25 +48,16 @@ set ARRULE {
 # HIGH LEVEL RULES
 # ==================================================================
 
-proc Executable {target {args srcs}} {
+proc Executable {args} {
 	show-this-rule
-	set test 0
-	while {[string match --* $target]} {
-		if {[regexp {^--install=(.*)} $target -> installdir} {
-			# Will install to $installdir
-		} elseif {$target eq "--test"} {
-			incr test
-		} else {
-			error "Uknown option $target"
-		}
-		set srcs [lassign $srcs target]
-	}
-	Link $target {*}[Objects {*}[join $srcs]]
+	set opts [getopt {test install:} args]
+	set args [lassign $args target]
+	Link $target {*}[Objects {*}[join $args]]
 	Depends all $target
-	if {[exists installdir]} {
-		Install $installdir $target
+	if {[info exists opts(install)]} {
+		Install --bin $opts(install) $target
 	}
-	if {$test} {
+	if {$opts(test)} {
 		# XXX: RunTest $target
 	}
 }
@@ -86,11 +80,21 @@ proc ArchiveLib {base {args srcs}} {
 
 alias Lib ArchiveLib
 
-proc SharedObject {target {args srcs}} {
+proc SharedObject {args} {
 	show-this-rule
+	# REVISIT: Should allow getopt to also checked fixed args too
+	#          so we can produce a nice error message
+	# Like: getopt SharedObject {install: test} target srcs...
+	#
+	set opts [getopt {install:} args]
+	set args [lassign $args target]
 	# XXX: Should build objects with -fpic, etc.
-	SharedObjectLink $target {*}[Objects {*}[join $srcs]]
+	# Use -vars to do this
+	SharedObjectLink $target {*}[Objects {*}[join $args]]
 	Depends all $target
+	if {[info exists opts(install)]} {
+		Install --bin $opts(install) $target
+	}
 }
 
 # Link an executable from objects
@@ -109,11 +113,19 @@ proc Objects {{args srcs}} {
 	set objs {}
 	foreach src $srcs {
 		set obj [change-ext .o $src]
+		set ext [file ext $src]
 		lappend objs $obj
-		if {![info exists ::OBJRULES([file ext $src])} {
-			error "Don't know how to build object from $src"
+		set extra {}
+		if {![info exists ::OBJRULES($ext)} {
+			dev-error "Don't know how to build Object from $src"
 		}
-		target $obj -inputs $src -do $::OBJRULES([file ext $src]) -msg $::OBJMSG([file ext $src])
+		if {[info exists ::OBJMSG($ext)} {
+			lappend extra -msg $::OBJMSG($ext)} {
+		}
+		if {[info exists ::HDRSCAN($ext)} {
+			lappend extra -dyndep $::HDRSCAN($ext)} {
+		}
+		target $obj -inputs $src -do $::OBJRULES($ext) {*}$extra
 		Clean clean $obj
 	}
 	return $objs
