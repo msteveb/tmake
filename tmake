@@ -23,6 +23,10 @@ set tmake(showrules) 0
 set tmake(exitcode) 0
 set tmake(modules) {}
 
+# Should this really be here?
+set tmake(includepaths) .
+set tmake(headerscan) {}
+
 # ==================================================================
 # Argument Processing
 # ==================================================================
@@ -871,6 +875,10 @@ proc build {target} {
 
 # Note: stops scanning after 200 lines with no #include
 proc header-scan-regexp {regex filename} {
+	# memoize the result
+	if {[dict exists $::tmake(headerscan) $filename,$regex]} {
+		return [dict get $::tmake(headerscan) $filename,$regex]
+	}
 	set headers {}
 	set f [open $filename]
 	set n 0
@@ -883,7 +891,22 @@ proc header-scan-regexp {regex filename} {
 		}
 	}
 	close $f
+	dict set ::tmake(headerscan) $filename,$regex $headers
 	return $headers
+}
+
+proc find-file {filename paths} {
+	foreach p $paths {
+		if {$p eq "" || $p eq "."} {
+			set f $filename
+		} else {
+			set f [file join $p $filename]
+		}
+		if {[is-target? $f] || [file exists $f]} {
+			return $f
+		}
+	}
+	return ""
 }
 
 # XXX: This could be done better
@@ -891,19 +914,23 @@ proc header-scan-regexp-recursive {regex filename} {
 	if {![file exists $filename]} {
 		return {}
 	}
-	# XXX: Should we search the IncludePaths looking
-	# for the file?
 	array set deps {}
 	set scanned($filename) 1
 	set toscan [header-scan-regexp $regex $filename]
 	while {[llength $toscan]} {
 		set newscan {}
 		foreach d $toscan {
-			set deps($d) 1
-			if {![info exists scanned($d)] && [file exists $d]} {
-				lappend newscan {*}[header-scan-regexp $regex $d]
+			if {![info exists scanned($d)]} {
+				set df [find-file $d $::tmake(includepaths)]
+				if {$df ne ""} {
+					set d $df
+					if {[file exists $df]} {
+						lappend newscan {*}[header-scan-regexp $regex $d]
+					}
+				}
+				set scanned($d) 1
 			}
-			set scanned($d) 1
+			set deps($d) 1
 		}
 		set toscan $newscan
 	}

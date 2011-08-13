@@ -152,6 +152,11 @@ proc LinkFlags {{args flags}} {
 	define-append LDFLAGS {*}$flags
 }
 
+proc IncludePaths {args} {
+	lappend ::tmake(includepaths) {*}$args
+	CFlags [prefix -I $args]
+}
+
 proc Load {filename} {
 	if {![file exists $filename]} {
 		puts "Warning: $filename does not yet exist"
