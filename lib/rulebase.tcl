@@ -91,7 +91,10 @@ proc ArchiveLib {args} {
 
 	set root [file tail $base]
 	set dir [file dirname $base]
-	set target $dir/lib$root.a
+	set target lib$root.a
+	if {$dir ne "."} {
+		set target [file join $dir $target]
+	}
 	target $target -inputs {*}[Objects {*}[join $args]] -do $::ARRULE -msg {note Ar $target}
 	Depends all $target
 	Clean clean $target
