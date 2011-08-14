@@ -22,8 +22,57 @@ published files become the dependency via the chain:
 
   dir2/target.o <- _publish/include/file.h <- dir1/file.h
 
+A typical scenario is where a library and some header files need to be exported
+from a directory. build.spec would look something like this.
+
+  PublishIncludes public1.h public2.h
+  # Private header files are not published
+  Lib --publish my file1.c file2.c file3.c
+
+This will publish publish/include/{public1,public2}.h and publish/lib/libmy.a where
+they will be available for other directories.
+
+To publish an executable (say, needed during the build):
+
+  HostExecutable --publish generate generate.c
+
+Now the direction which uses these published files does something like:
+
+  # Note that published header files are found automatically
+
+  Generate table.c input.txt [FindBin generate] {
+    run $script $inputs >$target
+  }
+  Executable xyz main.c table.c [FindLib my]
+
+Here FindBin and FindLib return the path to the published files
+
 Out of tree build
 -----------------
+Builds occur in a separate tree.
+Source files are located and the full or relative path is used in rules.
+($target in build dir, $inputs in either source or build dir)
+
+Install
+-------
+Explain the install philosophy
+
+Build from any directory within the tree
+----------------------------------------
+Stub makefiles, search for project.spec
+
+Integrating foreign projects
+----------------------------
+autotools-based, make-based
+
+Combining tmake-based projects
+------------------------------
+Adding a tmake project as a subproject
+
+automake
+--------
+Explain how to do automake-like things.
+Also migration from automake
 
 tmake TODO
 ----------
