@@ -4,10 +4,10 @@
 # Module containing misc procs useful to modules
 # Largely for platform compatibility
 
-set compat(istcl) [info exists ::tcl_library]
-set compat(iswin) [string equal windows $tcl_platform(platform)]
+set tmakecompat(istcl) [info exists ::tcl_library]
+set tmakecompat(iswin) [string equal windows $tcl_platform(platform)]
 
-if {$compat(iswin)} {
+if {$tmakecompat(iswin)} {
 	# mingw/windows separates $PATH with semicolons
 	# and doesn't have an executable bit
 	proc split-path {} {
@@ -35,7 +35,7 @@ proc exec-with-stderr {args} {
 	exec {*}$args 2>@1
 }
 
-if {$compat(istcl)} {
+if {$tmakecompat(istcl)} {
 	# Tcl doesn't have the env command
 	proc getenv {name args} {
 		if {[info exists ::env($name)]} {
@@ -52,7 +52,7 @@ if {$compat(istcl)} {
 	proc alias {new orig} {
 		interp alias {} $new {} $orig
 	}
-} elseif {$compat(iswin)} {
+} elseif {$tmakecompat(iswin)} {
 	# On Windows, backslash convert all environment variables
 	# (Assume that Tcl does this for us)
 	proc getenv {name args} {
@@ -186,7 +186,7 @@ proc error-location {msg} {
 proc find-source-location {{pattern *.spec}} {
 	# Search back through the stack for the first loca in a .spec file
 	for {set i 1} {$i < [info level]} {incr i} {
-		if {$::compat(istcl)} {
+		if {$::tmakecompat(istcl)} {
 			array set info [info frame -$i]
 		} else {
 			lassign [info frame -$i] info(caller) info(file) info(line)
@@ -203,7 +203,7 @@ proc find-source-location {{pattern *.spec}} {
 # (unless --debug is enabled)
 #
 proc error-stacktrace {msg} {
-	if {$::compat(istcl)} {
+	if {$::tmakecompat(istcl)} {
 		if {[regexp {file "([^ ]*)" line ([0-9]*)} $::errorInfo dummy file line]} {
 			return "[relative-path $file]:$line $msg\n$::errorInfo"
 		}

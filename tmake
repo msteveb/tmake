@@ -17,7 +17,7 @@ set tmake(debug) 0
 #  r = show rule for target being considered (combines with -db, -dn)
 #  t = target rule creation/update
 #  c = configuration checking
-#  g = graphical display of dependencies exuted
+#  g = graph dependencies executed
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0}
 set tmake(verbose) 0
 set tmake(norun) 0
@@ -48,7 +48,7 @@ proc make {argv} {
 	#puts "make $argv"
 	#parray ::env
 
-	# 'misc' is needed before we can do anything, so set a temporary libdir
+	# 'compat' is needed before we can do anything, so set a temporary libdir
 	# in case this is the development version
 	set tmake(dir) [file dirname $::argv0]
 	set tmake(libdir) $tmake(dir)/lib
@@ -1042,14 +1042,10 @@ proc header-scan-regexp-recursive {regex filename} {
 
 if {[info exists env(MAKEFLAGS)]} {
 	# Running under make
-	set argv [list {*}"-$env(MAKEFLAGS)" {*}$argv]
+	set argv [list {*}-$env(MAKEFLAGS) {*}$argv]
 }
 
-if {[catch {make $argv} msg opts]} {
-	set errmsg [errorInfo $msg]
-	puts stderr [regsub {Runtime Error: } $errmsg ""]
-	exit 1
-}
+make $argv
 
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
