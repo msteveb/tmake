@@ -1,3 +1,30 @@
+Publish
+-------
+The idea here is that normally any files referred to in a build.spec
+relate to files found in that directory.
+
+But sometimes files need to be shared across directories.
+Typically this will be:
+- Header files
+- Host executables and scripts
+- Libraries
+
+Instead of having each command which needs these things refer
+to the various directories which contain them, we "publish" these
+shared files to a top level directory, such as _publish
+Ideally we do this with hard links (if supported) so that
+if an error occurs (say in a header file) and the file is edited,
+it will be the original file which is edited.
+If hard links aren't supported, soft links or simply copying will work too.
+
+Unlike Install where the installed files are never dependencies, these
+published files become the dependency via the chain:
+
+  dir2/target.o <- _publish/include/file.h <- dir1/file.h
+
+Out of tree build
+-----------------
+
 tmake TODO
 ----------
 * Add support for per-directory rules. Probably need something like Jam's <grist>

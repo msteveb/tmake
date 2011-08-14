@@ -21,6 +21,8 @@ set SYSLIBS ""
 set LOCAL_LIBS ""
 set DESTDIR ""
 set OBJCFLAGS ""
+# XXX Should be $TOP/publish
+set PUBLISH publish
 
 # XXX: Either reuse cc-shared.tcl or expect these to be set
 #      in settings.conf
@@ -51,7 +53,7 @@ set ARRULE {
 
 proc Executable {args} {
 	show-this-rule
-	array set opts [getopt {test install:} args]
+	array set opts [getopt {test publish install:} args]
 	set args [lassign $args target]
 	Link $target {*}[Objects {*}[join $args]]
 	Depends all $target
@@ -60,6 +62,10 @@ proc Executable {args} {
 	}
 	if {$opts(test)} {
 		# XXX: RunTest $target
+	}
+	if {$opts(publish)} {
+		# Revisit: --publish=newname?
+		Publish bin $target
 	}
 }
 
@@ -70,13 +76,33 @@ proc Link {target args} {
 	Clean clean $target
 }
 
-proc ArchiveLib {base args} {
+proc Publish {dir args} {
 	show-this-rule
-	set libname lib$base.a
-	target $libname -inputs {*}[Objects {*}[join $args]] -do $::ARRULE -msg {note Ar $target}
-	Depends all $libname
-	Clean clean $libname
-	define-append LOCAL_LIBS $libname
+	foreach t $args {
+		set dest [file join $dir [file tail $t]]
+		HardLink [file join $::PUBLISH $dest] $t -vars dest $dest -msg {note Publish $dest}
+	}
+}
+
+proc ArchiveLib {args} {
+	show-this-rule
+	array set opts [getopt {publish install:} args]
+	set args [lassign $args base]
+
+	set root [file tail $base]
+	set dir [file dirname $base]
+	set target $dir/lib$root.a
+	target $target -inputs {*}[Objects {*}[join $args]] -do $::ARRULE -msg {note Ar $target}
+	Depends all $target
+	Clean clean $target
+	define-append LOCAL_LIBS $target
+
+	if {[info exists opts(install)]} {
+		Install $opts(install) $target
+	}
+	if {$opts(publish)} {
+		Publish lib $target
+	}
 }
 
 alias Lib ArchiveLib
@@ -171,15 +197,35 @@ proc UseSystemLibs {args} {
 }
 
 proc PublishIncludes {args} {
-	error "not yet implemented"
+	foreach a [join $args] {
+		Publish include $a
+	}
 }
 
 proc PublishArchiveLibs {args} {
+	foreach a [join $args] {
+		Publish lib $a
+	}
+}
+
+proc RunTest {args} {
 	error "not yet implemented"
 }
 
-proc RunTest {{args cmd}} {
-	error "not yet implemented"
+proc HardLink {args} {
+	show-this-rule
+
+	array set opts [getopt {fallback} args]
+	set args [lassign $args dst src]
+
+	# XXX: If the platform doesn't support hard links
+	# and opts(fallback) is set, fall back to soft links
+	# and then to file copy
+	target $dst -inputs $src -do {
+		file mkdir [file dirname $target]
+		exec ln $inputs $target
+	} {*}$args
+	Clean clean $dst
 }
 
 proc Install {args} {

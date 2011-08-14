@@ -18,7 +18,8 @@ set tmake(debug) 0
 #  t = target rule creation/update
 #  c = configuration checking
 #  g = graph dependencies executed
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0}
+#  p = show high level rules as they are parsed
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(current) {}
@@ -78,6 +79,12 @@ proc make {argv} {
 				define $n $v
 			}
 		} elseif {[string match -* $a]} {
+			if {$a eq "-d*"} {
+				foreach i [dict keys $tmake(debugtypes)] {
+					dict set tmake(debugtypes) $i 1
+				}
+				continue
+			}
 			switch -glob -- $a {
 				-d* {
 					foreach i [split [string range $a 2 end] {}] {
@@ -153,7 +160,14 @@ proc make {argv} {
 		show-all-rules
 	}
 
-	build $targets
+	foreach t $targets {
+		if {[build $t] < 0} {
+			if {$tmake(exitcode) == 0} {
+				build-error "Error: Don't know how to build $t"
+			}
+			break
+		}
+	}
 }
 
 # ==================================================================
@@ -499,7 +513,9 @@ proc set-target-rule {target dict} {
 }
 
 proc show-this-rule {} {
-	#dputs [info level -1]
+	if {[debug-is-set p]} {
+		puts "\[p\] [make-source-location [find-source-location]] [info level -1]"
+	}
 }
 
 proc get-clean {type} {
@@ -543,7 +559,7 @@ proc make-source-location {list {prefix {}} {suffix {}}} {
 proc target {target args} {
 	array set info [parse-target-rule $target $args]
 
-	show-this-rule
+	#show-this-rule
 
 	set replace $info(replace)
 	unset info(replace)
@@ -833,9 +849,6 @@ proc build {target} {
 	foreach i $depends {
 		#puts "Building $i"
 		#dumptarget $i
-		if {[dict get $::tmake(debugtypes) g]} {
-			#puts "\[g\] [join $current { --> }]"
-		}
 		set rc [build $i]
 		if {$rc < 0} {
 			if {[get-target-result $target] >= 0 && $tmake(exitcode) == 0} {
