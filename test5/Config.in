@@ -1,0 +1,12 @@
+config CONFIG_USER_MDNSRESPONDER
+	bool "mDNSResponder"
+	default n
+	help
+	    Application mDNSResponder
+
+config CONFIG_USER_MDNSRESPONDER_IPV6
+	bool "ipv6 support"
+	depends on CONFIG_USER_MDNSRESPONDER
+	default n
+	help
+	    Must have ipv6 support in the kernel too
