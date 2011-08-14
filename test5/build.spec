@@ -1,9 +1,9 @@
-
-LocalMakefile GNUmakefile
+#LocalMakefile GNUmakefile
+Load settings.conf
 
 #ifconfig USER_MDNSRESPONDER
 
-IncludePath mdnsresponder/mDNSCore mdnsresponder/mDNSShared
+IncludePaths mDNSCore mDNSShared
 
 CFlags -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\" \
     -DPID_FILE=\"/var/run/mdnsd.pid\" \
@@ -16,9 +16,9 @@ CFlags -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\" \
 
 CFlags -Wno-deprecated-declarations
 
-#if {[string match  *-linux* [config TARGET_PLATFORM]]} {
-#	CFlags -DUSES_NETLINK -DHAVE_LINUX
-#}
+if {[string match  *-linux* $host]} {
+	CFlags -DUSES_NETLINK -DHAVE_LINUX
+}
 
 Lib mdns mDNSCore/DNSCommon.c mDNSCore/DNSDigest.c mDNSCore/mDNS.c mDNSCore/uDNS.c \
 		mDNSPosix/mDNSPosix.c mDNSPosix/mDNSUNP.c mDNSShared/GenLinkedList.c \
