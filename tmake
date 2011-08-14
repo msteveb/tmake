@@ -189,14 +189,9 @@ proc user-error {msg} {
 
 # @build-error msg
 #
-# Indicate that something failed to build
-# If --quickstop is set, exit.
-# Otherwise just note the error.
+# Indicate that something failed to build and set exitcode=1
 proc build-error {msg} {
-	puts stderr "Error: $msg"
-	if {$::tmake(quickstop)} {
-		exit 1
-	}
+	puts stderr $msg
 	set ::tmake(exitcode) 1
 }
 # @user-notice msg
@@ -270,8 +265,8 @@ proc show-rule {target} {
 		array set t [get-target-rule $target]
 		set flags {}
 		set lines {}
-		foreach n [lsort [dict keys $t]] {
-			set v [dict get $t $n]
+		foreach n [lsort [array names t]] {
+			set v $t($n)
 			switch -- $n {
 				do - depends - inputs - building - msg - target {}
 				source {
@@ -417,9 +412,11 @@ proc merge-vars {dict1 dict2} {
 		if {[dict size $dict1] == 0} {
 			return $dict2
 		}
+		array set d1 $dict1
 		foreach {n v} $dict2 {
-			append-with-space dict1($n) $v
+			append-with-space d1($n) $v
 		}
+		return [array get d1]
 	}
 	return $dict1
 }
@@ -526,6 +523,13 @@ proc add-install-file {dest src {bin 0}} {
 #
 proc get-installdirs {} {
 	prefix $::DESTDIR [lsort [dict keys $::tmake(installdirs)]]
+}
+
+proc make-source-location {list {prefix {}} {suffix {}}} {
+	if {$list eq "unknown"} {
+		return ""
+	}
+	return $prefix[join $list ", "]$suffix
 }
 
 # This is the only way to create a rule
@@ -714,15 +718,15 @@ proc needbuild? {target source} {
 
 # Sets target-local variables. e.g. $inputs, $depends and $target
 proc set-target-vars {info} {
-	foreach {n v} $info(vars) {
+	foreach {n v} [dict get $info vars] {
 		set ::$n $v
 	}
 	foreach n {target depends inputs} {
-		set ::$n $info($n)
+		set ::$n [dict get $info $n]
 	}
 }
-proc clear-target-vars {info} {
-	foreach n [dict keys $info(vars)] {
+proc clear-target-vars {vars} {
+	foreach n [dict keys $vars] {
 		set ::$n ""
 	}
 }
@@ -732,7 +736,7 @@ proc get-target-result {target} {
 		return -1
 	}
 	array set t [get-target-rule $target]
-	dict get $t result
+	return $t(result)
 }
 
 proc set-target-result {target result} {
@@ -748,14 +752,17 @@ proc note {args} {
 }
 
 proc run {args} {
-	vputs [string trim [join $args]]
-	try {
-		exec >@stdout {*}[join $args]
-	} on error msg {
-		puts stderr \n\t[join $args]\n
-		puts stderr $msg\n
+	set cmdline [join $args]
+	vputs [string trim $cmdline]
+	set rc [catch {
+		exec >@stdout {*}$cmdline
+	} msg opts]
+	if {$rc == 1} {
+		# On error, display the command and the error and return break
+		build-error \n\t$cmdline\n$msg\n
 		return -code break
 	}
+	# XXX: What to do on signal?
 }
 
 proc build {target} {
@@ -779,7 +786,7 @@ proc build {target} {
 		return 1
 	}
 	if {$t(building)} {
-		puts stderr "Recursive definition for [join [lreverse $current] { <= }] @[join $t(source) {, }]"
+		puts stderr "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
 		exit 1
 	}
 	dict set tmake(rules) $target building 1
@@ -827,8 +834,8 @@ proc build {target} {
 		}
 		set rc [build $i]
 		if {$rc < 0} {
-			if {[get-target-result $target] >= 0} {
-				build-error "Don't know how to build $i: [join [lreverse $current] { <= }] @[join $t(source) {, }]"
+			if {[get-target-result $target] >= 0 && $tmake(exitcode) == 0} {
+				build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
 			}
 			#dumptarget $target
 			#show-reason $current
@@ -865,6 +872,10 @@ proc build {target} {
 		}
 	}
 
+	if {$tmake(quickstop) && $tmake(exitcode)} {
+		exit $tmake(exitcode)
+	}
+
 	if {$result > 0} {
 		if {[debug-is-set g]} {
 			puts "\[g\] [join $current { --> }] ($reason)"
@@ -873,68 +884,79 @@ proc build {target} {
 
 	if {$result > 0 && $t(do) ne ""} {
 		#puts "Running rules for $target"
-		dputs b "Building [join [lreverse $current] { <= }] with rule @[join $t(source) {, }]"
-		try -signal {
-			signal handle SIGINT SIGTERM
-			set-target-vars $t
+		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $t(source) "with rule @"]"
+		set rc [catch {
+			set-target-vars [array get t]
 			uplevel #0 $t(msg)
 			if {[dict get $tmake(debugtypes) r]} {
 				show-rule $target
 			}
 			if {$tmake(norun)} {
-				try {
-					set do [uplevel #0 [list subst $t(do)]]
-				} on error msg {
+				if {[catch {uplevel #0 [list subst $t(do)]} do]} {
 					# The rule probably refers to a command or variable which
-					# doesn't exist, to show it without the subst
+					# doesn't exist, so show it without the subst
 					set do $t(do)
 				}
 				show-rule-commands $do
 			} else {
 				uplevel #0 $t(do)
-				# Did the rule make the targets?
-				if {!$t(phony)} {
-					foreach f $target {
-						if {![file exists $f]} {
-							build-error "Rule for $target @[join $t(source) {, }] failed to build target(s)"
-							set result -1
-							break
-						}
-					}
+			}
+		} msg opts]
+
+		if {[check-signal]} {
+			puts ""
+			set tmake(exitcode) 2
+			set rc 5
+		}
+
+		# Always delete $t(clean) files after the rule has run
+		if {[llength $t(clean)]} {
+			file delete {*}$t(clean)
+		}
+
+		# Did the rule make the targets?
+		if {$rc == 0 && !$t(phony) && !$tmake(norun)} {
+			foreach f $target {
+				if {![file exists $f]} {
+					# XXX: Should onfail run here if --quickstop is set?
+					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s)"
+					# Use break to indicate that we have already output the message
+					set rc 3
 				}
-				incr tmake(numtargets)
 			}
-		} on {error signal break} {msg opts} {
-			set gotsignal 0
-			if {[info returncodes $opts(-code)] eq "signal"} {
-				puts ""
-				incr gotsignal
-			}
-			file delete $target {*}$t(clean)
-			try {
+		}
+
+		if {$rc == 0} {
+			incr tmake(numtargets)
+		} else {
+			# On failure, delete the target(s)
+			file delete {*}$target
+
+			# Try to run onfail
+			if {[catch {
 				dputs b $t(onfail)
 				uplevel #0 $t(onfail)
-				if {[info returncode $opts(-code)] eq "error"} {
-					puts stderr [errorInfo $msg]
+				if {$rc == 1} {
+					build-error [errorInfo $msg]
 				}
-			} on error {fmsg fopts} {
-				puts stderr [errorInfo $fmsg]
-			}
-			if {$gotsignal} {
-				exit 1
+			} fmsg fopts]} {
+				build-error [errorInfo $fmsg]
 			}
 			set result -1
-		} finally {
-			signal default SIGINT SIGTERM
-			clear-target-vars $t
 		}
+
+		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
+			exit $tmake(exitcode)
+		}
+
+		clear-target-vars $t(vars)
 	}
 
 	# For each target, mark it as made (> 0) or unmakeable(< 0)
 	if {$result != 0} {
 		#puts "Marking target result=$result for $current"
-		foreach t $current {
-			set-target-result $t $result
+		foreach c $current {
+			set-target-result $c $result
 		}
 	}
 	set tmake(current) $oldcurrent
@@ -1026,7 +1048,8 @@ if {[catch {make $argv} msg opts]} {
 }
 
 if {$tmake(numtargets) || $tmake(showtime)} {
-	puts "Built $tmake(numtargets) target(s) in [format %.2f $(([clock-millis] - $tmake(start)) / 1000.0)] seconds"
+	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
+	puts "Built $tmake(numtargets) target(s) in [format %.2f $elapsed] seconds"
 }
 
 exit $tmake(exitcode)

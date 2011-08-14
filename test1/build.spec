@@ -13,9 +13,8 @@ target {blah.c include/blah.h} -depends make-two -vars basename blah -do {
 	writefile tempfile.dat "This is a temp file"
 	run sh make-two $basename
 } -onfail {
-	note "MakeTwo failed, so cleaning up tempfile.dat"
-	file delete tempfile.dat
-}
+	note "MakeTwo failed, so cleaning up..."
+} -clean tempfile.dat
 Clean clean blah.c include/blah.h
 
 Executable blah blah.c
