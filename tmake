@@ -591,10 +591,11 @@ proc target {target args} {
 		lappend info(depends) {*}$orig(depends)
 		lappend info(inputs) {*}$orig(inputs)
 		lappend info(clean) {*}$orig(clean)
-		lappend info(dyndep) {*}$orig(dyndep)
 		incr info(phony) $orig(phony)
 		append-with-space info(onfail) $orig(onfail) \n
-		append-with-space orig(do) $info(add-do) \n
+		# Only one of these will be non-blank
+		append-with-space orig(do) $info(add-do)
+		append-with-space info(dyndep) $orig(dyndep)
 
 		if {$info(source) eq "unknown"} {
 			set info(source) $orig(source)

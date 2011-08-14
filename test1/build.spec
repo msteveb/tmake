@@ -11,9 +11,10 @@ PublishIncludes fdcallback/fdcallback.h
 
 PublishIncludes [prefix timer/include/ timer.h timerqueue.h]
 
-# Do this after libcdcb.a so we are sure to pick up the published versions
-#IncludePaths timer/include
-Lib --publish timer/timer timer/timerqueue.c timer/timer.c
+# Imagine that we want to build one object with different flags
+ObjectCFlags [Object timer/timerqueue.o timer/timerqueue.c] -DDUMMY_DEFINE
+# And specify the object file here
+Lib --publish timer/timer timer/timer.c timer/timerqueue.o
 
 Executable --publish --test testfdloop testfdloop.c fdcallback/fdcallback.c
 

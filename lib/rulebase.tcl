@@ -138,27 +138,35 @@ proc SharedObjectLink {target args} {
 # Create an object file from each source file
 # Uses $OBJSRULES(.ext) to determine the build rule
 # Returns a list of objects
+# Accepts object files (.o) in addition to source files
+# and simply returns them
 proc Objects {args} {
 	show-this-rule
 	set objs {}
 	foreach src $args {
-		set obj [change-ext .o $src]
-		set ext [file ext $src]
-		lappend objs $obj
+		lappend objs [Object [change-ext .o $src] $src]
+	}
+	return $objs
+}
+
+proc Object {obj src} {
+	show-this-rule
+	set ext [file ext $src]
+	if {$ext ne ".o"} {
 		set extra {}
 		if {![info exists ::OBJRULES($ext)]} {
 			dev-error "Don't know how to build Object from $src"
 		}
 		if {[info exists ::OBJMSG($ext)]} {
-			lappend extra -msg $::OBJMSG($ext)} {
+			lappend extra -msg $::OBJMSG($ext)
 		}
 		if {[info exists ::HDRSCAN($ext)]} {
-			lappend extra -dyndep $::HDRSCAN($ext)} {
+			lappend extra -dyndep $::HDRSCAN($ext)
 		}
 		target $obj -inputs $src -do $::OBJRULES($ext) {*}$extra
 		Clean clean $obj
 	}
-	return $objs
+	return $obj
 }
 
 # Set object-specific CFLAGS
