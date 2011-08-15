@@ -323,7 +323,9 @@ proc show-rule {target} {
 		if {[llength $lines]} {
 			puts [join $lines \n]
 		}
-		show-rule-commands $t(do)
+		foreach do $t(do) {
+			show-rule-commands $do
+		}
 	} else {
 		puts "No rule to make $target"
 	}
@@ -582,7 +584,7 @@ proc target {target args} {
 		# There is already a rule for this target, so attempt
 		# to merge the two rules
 
-		if {$info(do) ne "" && $orig(do) ne ""} {
+		if {[llength $info(do)] && [llength $orig(do)]} {
 			dev-error "$target already has '-do' @$orig(source)"
 		}
 		if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
@@ -594,7 +596,7 @@ proc target {target args} {
 		incr info(phony) $orig(phony)
 		append-with-space info(onfail) $orig(onfail) \n
 		# Only one of these will be non-blank
-		append-with-space orig(do) $info(add-do)
+		lappend orig(do) {*}$info(add-do)
 		append-with-space info(dyndep) $orig(dyndep)
 
 		if {$info(source) eq "unknown"} {
@@ -607,7 +609,7 @@ proc target {target args} {
 		set info(vars) [merge-vars $orig(vars) $info(vars)]
 
 		# Whichever rule has '-do' also specifies '-inputs' and '-msg'
-		if {$info(do) eq ""} {
+		if {[llength $info(do)] == 0} {
 			set info(do) $orig(do)
 			set info(inputs) $orig(inputs)
 			set info(msg) $orig(msg)
@@ -690,7 +692,7 @@ proc parse-target-rule {target arglist} {
 			dev-error "Rule for $target has '-add' but no '-do'"
 		}
 		# Transfer -do to add-do
-		set info(add-do) [lindex ${-do} 0]
+		set info(add-do) ${-do}
 		set -do ""
 	}
 
@@ -699,15 +701,15 @@ proc parse-target-rule {target arglist} {
 	set info(clean) ${-clean}
 	set info(onfail) [lindex ${-onfail} 0]
 	set info(vars) ${-vars}
-	set info(do) [lindex ${-do} 0]
+	set info(do) ${-do}
 	set info(msg) [lindex ${-msg} 0]
 	set info(dyndep) [lindex ${-dyndep} 0]
 	set info(replace) $replace
 
-	if {$info(do) eq "" && [llength $info(inputs)]} {
+	if {[llength $info(do)] == 0 && [llength $info(inputs)]} {
 		dev-error "Rule for $target has '-inputs' but no '-do'"
 	}
-	if {$info(do) eq "" && $info(msg) ne ""} {
+	if {[llength $info(do)] == 0 && $info(msg) ne ""} {
 		dev-error "Rule for $target has '-msg' but no '-do'"
 	}
 	array get info
@@ -900,7 +902,7 @@ proc build {target} {
 		}
 	}
 
-	if {$result > 0 && $t(do) ne ""} {
+	if {$result > 0 && [llength $t(do)]} {
 		#puts "Running rules for $target"
 		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $t(source) "with rule @"]"
 		set rc [catch {
@@ -910,14 +912,18 @@ proc build {target} {
 				show-rule $target
 			}
 			if {$tmake(norun)} {
-				if {[catch {uplevel #0 [list subst $t(do)]} do]} {
-					# The rule probably refers to a command or variable which
-					# doesn't exist, so show it without the subst
-					set do $t(do)
+				foreach do $t(do) {
+					if {[catch {uplevel #0 [list subst $do]} expanded]} {
+						# The rule probably refers to a command or variable which
+						# doesn't exist, so show it without the subst
+						set expanded $do
+					}
+					show-rule-commands $expanded
 				}
-				show-rule-commands $do
 			} else {
-				uplevel #0 $t(do)
+				foreach do $t(do) {
+					uplevel #0 $do
+				}
 			}
 		} msg opts]
 
@@ -955,10 +961,10 @@ proc build {target} {
 				dputs b $t(onfail)
 				uplevel #0 $t(onfail)
 				if {$rc == 1} {
-					build-error [errorInfo $msg]
+					build-error [error-stacktrace $msg]
 				}
 			} fmsg fopts]} {
-				build-error [errorInfo $fmsg]
+				build-error [error-stacktrace $fmsg]
 			}
 			set result -1
 		}

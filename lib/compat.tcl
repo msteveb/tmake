@@ -46,9 +46,6 @@ if {$tmakecompat(istcl)} {
 		}
 		return -code error "environment variable \"$name\" does not exist"
 	}
-	proc errorInfo {msg} {
-		return $::errorInfo
-	}
 	proc alias {new orig} {
 		interp alias {} $new {} $orig
 	}

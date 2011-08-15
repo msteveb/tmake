@@ -53,17 +53,16 @@ set ARRULE {
 
 proc Executable {args} {
 	show-this-rule
-	array set opts [getopt {test publish install:} args]
-	set args [lassign $args target]
+	getopt {--test --publish --install: target args} args
 	Link $target {*}[Objects {*}[join $args]]
 	Depends all $target
-	if {[info exists opts(install)]} {
-		Install --bin $opts(install) $target
+	if {[info exists install]} {
+		Install --bin $install $target
 	}
-	if {$opts(test)} {
+	if {$test} {
 		# XXX: RunTest $target
 	}
-	if {$opts(publish)} {
+	if {$publish} {
 		# Revisit: --publish=newname?
 		Publish bin $target
 	}
@@ -86,11 +85,10 @@ proc Publish {dir args} {
 
 proc ArchiveLib {args} {
 	show-this-rule
-	array set opts [getopt {publish install:} args]
-	set args [lassign $args base]
+	getopt {--publish --install: libname args} args
 
-	set root [file tail $base]
-	set dir [file dirname $base]
+	set root [file tail $libname]
+	set dir [file dirname $libname]
 	set target lib$root.a
 	if {$dir ne "."} {
 		set target [file join $dir $target]
@@ -100,10 +98,10 @@ proc ArchiveLib {args} {
 	Clean clean $target
 	define-append LOCAL_LIBS $target
 
-	if {[info exists opts(install)]} {
-		Install $opts(install) $target
+	if {[info exists install]} {
+		Install $install $target
 	}
-	if {$opts(publish)} {
+	if {$publish} {
 		Publish lib $target
 	}
 }
@@ -116,14 +114,14 @@ proc SharedObject {args} {
 	#          so we can produce a nice error message
 	# Like: getopt SharedObject {install: test} target srcs...
 	#
-	array set opts [getopt {install:} args]
-	set args [lassign $args target]
+	getopt {--install: sharedobj args} args
+
 	# XXX: Should build objects with -fpic, etc.
-	# Use -vars to do this
-	SharedObjectLink $target {*}[Objects {*}[join $args]]
-	Depends all $target
-	if {[info exists opts(install)]} {
-		Install --bin $opts(install) $target
+	# Use -vars/ObjectCFlags to do this
+	SharedObjectLink $sharedobj {*}[Objects {*}[join $args]]
+	Depends all $sharedobj
+	if {[info exists install]} {
+		Install --bin $install $sharedobj
 	}
 }
 
@@ -226,43 +224,41 @@ proc RunTest {args} {
 proc HardLink {args} {
 	show-this-rule
 
-	array set opts [getopt {fallback} args]
-	set args [lassign $args dst src]
+	getopt {--fallback dest source args} args
 
 	# XXX: If the platform doesn't support hard links
-	# and opts(fallback) is set, fall back to soft links
+	# and --fallback is set, fall back to soft links
 	# and then to file copy
-	target $dst -inputs $src -do {
+	target $dest -inputs $source -do {
 		file mkdir [file dirname $target]
 		exec ln $inputs $target
 	} {*}$args
-	Clean clean $dst
+	Clean clean $dest
 }
 
 proc Install {args} {
 	show-this-rule
 
-	array set opts [getopt {bin keepdir} args]
-	set files [lassign $args dest]
+	getopt {--bin --keepdir dest args} args
 
 	set srcs {}
-	foreach i $files {
+	foreach i $args {
 		if {[string match {*[*?]*} $i]} {
 			set flist [glob $i]
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] src target
 			lappend srcs $src
-			add-install-file [file join $dest $target] $src $opts(bin)
+			add-install-file [file join $dest $target] $src $bin
 			continue
 		} else {
 			set flist $i
 		}
 		foreach j $flist {
 			lappend srcs $j
-			if {$opts(keepdir)} {
-				add-install-file [file join $dest $j] $j $opts(bin)
+			if {$keepdir} {
+				add-install-file [file join $dest $j] $j $bin
 			} else {
-				add-install-file [file join $dest [file tail $j]] $j $opts(bin)
+				add-install-file [file join $dest [file tail $j]] $j $bin
 			}
 		}
 	}
@@ -314,7 +310,10 @@ Phony distclean -do {
 
 Phony install -do {
 	# First create all the directories
-	file mkdir {*}[get-installdirs]
+	set installdirs [get-installdirs]
+	if {[llength installdirs]} {
+		file mkdir {*}installdirs
+	}
 
 	set prevdir ""
 

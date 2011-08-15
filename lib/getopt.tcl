@@ -3,22 +3,42 @@
 
 # Simple getopt module
 
-proc getopt {optdef argvname} {
-	upvar $argvname argv
+# optdef looks something like:
+# --test --install: dest source args
+#
+# Sets variables in the caller's scope with the names given in optdef, except
+# any remaining args are left in the original argv
+#
+# If --test is set, then test=1, otherwise test=0
+# If --install is specified, $install is set, otherwise it left unset
 
-	# Parse everything out of the argv list which looks like an option
-	# Knows about --enable-thing and --disable-thing as alternatives for --thing=0 or --thing=1
-	# Everything which doesn't look like an option, or is after --, is left unchanged
+proc getopt {optdef argvname} {
 	upvar $argvname argv
 	set nargv {}
 
-	# Initialise all boolean options to 0
-	# String options are unset
+	# Parse the options
+	set haveargs 0
+	set named {}
 	foreach i $optdef {
-		if {![string match *: $i]} {
-			set opts($i) 0
+		if {[regexp {^--([^:]*)(:)?$} $i -> name colon]} {
+			if {$colon eq ":"} {
+				set valopts($name) 1
+			} else {
+				set boolopts($name) 0
+			}
+			continue
+		}
+		if {$i eq "args"} {
+			incr haveargs
+		} else {
+			lappend named $i
 		}
 	}
+	#parray valopts
+	#parray boolopts
+	#puts named=$named
+	#puts haveargs=$haveargs
+	#puts args=$argv
 
 	for {set i 0} {$i < [llength $argv]} {incr i} {
 		set arg [lindex $argv $i]
@@ -28,37 +48,36 @@ proc getopt {optdef argvname} {
 		if {$arg eq "--"} {
 			# End of options
 			incr i
-			lappend nargv {*}[lrange $argv $i end]
 			break
 		}
 
 		if {[regexp {^--([^=]+)=(.*)} $arg -> name value]} {
 			# --abc=def
-			if {"$name:" ni $optdef} {
-				if {$name in $optdef} {
-					error "getopt: Option --$name does not accept a parameter"
+			if {![info exists valopts($name)} {
+				if {[info exists boolopts($name)]} {
+					dev-error "Option --$name does not accept a parameter"
 				}
-				error "getopt: Unknown option: --$name"
+				dev-error "Unknown option: --$name"
 			}
-			set opts($name) $value
+			uplevel 1 set $name $value
 		} elseif {[regexp {^--(.*)} $arg -> name]} {
 			# --abc
-			if {$name ni $optdef} {
-				if {"$name:" in $optdef} {
-					error "getopt: Option --$name requires a parameter"
+			if {![info exists boolopts($name)]} {
+				if {[info exists valopts($name)} {
+					dev-error "Option --$name requires a parameter"
 				}
-				error "getopt: Unknown option: --$name"
+				dev-error "Unknown option: --$name"
 			}
-			set opts($name) 1
+			set boolopts($name) 1
 		} else {
 			lappend nargv $arg
 		}
 	}
-
-	#puts "getopt: argv=[join $argv] => [join $nargv]"
-	#parray opts
-
-	set argv $nargv
-
-	return [array get opts]
+	foreach i [array names boolopts] {
+		uplevel 1 set $i $boolopts($i)
+	}
+	if {!$haveargs && [llength $nargv] > [llength $named]} {
+		dev-error "Too many parameters"
+	}
+	set argv [uplevel 1 [list lassign $nargv {*}$named]]
 }
