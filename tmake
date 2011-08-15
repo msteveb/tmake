@@ -1059,7 +1059,10 @@ if {[info exists env(MAKEFLAGS)]} {
 	set argv [list {*}-$env(MAKEFLAGS) {*}$argv]
 }
 
-make $argv
+if {[catch {make $argv} msg]} {
+	puts stderr [error-stacktrace $msg]
+	set tmake(exitcode) 1
+}
 
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]

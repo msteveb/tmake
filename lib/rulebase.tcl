@@ -242,24 +242,28 @@ proc HardLink {args} {
 proc Install {args} {
 	show-this-rule
 
-	array set opts [getopt {test bin} args]
+	array set opts [getopt {bin keepdir} args]
 	set files [lassign $args dest]
 
-	# pairs of src dest
 	set srcs {}
 	foreach i $files {
 		if {[string match {*[*?]*} $i]} {
-			foreach j [glob $i] {
-				lappend srcs $j
-				add-install-file [file join $dest [file tail $j]] $j $opts(bin)
-			}
+			set flist [glob $i]
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] src target
 			lappend srcs $src
 			add-install-file [file join $dest $target] $src $opts(bin)
+			continue
 		} else {
-			lappend srcs $i
-			add-install-file [file join $dest [file tail $i]] $i $opts(bin)
+			set flist $i
+		}
+		foreach j $flist {
+			lappend srcs $j
+			if {$opts(keepdir)} {
+				add-install-file [file join $dest $j] $j $opts(bin)
+			} else {
+				add-install-file [file join $dest [file tail $j]] $j $opts(bin)
+			}
 		}
 	}
 	Depends install {*}$srcs
@@ -270,8 +274,12 @@ proc Clean {type args} {
 }
 
 proc Generate {target script inputs rules} {
+	# XXX: Would be nice if script and inputs were optional
 	target $target -inputs {*}$inputs -depends $script -vars script $script -do $rules -msg {note Generate $target}
 	Clean clean $target
+	# Since the rules come from build.spec, the target depends on build.spec
+	# XXX: This will be better once we have the cache
+	Depends $target build.spec
 }
 
 proc Depends {target args} {
