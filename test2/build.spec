@@ -49,9 +49,7 @@ ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregex
 
 Executable --install=$exec_prefix jimsh jimsh.c
 
-ifconfig JIM_UNIT_TESTS {
-	Test --runwith=jimsh regtest.tcl
-}
+Test --runwith=jimsh regtest.tcl
 
 Generate Tcl.html make-index jim_tcl.txt {
 	run $tclsh $script $inputs | asciidoc -o $target -d manpage -

@@ -55,12 +55,13 @@ proc Executable {args} {
 	show-this-rule
 	getopt {--test --publish --install: target args} args
 	Link $target {*}[Objects {*}[join $args]]
-	Depends all $target
 	if {[info exists install]} {
 		Install --bin $install $target
 	}
 	if {$test} {
-		# XXX: RunTest $target
+		Test $target
+	} else {
+		Depends all $target
 	}
 	if {$publish} {
 		# Revisit: --publish=newname?
@@ -217,8 +218,31 @@ proc PublishArchiveLibs {args} {
 	}
 }
 
-proc RunTest {args} {
-	error "not yet implemented"
+proc Test {args} {
+	getopt {--runwith: command args} args
+	set testid test:[incr ::testid]
+	set depends {}
+	# XXX: If cross compiling, the existence of $runwith
+	#      and $command as targets is no guarantee that they
+	#      can run.
+	if {[info exists runwith]} {
+		if {[is-target? $runwith]} {
+			lappend depends $runwith
+		}
+		set testcommand "$runwith $command [join $args]"
+	} else {
+		set testcommand "./$command [join $args]"
+	}
+	if {[is-target? $command]} {
+		lappend depends $command
+	}
+	Phony $testid -depends $depends -vars testcommand $testcommand command $command -msg {note "Test $command"} -do {
+		incr ::tmake(testruncount)
+		run {*}$testcommand
+		incr ::tmake(testpasscount)
+	}
+	Depends test $testid
+	return $testid
 }
 
 proc HardLink {args} {
@@ -350,4 +374,8 @@ Phony uninstall -do {
 }
 
 Phony all
-Phony test
+Phony test -do {
+	# XXX: Need this to be a "run-anyway" command so that even if some tests fail it will still run
+	# Actually, tests should not be targets. 
+	puts [format "Test Summary: %d of %d passed" $tmake(testpasscount) $tmake(testruncount)]
+}

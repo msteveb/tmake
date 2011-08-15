@@ -88,15 +88,12 @@ tmake TODO
   - high level rules
   - default rule base
   - local customisations
-* How to add rules for new Object types?
-  - Currently just OBJRULES etc.
 * Add parallel build support.
   - With exec &, and os.wait
-* Support Test, Publish*
+* Support Test
 * Support shared libraries
-* Do proper getopt processing in tmake
+* Do proper getopt processing for the tmake command line
 * Record commands used to build targets in a cache
-* Publish includes, libs, bins to a dir as ungristed
 * Need support for host executables with (at least):
   - HostExecutable
   - HostCFlags
@@ -130,3 +127,7 @@ Done
 * header scan should take include path(s) into consideration
 * Add user errors and internal errors like autosetup/automf
 * Modify to support jimsh, bootstrap jimsh and Tcl8.5
+* Support Publish* and --publish
+* How to add rules for new Object types?
+  - ObjectCFlags
+* Publish includes, libs, bins to a dir as ungristed

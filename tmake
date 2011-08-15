@@ -39,6 +39,8 @@ set tmake(modules) {}
 # Should this really be here?
 set tmake(includepaths) .
 set tmake(headerscan) {}
+set tmake(testruncount) 0
+set tmake(testpasscount) 0
 
 # ==================================================================
 # Argument Processing
