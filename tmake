@@ -830,22 +830,15 @@ proc parse-target-rule {target arglist} {
 # Dependency Engine
 # ==================================================================
 
+# Both $target and $source must exist.
+# Returns 1 if $target is older than $source or 0 otherwise
+# 
 proc needbuild? {target source} {
-	set result [get-target-result $target]
-	if {$result} {
-		return $result
-	}
-	if {[file exists $target]} {
-		if {[file exists $source]} {
-			if {[file mtime $target] >= [file mtime $source]} {
-				dputs n "$target is newer than $source, so not forcing rebuild"
-				return 0
-			}
-		}
-		dputs b "$target is older than $source, so forcing rebuild"
-		return 1
+	if {[file mtime $target] >= [file mtime $source]} {
+		dputs n "$target is newer than $source, so not forcing rebuild"
+		return 0
 	} else {
-		dputs b "$target does not exist, so forcing build"
+		dputs b "$target is older than $source, so forcing rebuild"
 		return 1
 	}
 }
@@ -899,6 +892,19 @@ proc run {args} {
 	# XXX: What to do on signal?
 }
 
+proc calc-dyndeps {target} {
+	array set t [get-target-rule $target]
+
+	set dyndeps {}
+	if {$t(dyndep) ne ""} {
+		foreach i $t(depends) {
+			lappend dyndeps {*}[uplevel #0 $t(dyndep) $i]
+		}
+		dputs d "Dynamic dependencies for $target: $dyndeps"
+	}
+	return $dyndeps
+}
+
 proc build {target} {
 	global tmake
 	set current $tmake(current)
@@ -942,69 +948,73 @@ proc build {target} {
 	set oldcurrent $tmake(current)
 	set tmake(current) $current
 
+	# Here is the plan to build $target
+	# 1. Run 'build' for each static dependency
+	#    - If 'build' returns -1 (fails) and --quickstop is specified, we are done
+	#    - If 'build' returns 1, the target needs to be built
+	# 2. Calculate any dynamic dependencies for $target and run 'build' for each one
+	#    - If 'build' returns -1 (fails) and --quickstop is specified, we are done
+	#    - If 'build' returns 1, the target needs to be built
+	# 3. If nothing was built ($result is 0), check each static+dynamic dependency for time
+	#    - If needbuild? returns 1, the target needs to be built
+
 	# First check dynamic dependencies
 	set depends $t(depends)
-	set dyndeps {}
-	if {$t(dyndep) ne ""} {
-		foreach i $t(depends) {
-			lappend dyndeps {*}[uplevel #0 $t(dyndep) $i]
-		}
-		dputs d "Dynamic dependencies for $target: $dyndeps"
 
-		# Add anything which is a known target to the real dependencies
-		foreach i $dyndeps {
-			if {[is-target? $i]} {
-				lappend depends $i
-			}
-		}
-	}
-
-	# Make sure dependencies are up to date
+	# 1. Static dependencies
 	foreach i $depends {
-		#puts "Building $i"
-		#dumptarget $i
 		set rc [build $i]
 		if {$rc < 0} {
+			set faildep
 			if {[get-target-result $target] >= 0 && $tmake(exitcode) == 0} {
 				build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
 			}
-			#dumptarget $target
-			#show-reason $current
 			set result -1
 			if {$tmake(quickstop)} {
 				break
 			}
-		} elseif {$result == 0} {
-			if {$rc > 0} {
+		} elseif {$rc > 0} {
+			dputs b "Rebuilding $target because $i was built"
+			lappend reason depend $i
+			set result 1
+		}
+	}
+
+	if {$result >= 0} {
+		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
+		foreach i [calc-dyndeps $target] {
+			lappend depends $i
+
+			set rc [build $i]
+			if {$rc < 0} {
+				if {[get-target-result $target] >= 0 && $tmake(exitcode) == 0} {
+					build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
+				}
+				set result -1
+				if {$tmake(quickstop)} {
+					break
+				}
+			} elseif {$rc > 0} {
 				dputs b "Rebuilding $target because $i was built"
 				lappend reason depend $i
 				set result 1
-			} elseif {[needbuild? $target $i]} {
-				lappend reason older $i
-				set result 1
-			} elseif {$rc == 0} {
-				foreach d $dyndeps {
-					# Only care about non-target dynamic dependencies if they exist
-					# XXX: Do we need to look in IncludePaths for this file?
-					if {[file exists $d]} {
-						#puts "Is target or exists: $d"
-						# Do we need build here, or just needbuild?
-						if {[needbuild? $target $d]} {
-							lappend reason older $d
-							set result 1
-							break
-						}
-					} else {
-						#puts "Ignoring dyndep: $d"
-					}
-				}
 			}
-			#puts "Got dyndep for $target, rc=$rc, result=$result"
 		}
 	}
 
 	if {$tmake(quickstop) && $tmake(exitcode)} {
 		exit $tmake(exitcode)
+	}
+
+	if {$result == 0} {
+		# 3.  Target exists but no dependencies were built so check time dependencies
+		foreach i $depends {
+			if {[needbuild? $target $i]} {
+				lappend reason older $i
+				set result 1
+				break
+			}
+		}
 	}
 
 	if {$result > 0} {
@@ -1111,7 +1121,8 @@ proc build {target} {
 # Dynamic dependencies
 # ==================================================================
 
-# Note: stops scanning after 200 lines with no #include
+# XXX: Stops scanning after 200 lines with no #include - should be at least configurable
+# 
 proc header-scan-regexp {regex filename} {
 	# memoize the result
 	if {[dict exists $::tmake(headerscan) $filename,$regex]} {
@@ -1130,6 +1141,7 @@ proc header-scan-regexp {regex filename} {
 	}
 	close $f
 	dict set ::tmake(headerscan) $filename,$regex $headers
+	dputs d "header-scan-regexp $filename => $headers"
 	return $headers
 }
 
@@ -1144,6 +1156,7 @@ proc find-file {filename paths} {
 			return $f
 		}
 	}
+	dputs d "Not a file and not a target, $filename"
 	return ""
 }
 
@@ -1162,13 +1175,13 @@ proc header-scan-regexp-recursive {regex filename} {
 				set df [find-file $d $::tmake(includepaths)]
 				if {$df ne ""} {
 					set d $df
+					set deps($d) 1
 					if {[file exists $df]} {
 						lappend newscan {*}[header-scan-regexp $regex $d]
 					}
 				}
 				set scanned($d) 1
 			}
-			set deps($d) 1
 		}
 		set toscan $newscan
 	}

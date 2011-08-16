@@ -368,9 +368,6 @@ proc Generate {target script inputs rules} {
 	# XXX: Would be nice if script and inputs were optional
 	target $target -inputs {*}$inputs -depends $script -vars script $script -do $rules -msg {note Generate $target}
 	Clean clean $target
-	# Since the rules come from build.spec, the target depends on build.spec
-	# XXX: This will be better once we have the cache
-	Depends $target build.spec
 }
 
 proc Depends {target args} {
