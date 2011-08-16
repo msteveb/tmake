@@ -17,10 +17,10 @@ set CFLAGS ""
 set CXXFLAGS ""
 set SH_LINKFLAGS ""
 set LDFLAGS ""
-set SYSLIBS ""
 set LOCAL_LIBS ""
 set DESTDIR ""
 set OBJCFLAGS ""
+
 # XXX Should be $TOP/publish
 set PUBLISH publish
 
@@ -31,6 +31,9 @@ define SH_CFLAGS -dynamic
 define SH_LDFLAGS "-dynamiclib"
 define SHOBJ_CFLAGS "-dynamic -fno-common"
 define SHOBJ_LDFLAGS "-bundle -undefined dynamic_lookup"
+
+set PROJLIBS ""
+set SYSLIBS ""
 
 set OBJRULES(.c) {run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target}
 set OBJMSG(.c) {note Cc $target}
@@ -48,20 +51,39 @@ set ARRULE {
 }
 
 # ==================================================================
+# PROLOG/EPILOG HOOKS
+# ==================================================================
+proc BuildSpecProlog {} {
+	# Local phony targets build from the current directory down
+	if {[local-prefix] ne ""} {
+		foreach t {all clean distclean test} {
+			Phony $t [make-local $t]
+			Phony [make-local $t]
+		}
+		CleanTarget clean
+		CleanTarget distclean
+	}
+}
+
+proc BuildSpecEpilog {} {
+}
+
+# ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================
 
 proc Executable {args} {
 	show-this-rule
 	getopt {--test --publish --install: target args} args
-	Link $target {*}[Objects {*}[join $args]]
+	set target [make-local $target]
+	Link $target {*}[Objects {*}[join $args]] $::LOCAL_LIBS {*}$::PROJLIBS
 	if {[info exists install]} {
 		Install --bin $install $target
 	}
 	if {$test} {
 		Test $target
 	} else {
-		Depends all $target
+		Phony [make-local all] $target
 	}
 	if {$publish} {
 		# Revisit: --publish=newname?
@@ -72,7 +94,7 @@ proc Executable {args} {
 # Link an executable from objects
 proc Link {target args} {
 	show-this-rule
-	target $target -inputs {*}$args $::LOCAL_LIBS -do $::EXERULE -msg {note Link $target}
+	target $target -inputs {*}$args -do $::EXERULE -msg {note Link $target}
 	Clean clean $target
 }
 
@@ -88,14 +110,9 @@ proc ArchiveLib {args} {
 	show-this-rule
 	getopt {--publish --install: libname args} args
 
-	set root [file tail $libname]
-	set dir [file dirname $libname]
-	set target lib$root.a
-	if {$dir ne "."} {
-		set target [file join $dir $target]
-	}
+	set target [make-local lib$libname.a]
 	target $target -inputs {*}[Objects {*}[join $args]] -do $::ARRULE -msg {note Ar $target}
-	Depends all $target
+	Phony [make-local all] $target
 	Clean clean $target
 	define-append LOCAL_LIBS $target
 
@@ -117,10 +134,12 @@ proc SharedObject {args} {
 	#
 	getopt {--install: sharedobj args} args
 
+	set sharedobj [make-local $sharedobj]
+
 	# XXX: Should build objects with -fpic, etc.
 	# Use -vars/ObjectCFlags to do this
 	SharedObjectLink $sharedobj {*}[Objects {*}[join $args]]
-	Depends all $sharedobj
+	Phony [make-local all] $sharedobj
 	if {[info exists install]} {
 		Install --bin $install $sharedobj
 	}
@@ -151,6 +170,8 @@ proc Objects {args} {
 proc Object {obj src} {
 	show-this-rule
 	set ext [file ext $src]
+	set obj [make-local $obj]
+	set src [make-local $src]
 	if {$ext ne ".o"} {
 		set extra {}
 		if {![info exists ::OBJRULES($ext)]} {
@@ -189,9 +210,19 @@ proc LinkFlags {args} {
 	define-append LDFLAGS {*}$args
 }
 
+proc UseLibs {args} {
+	foreach lib $args {
+		# REVISIT: If we are to support linking against project shared libs, PROJLIBS
+		#          needs to be just a list of libs which will then be resolved to actual
+		#          targets (archive or shared) at deferred resolution time
+		define-append PROJLIBS [file join $::PUBLISH lib $lib]
+	}
+}
+
 proc IncludePaths {args} {
-	lappend ::tmake(includepaths) {*}$args
-	CFlags [prefix -I $args]
+	set paths [make-local {*}$args]
+	lappend ::tmake(includepaths) $paths
+	CFlags [prefix -I $paths]
 }
 
 proc Load {filename} {
@@ -225,23 +256,22 @@ proc Test {args} {
 	# XXX: If cross compiling, the existence of $runwith
 	#      and $command as targets is no guarantee that they
 	#      can run.
+	set maybe-depends $command
 	if {[info exists runwith]} {
-		if {[is-target? $runwith]} {
-			lappend depends $runwith
-		}
 		set testcommand "$runwith $command [join $args]"
+		lappend maybe-depends $runwith
 	} else {
 		set testcommand "./$command [join $args]"
 	}
-	if {[is-target? $command]} {
-		lappend depends $command
-	}
-	Phony $testid -depends $depends -vars testcommand $testcommand command $command -msg {note "Test $command"} -do {
+	# Note: We don't yet know if $runwith and/or $command are targets, so defer until all rules are read.
+	# 
+	Phony $testid -maybe-depends {*}${maybe-depends} -vars testcommand $testcommand command $command -msg {note "Test $command"} -do {
 		incr ::tmake(testruncount)
 		run {*}$testcommand
 		incr ::tmake(testpasscount)
 	}
-	Depends test $testid
+	Phony [make-local test] $testid
+
 	return $testid
 }
 
@@ -260,6 +290,34 @@ proc HardLink {args} {
 	Clean clean $dest
 }
 
+# Helper for installing files
+proc install-file {target source bin} {
+	file mkdir [file dirname $target]
+	vputs "Copy $source $target"
+	file copy -force $source $target
+	if {$bin} {
+		vputs "chmod +x $target"
+		exec chmod +x $target
+	}
+}
+
+proc InstallFile {dest src {bin 0}} {
+	show-this-rule
+
+	set destfile $::DESTDIR$dest
+	target $destfile -inputs $src -vars dest $dest bin $bin -msg {note "Install $dest"} -do {
+		install-file $target $inputs $bin
+	}
+	Depends install $destfile
+
+	# This file also needs to be uninstalled
+	Clean uninstall $destfile
+
+	#if {[dict exists $::tmake(install) $dest]} {
+	#	user-notice "Warning: Duplicate install rule for $dest"
+	#}
+}
+
 proc Install {args} {
 	show-this-rule
 
@@ -272,7 +330,7 @@ proc Install {args} {
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] src target
 			lappend srcs $src
-			add-install-file [file join $dest $target] $src $bin
+			InstallFile [file join $dest $target] $src $bin
 			continue
 		} else {
 			set flist $i
@@ -280,17 +338,30 @@ proc Install {args} {
 		foreach j $flist {
 			lappend srcs $j
 			if {$keepdir} {
-				add-install-file [file join $dest $j] $j $bin
+				InstallFile [file join $dest $j] $j $bin
 			} else {
-				add-install-file [file join $dest [file tail $j]] $j $bin
+				InstallFile [file join $dest [file tail $j]] $j $bin
 			}
 		}
 	}
-	Depends install {*}$srcs
 }
 
+# This creates the clean target of the given type, e.g. clean, distclean
+#
+proc CleanTarget {type} {
+	Phony [make-local $type] -nofail -vars cleanfiles {} -do {
+		note "Clean $target"
+		if {[llength $cleanfiles]} {
+			vputs "rm $cleanfiles"
+			file delete {*}$cleanfiles
+		}
+	}
+}
+
+# This adds files to be cleaned for the given type
+#
 proc Clean {type args} {
-	add-clean $type {*}[join $args]
+	Phony [make-local $type] -vars cleanfiles [join $args]
 }
 
 proc Generate {target script inputs rules} {
@@ -307,6 +378,7 @@ proc Depends {target args} {
 }
 
 proc Phony {target args} {
+	show-this-rule
 	Depends $target -phony -depends {*}$args
 }
 
@@ -314,66 +386,14 @@ proc Phony {target args} {
 # Built-in targets
 # ==================================================================
 
-Phony clean -do {
-	note "Clean clean"
-	set files [get-clean clean]
-	if {[llength $files]} {
-		vputs "rm $files"
-		file delete {*}$files
-	}
-}
+CleanTarget clean
+CleanTarget distclean
+CleanTarget uninstall
 
-Phony distclean -do {
-	note "Clean distclean"
-	set files [concat [get-clean clean] [get-clean distclean]]
-	if {[llength $files]} {
-		vputs "rm $files"
-		file delete {*}$files
-	}
-}
-
-Phony install -do {
-	# First create all the directories
-	set installdirs [get-installdirs]
-	if {[llength installdirs]} {
-		file mkdir {*}installdirs
-	}
-
-	set prevdir ""
-
-	foreach dest [lsort [dict keys $::tmake(install)]] {
-		set src [dict get $::tmake(install) $dest]
-		set bin [dict exists $::tmake(installbin) $dest]
-		set dest $::DESTDIR$dest
-		if {![file exists $dest] || [file mtime $dest] < [file mtime $src]} {
-			set dir [file dirname $dest]
-			if {$dir ne $prevdir} {
-				note "Install $dir"
-				set prevdir $dir
-			}
-			vputs "Copy $src $dest"
-			file copy -force $src $dest
-			if {$bin} {
-				vputs "chmod +x $dest"
-				exec chmod +x $dest
-			}
-		}
-	}
-}
-
-Phony uninstall -do {
-	note "Clean uninstall"
-	set files [prefix $::DESTDIR [get-clean uninstall]]
-	if {[llength $files]} {
-		vputs "rm $files"
-		file delete {*}$files
-	}
-	foreach i [get-installdirs] {
-		file delete -force $i
-	}
-}
+Depends distclean clean
 
 Phony all
+Phony install all
 Phony test -do {
 	# XXX: Need this to be a "run-anyway" command so that even if some tests fail it will still run
 	# Actually, tests should not be targets. 

@@ -19,22 +19,21 @@ set tmake(debug) 0
 #  c = configuration checking
 #  g = graph dependencies executed
 #  p = show high level rules as they are parsed
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0}
+#  m = miscellaneous debug
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(current) {}
 set tmake(rules) {}
 set tmake(targets) {}
-set tmake(clean) {clean {} distclean {} uninstall {}}
-set tmake(install) {}
-set tmake(installbin) {}
-set tmake(installdirs) {}
 set tmake(numtargets) 0
 set tmake(showtime) 0
 set tmake(quickstop) 0
 set tmake(showrules) 0
 set tmake(exitcode) 0
 set tmake(modules) {}
+set tmake(autosubdirs) 1
+set tmake(subdirs) {}
 
 # Should this really be here?
 set tmake(includepaths) .
@@ -52,11 +51,12 @@ proc make {argv} {
 	#parray ::env
 
 	# 'compat' is needed before we can do anything, so set a temporary libdir
-	# in case this is the development version
-	set tmake(dir) [file dirname $::argv0]
-	set tmake(libdir) $tmake(dir)/lib
+	set tmake(libdir) [file dirname $::argv0]/lib
 
 	use compat
+
+	set tmake(dir) [file-normalize [file dirname $::argv0]]
+	set tmake(libdir) $tmake(dir)/lib
 	set tmake(start) [clock-millis]
 
 	use getopt config
@@ -142,15 +142,23 @@ proc make {argv} {
 	}
 
 	#parray tmake
+	set tmake(topdir) [find-project-top]
+	cd $tmake(topdir)
+
+	set tmake(prefix) ""
 
 	use rulebase
 
+	invoke-spec-file project.spec
+
 	# Loaded in the global scope 
-	if {[file exists build.spec]} {
-		uplevel #0 source build.spec
-	} else {
+	if {![file exists build.spec]} {
 		user-error "No build.spec in the current directory"
 	}
+
+	process-build-spec-file .
+
+	resolve-deferred-dependencies
 
 	# Now build the targets
 
@@ -170,6 +178,111 @@ proc make {argv} {
 			break
 		}
 	}
+}
+
+# ==================================================================
+# .spec file processing
+# ==================================================================
+
+proc find-project-top {} {
+	set topdir [pwd]
+	while {![file exists $topdir/project.spec]} {
+		set parent [file dir $topdir]
+		if {$topdir eq $parent} {
+			user-error "Failed to find project.spec in any parent directory."
+		}
+		set topdir $parent
+	}
+	dputs m "Project top found at $topdir"
+	return $topdir
+}
+
+proc local-prefix {} {
+	return $::tmake(prefix)
+}
+
+proc make-local {args} {
+	prefix [local-prefix] $args
+}
+
+proc invoke-spec-file {filename} {
+	global tmake
+	lappend tmake(specfiles) $filename
+	dputs m "Parsing $filename"
+
+	uplevel #0 source $filename
+}
+
+proc AutoSubDirs {onoff} {
+	switch -- $onoff {
+		on {
+			set ::tmake(autosubdirs) 1
+		}
+		off {
+			set ::tmake(autosubdirs) 0
+		}
+		default {
+			dev-error "on or off expected"
+		}
+	}
+}
+
+proc SubDirs {args} {
+	lappend ::tmake(subdirs) {*}$args
+}
+
+# Read in the given spec file in the given directory (relative to topdir)
+# Returns 1 if OK, or 0 if subdirs should be skipped
+proc process-build-spec-file {dir} {
+	global tmake
+	dputs m "process-build-spec dir=$dir"
+	#set dir [make_path $::automf(topdir) $dir]
+
+	# XXX: Need to save and restore the following:
+	#      autosubdirs, subdirs?
+
+	if {$dir eq "."} {
+		set tmake(prefix) ""
+	} else {
+		set tmake(prefix) $dir/
+	}
+	set path $tmake(prefix)build.spec
+
+	if {![file exists $path]} {
+		user-error "$path does not exist"
+	}
+
+	BuildSpecProlog
+	invoke-spec-file $path
+	BuildSpecEpilog
+
+	# Now subdirectories
+	incr tmake(depth)
+
+	#local_lappend subdirs $dir
+
+	# Find the explicitly set subdirs
+	set subdirs $tmake(subdirs)
+	set tmake(subdirs) {}
+
+	# Normally we search for dirs containing build.spec
+	if {$tmake(autosubdirs)} {
+		foreach d [glob -nocomplain $dir/*] {
+			if {[file isdirectory $d] && [file exists $d/build.spec] && $d ni $subdirs} {
+				lappend subdirs $d
+			}
+		}
+	}
+
+	# Now process subdirs
+	foreach d $subdirs {
+		if {[file exists $d/build.ignore]} {
+			dputs m "Ignoring $d because build.ignore exists"
+		} else {
+			process-build-spec-file $d
+		}
+	}
+	incr tmake(depth) -1
 }
 
 # ==================================================================
@@ -448,12 +561,16 @@ proc merge-vars {dict1 dict2} {
 	return $dict1
 }
 
-# Appends the given arguments to the given key in the dictionary
-proc dict-lappend {dictname key args} {
+# Appends the given arguments to the given keylist in the dictionary
+proc dict-lappend {dictname keys args} {
 	upvar $dictname d
-	set list [dict get $d $key]
-	lappend list {*}$args
-	dict set d $key $list
+	if {[dict exists $d {*}$keys]} {
+		set list [dict get $d {*}$keys]
+		lappend list {*}$args
+	} else {
+		set list $args
+	}
+	dict set d {*}$keys $list
 }
 
 # Increments a value in the dictionary
@@ -525,33 +642,6 @@ proc show-this-rule {} {
 	if {[debug-is-set p]} {
 		puts "\[p\] [make-source-location [find-source-location]] [info level -1]"
 	}
-}
-
-proc get-clean {type} {
-	dict get $::tmake(clean) $type
-}
-
-proc add-clean {type args} {
-	dict-lappend ::tmake(clean) $type {*}$args
-}
-
-# Adds a file to be installed
-proc add-install-file {dest src {bin 0}} {
-	# Add the directory to the list of directories to be created
-	dict set ::tmake(installdirs) [file dirname $dest] 1
-	if {[dict exists $::tmake(install) $dest]} {
-		user-notice "Warning: Duplicate install rule for $dest"
-	}
-	dict set ::tmake(install) $dest $src
-	dict set ::tmake(installbin) $dest $bin
-	# This file also needs to be uninstalled
-	add-clean uninstall $dest
-}
-
-# Returns the list of directories where files will be installed
-#
-proc get-installdirs {} {
-	prefix $::DESTDIR [lsort [dict keys $::tmake(installdirs)]]
 }
 
 proc make-source-location {list {prefix {}} {suffix {}}} {
@@ -629,6 +719,24 @@ proc target {target args} {
 	set-target-rule $target [array get info]
 }
 
+proc resolve-deferred-dependencies {} {
+	global tmake
+	foreach target [dict keys $tmake(rules)] {
+		array unset t
+		array set t [get-target-rule $target]
+		foreach dd $t(maybe-depends) {
+			if {[is-target? $dd]} {
+				dputs m "Resolving deferred dependency $dd for $target"
+				lappend t(depends) $dd
+			} else {
+				dputs m "Discarding deferred dependency $dd for $target"
+			}
+		}
+		unset t(maybe-depends)
+		set-target-rule $target [array get t]
+	}
+}
+
 # Returns a dictionary (list) representing the parsed target rule
 #
 proc parse-target-rule {target arglist} {
@@ -640,6 +748,7 @@ proc parse-target-rule {target arglist} {
 
 	set -inputs {}
 	set -depends {}
+	set -maybe-depends {}
 	set -clean {}
 	set -do {}
 	set -onerror {}
@@ -700,6 +809,7 @@ proc parse-target-rule {target arglist} {
 
 	set info(inputs) [join ${-inputs}]
 	set info(depends) [join ${-depends}]
+	set info(maybe-depends) [join ${-maybe-depends}]
 	set info(onerror) [lindex ${-onerror} 0]
 	set info(msg) [lindex ${-msg} 0]
 	set info(dyndep) [lindex ${-dyndep} 0]
@@ -920,6 +1030,7 @@ proc build {target} {
 				}
 				show-rule-commands $expanded
 			}
+			set rc 0
 		} else {
 			foreach do $t(do) {
 				set rc [catch {uplevel #0 $do} msg opts]
