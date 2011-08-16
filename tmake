@@ -294,7 +294,7 @@ proc show-rule {target} {
 						puts @[join $v {, }]
 					}
 				}
-				phony {
+				phony - nofail {
 					if {$v} {
 						lappend flags $n
 					}
@@ -309,6 +309,11 @@ proc show-rule {target} {
 				vars {
 					foreach {vn vv} $v {
 						lappend lines "  var $vn=$vv"
+					}
+				}
+				onerror {
+					if {$v ne ""} {
+						lappend lines "$n={[join [split [string trim $v] \n] {;}]}"
 					}
 				}
 				default {
@@ -596,9 +601,11 @@ proc target {target args} {
 		lappend info(inputs) {*}$orig(inputs)
 		lappend info(clean) {*}$orig(clean)
 		incr info(phony) $orig(phony)
-		append-with-space info(onfail) $orig(onfail) \n
+		incr info(nofail) $orig(nofail)
+		append-with-space info(onerror) $orig(onerror) \n
 		# Only one of these will be non-blank
 		lappend orig(do) {*}$info(add-do)
+		unset info(add-do)
 		append-with-space info(dyndep) $orig(dyndep)
 
 		if {$info(source) eq "unknown"} {
@@ -629,33 +636,26 @@ proc parse-target-rule {target arglist} {
 	set info(result) 0
 	set info(building) 0
 	set info(target) $target
-	set info(phony) 0
 	set info(add-do) {}
 
 	set -inputs {}
 	set -depends {}
 	set -clean {}
 	set -do {}
-	set -onfail {}
+	set -onerror {}
 	set -msg {}
 	set -vars {}
 	set -dyndep {}
+	set -add 0
+	set -replace 0
+	set -nofail 0
+	set -phony 0
 
 	set skip 0
-	set add 0
-	set replace 0
 
 	foreach a $arglist {
-		if {$a eq "-phony"} {
-			incr info(phony)
-			continue
-		}
-		if {$a eq "-add"} {
-			incr add
-			continue
-		}
-		if {$a eq "-replace"} {
-			incr replace
+		if {$a in {-phony -add -replace -nofail}} {
+			incr $a
 			continue
 		}
 		if {$skip == 0 && [string match -* $a]} {
@@ -686,10 +686,10 @@ proc parse-target-rule {target arglist} {
 	if {[llength ${-dyndep}] > 1} {
 		dev-error "Rule for $target has more than one '-dyndep' parameter"
 	}
-	if {$add && $replace} {
+	if {${-add} && ${-replace}} {
 		dev-error "Rule for $target has both '-add' and '-replace'"
 	}
-	if {$add} {
+	if {${-add}} {
 		if {![llength ${-do}]} {
 			dev-error "Rule for $target has '-add' but no '-do'"
 		}
@@ -700,13 +700,12 @@ proc parse-target-rule {target arglist} {
 
 	set info(inputs) [join ${-inputs}]
 	set info(depends) [join ${-depends}]
-	set info(clean) ${-clean}
-	set info(onfail) [lindex ${-onfail} 0]
-	set info(vars) ${-vars}
-	set info(do) ${-do}
+	set info(onerror) [lindex ${-onerror} 0]
 	set info(msg) [lindex ${-msg} 0]
 	set info(dyndep) [lindex ${-dyndep} 0]
-	set info(replace) $replace
+	foreach i {replace phony nofail vars do clean} {
+		set info($i) [set -$i]
+	}
 
 	if {[llength $info(do)] == 0 && [llength $info(inputs)]} {
 		dev-error "Rule for $target has '-inputs' but no '-do'"
@@ -907,27 +906,34 @@ proc build {target} {
 	if {$result > 0 && [llength $t(do)]} {
 		#puts "Running rules for $target"
 		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $t(source) "with rule @"]"
-		set rc [catch {
-			set-target-vars [array get t]
-			uplevel #0 $t(msg)
-			if {[dict get $tmake(debugtypes) r]} {
-				show-rule $target
+		set-target-vars [array get t]
+		uplevel #0 $t(msg)
+		if {[dict get $tmake(debugtypes) r]} {
+			show-rule $target
+		}
+		if {$tmake(norun)} {
+			foreach do $t(do) {
+				if {[catch {uplevel #0 [list subst $do]} expanded]} {
+					# The rule probably refers to a command or variable which
+					# doesn't exist, so show it without the subst
+					set expanded $do
+				}
+				show-rule-commands $expanded
 			}
-			if {$tmake(norun)} {
-				foreach do $t(do) {
-					if {[catch {uplevel #0 [list subst $do]} expanded]} {
-						# The rule probably refers to a command or variable which
-						# doesn't exist, so show it without the subst
-						set expanded $do
+		} else {
+			foreach do $t(do) {
+				set rc [catch {uplevel #0 $do} msg opts]
+				if {$rc} {
+					# XXX: Check for signal?
+					if {$t(nofail)} {
+						user-notice "\[ignored\] $msg"
+						set rc 0
+					} else {
+						break
 					}
-					show-rule-commands $expanded
-				}
-			} else {
-				foreach do $t(do) {
-					uplevel #0 $do
 				}
 			}
-		} msg opts]
+		}
 
 		if {[check-signal]} {
 			puts ""
@@ -944,7 +950,7 @@ proc build {target} {
 		if {$rc == 0 && !$t(phony) && !$tmake(norun)} {
 			foreach f $target {
 				if {![file exists $f]} {
-					# XXX: Should onfail run here if --quickstop is set?
+					# XXX: Should onerror run here if --quickstop is set?
 					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s)"
 					# Use break to indicate that we have already output the message
 					set rc 3
@@ -958,10 +964,10 @@ proc build {target} {
 			# On failure, delete the target(s)
 			file delete {*}$target
 
-			# Try to run onfail
+			# Try to run onerror
 			if {[catch {
-				dputs b $t(onfail)
-				uplevel #0 $t(onfail)
+				dputs b $t(onerror)
+				uplevel #0 $t(onerror)
 				if {$rc == 1} {
 					build-error [error-stacktrace $msg]
 				}
