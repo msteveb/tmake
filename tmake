@@ -34,6 +34,7 @@ set tmake(exitcode) 0
 set tmake(modules) {}
 set tmake(autosubdirs) 1
 set tmake(subdirs) {}
+set tmake(cache) {}
 
 # Should this really be here?
 set tmake(includepaths) .
@@ -154,6 +155,11 @@ proc make {argv} {
 	# Loaded in the global scope 
 	if {![file exists build.spec]} {
 		user-error "No build.spec in the current directory"
+	}
+
+	# Now load the cache if it exists
+	if {[file exists .makecache]} {
+		source .makecache
 	}
 
 	process-build-spec-file .
@@ -861,11 +867,22 @@ proc parse-rule {target arglist} {
 # Dependency Engine
 # ==================================================================
 
+proc file-real-mtime {filename} {
+	file mtime $filename
+}
+
+proc file-virtual-mtime {filename} {
+	if {[dict exists $::tmake(cache) $filename]} {
+		return [dict get $::tmake(cache) $filename]
+	}
+	file-real-mtime $filename
+}
+
 # Both $target and $source must exist.
 # Returns 1 if $target is older than $source or 0 otherwise
-# 
+#
 proc needbuild? {target source} {
-	if {[file mtime $target] >= [file mtime $source]} {
+	if {[file-virtual-mtime $target] >= [file-real-mtime $source]} {
 		dputs n "$target is newer than $source, so not forcing rebuild"
 		return 0
 	} else {
@@ -1103,12 +1120,16 @@ proc build {target} {
 
 		# Did the rule make the targets?
 		if {$rc == 0 && !$t(phony) && !$tmake(norun)} {
+			set now [clock seconds]
 			foreach f $target {
 				if {![file exists $f]} {
 					# XXX: Should onerror run here if --quickstop is set?
 					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s)"
 					# Use break to indicate that we have already output the message
 					set rc 3
+				} else {
+					# Record the time that this target was created
+					dict set tmake(cache) $f $now
 				}
 			}
 		}
@@ -1236,6 +1257,9 @@ if {[catch {make $argv} msg]} {
 	puts stderr [error-stacktrace $msg]
 	set tmake(exitcode) 1
 }
+
+# Write the cache
+writefile .makecache [list set tmake(cache) $tmake(cache)]
 
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]

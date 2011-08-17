@@ -76,6 +76,7 @@ Also migration from automake
 
 tmake TODO
 ----------
+* Does .makecache and tmake(cache) ever need to be cleaned up?
 * Add support for per-directory rules. Probably need something like Jam's <grist>
   - except I will probably use "path/from/top" as the grist
 * Read project.spec and build.spec in subdirs
@@ -131,3 +132,6 @@ Done
 * How to add rules for new Object types?
   - ObjectCFlags
 * Publish includes, libs, bins to a dir as ungristed
+* There is a problem in handling rules which run but don't update the target because
+  nothing has changed. Ideally we would record the fact that the rule had run in
+  a cache file along with the time that the rule ran. See .makecache
