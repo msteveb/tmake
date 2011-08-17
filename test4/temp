@@ -1,0 +1,1473 @@
+-------------------------------------------
+@build.spec:44
+add_.c: translate add.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+add_.o: add_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:70, build.spec:68
+all: fossil libfossil.a
+status=unknown
+
+-------------------------------------------
+@build.spec:44
+allrepo_.c: translate allrepo.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+allrepo_.o: allrepo_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+attach_.c: translate attach.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+attach_.o: attach_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+bag_.c: translate bag.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+bag_.o: bag_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+bisect_.c: translate bisect.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+bisect_.o: bisect_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+blob_.c: translate blob.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+blob_.o: blob_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+branch_.c: translate branch.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+branch_.o: branch_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+browse_.c: translate browse.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+browse_.o: browse_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+captcha_.c: translate captcha.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+captcha_.o: captcha_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+cgi_.c: translate cgi.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+cgi_.o: cgi_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+checkin_.c: translate checkin.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+checkin_.o: checkin_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+checkout_.c: translate checkout.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+checkout_.o: checkout_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:74, build.spec:70, build.spec:70, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:68, build.spec:58, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:44, build.spec:36, build.spec:16, build.spec:16, build.spec:16, build.spec:16
+clean: 
+status=unknown
+  var cleanfiles=translate makeheaders mkindex mkversion page_index.h add_.c allrepo_.c attach_.c bag_.c bisect_.c blob_.c branch_.c browse_.c captcha_.c cgi_.c checkin_.c checkout_.c clearsign_.c clone_.c comformat_.c configure_.c content_.c db_.c delta_.c deltacmd_.c descendants_.c diff_.c diffcmd_.c doc_.c encode_.c event_.c export_.c file_.c finfo_.c glob_.c graph_.c gzip_.c http_.c http_socket_.c http_transport_.c import_.c info_.c leaf_.c login_.c manifest_.c md5_.c merge_.c merge3_.c name_.c path_.c pivot_.c popen_.c pqueue_.c printf_.c rebuild_.c report_.c rss_.c schema_.c search_.c setup_.c sha1_.c shun_.c skins_.c sqlcmd_.c stash_.c stat_.c style_.c sync_.c tag_.c tar_.c th_main_.c timeline_.c tkt_.c tktsetup_.c undo_.c update_.c url_.c user_.c verify_.c vfile_.c wiki_.c wikiformat_.c winhttp_.c xfer_.c zip_.c http_ssl_.c main_.c include/add.h include/allrepo.h include/attach.h include/bag.h include/bisect.h include/blob.h include/branch.h include/browse.h include/captcha.h include/cgi.h include/checkin.h include/checkout.h include/clearsign.h include/clone.h include/comformat.h include/configure.h include/content.h include/db.h include/delta.h include/deltacmd.h include/descendants.h include/diff.h include/diffcmd.h include/doc.h include/encode.h include/event.h include/export.h include/file.h include/finfo.h include/glob.h include/graph.h include/gzip.h include/http.h include/http_socket.h include/http_transport.h include/import.h include/info.h include/leaf.h include/login.h include/manifest.h include/md5.h include/merge.h include/merge3.h include/name.h include/path.h include/pivot.h include/popen.h include/pqueue.h include/printf.h include/rebuild.h include/report.h include/rss.h include/schema.h include/search.h include/setup.h include/sha1.h include/shun.h include/skins.h include/sqlcmd.h include/stash.h include/stat.h include/style.h include/sync.h include/tag.h include/tar.h include/th_main.h include/timeline.h include/tkt.h include/tktsetup.h include/undo.h include/update.h include/url.h include/user.h include/verify.h include/vfile.h include/wiki.h include/wikiformat.h include/winhttp.h include/xfer.h include/zip.h include/http_ssl.h include/main.h add_.o allrepo_.o attach_.o bag_.o bisect_.o blob_.o branch_.o browse_.o captcha_.o cgi_.o checkin_.o checkout_.o clearsign_.o clone_.o comformat_.o configure_.o content_.o db_.o delta_.o deltacmd_.o descendants_.o diff_.o diffcmd_.o doc_.o encode_.o event_.o export_.o file_.o finfo_.o glob_.o graph_.o gzip_.o http_.o http_socket_.o http_transport_.o import_.o info_.o leaf_.o login_.o manifest_.o md5_.o merge_.o merge3_.o name_.o path_.o pivot_.o popen_.o pqueue_.o printf_.o rebuild_.o report_.o rss_.o schema_.o search_.o setup_.o sha1_.o shun_.o skins_.o sqlcmd_.o stash_.o stat_.o style_.o sync_.o tag_.o tar_.o th_main_.o timeline_.o tkt_.o tktsetup_.o undo_.o update_.o url_.o user_.o verify_.o vfile_.o wiki_.o wikiformat_.o winhttp_.o xfer_.o zip_.o http_ssl_.o th.o th_lang.o sqlite3.o shell.o libfossil.a main_.o fossil include/VERSION.h
+	note "Clean $target"
+	if {[llength $cleanfiles]} {
+		vputs "rm $cleanfiles"
+		file delete {*}$cleanfiles
+	}
+
+-------------------------------------------
+@build.spec:44
+clearsign_.c: translate clearsign.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+clearsign_.o: clearsign_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+clone_.c: translate clone.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+clone_.o: clone_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+comformat_.c: translate comformat.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+comformat_.o: comformat_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+configure_.c: translate configure.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+configure_.o: configure_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+content_.c: translate content.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+content_.o: content_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+db_.c: translate db.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+db_.o: db_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+delta_.c: translate delta.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+delta_.o: delta_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+deltacmd_.c: translate deltacmd.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+deltacmd_.o: deltacmd_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+descendants_.c: translate descendants.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+descendants_.o: descendants_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+diff_.c: translate diff.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+diff_.o: diff_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+diffcmd_.c: translate diffcmd.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+diffcmd_.o: diffcmd_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:78
+distclean: clean
+status=unknown
+  var cleanfiles=settings.conf autoconfig.h
+	note "Clean $target"
+	if {[llength $cleanfiles]} {
+		vputs "rm $cleanfiles"
+		file delete {*}$cleanfiles
+	}
+
+-------------------------------------------
+@build.spec:44
+doc_.c: translate doc.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+doc_.o: doc_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+encode_.c: translate encode.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+encode_.o: encode_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+event_.c: translate event.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+event_.o: event_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+export_.c: translate export.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+export_.o: export_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+file_.c: translate file.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+file_.o: file_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+finfo_.c: translate finfo.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+finfo_.o: finfo_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:70
+fossil: main_.o libfossil.a
+status=unknown
+	run $CC $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS
+
+-------------------------------------------
+@build.spec:44
+glob_.c: translate glob.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+glob_.o: glob_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+graph_.c: translate graph.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+graph_.o: graph_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+gzip_.c: translate gzip.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+gzip_.o: gzip_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+http_.c: translate http.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+http_.o: http_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+http_socket_.c: translate http_socket.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+http_socket_.o: http_socket_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+http_ssl_.c: translate http_ssl.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+http_ssl_.o: http_ssl_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+http_transport_.c: translate http_transport.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+http_transport_.o: http_transport_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+import_.c: translate import.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+import_.o: import_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:74
+include/VERSION.h: mkversion manifest.uuid manifest VERSION
+status=unknown
+  var script=mkversion
+	run ./mkversion $inputs >$target
+
+-------------------------------------------
+@build.spec:55
+include/add.h include/allrepo.h include/attach.h include/bag.h include/bisect.h include/blob.h include/branch.h include/browse.h include/captcha.h include/cgi.h include/checkin.h include/checkout.h include/clearsign.h include/clone.h include/comformat.h include/configure.h include/content.h include/db.h include/delta.h include/deltacmd.h include/descendants.h include/diff.h include/diffcmd.h include/doc.h include/encode.h include/event.h include/export.h include/file.h include/finfo.h include/glob.h include/graph.h include/gzip.h include/http.h include/http_socket.h include/http_transport.h include/import.h include/info.h include/leaf.h include/login.h include/manifest.h include/md5.h include/merge.h include/merge3.h include/name.h include/path.h include/pivot.h include/popen.h include/pqueue.h include/printf.h include/rebuild.h include/report.h include/rss.h include/schema.h include/search.h include/setup.h include/sha1.h include/shun.h include/skins.h include/sqlcmd.h include/stash.h include/stat.h include/style.h include/sync.h include/tag.h include/tar.h include/th_main.h include/timeline.h include/tkt.h include/tktsetup.h include/undo.h include/update.h include/url.h include/user.h include/verify.h include/vfile.h include/wiki.h include/wikiformat.h include/winhttp.h include/xfer.h include/zip.h include/http_ssl.h include/main.h: add_.c allrepo_.c attach_.c bag_.c bisect_.c blob_.c branch_.c browse_.c captcha_.c cgi_.c checkin_.c checkout_.c clearsign_.c clone_.c comformat_.c configure_.c content_.c db_.c delta_.c deltacmd_.c descendants_.c diff_.c diffcmd_.c doc_.c encode_.c event_.c export_.c file_.c finfo_.c glob_.c graph_.c gzip_.c http_.c http_socket_.c http_transport_.c import_.c info_.c leaf_.c login_.c manifest_.c md5_.c merge_.c merge3_.c name_.c path_.c pivot_.c popen_.c pqueue_.c printf_.c rebuild_.c report_.c rss_.c schema_.c search_.c setup_.c sha1_.c shun_.c skins_.c sqlcmd_.c stash_.c stat_.c style_.c sync_.c tag_.c tar_.c th_main_.c timeline_.c tkt_.c tktsetup_.c undo_.c update_.c url_.c user_.c verify_.c vfile_.c wiki_.c wikiformat_.c winhttp_.c xfer_.c zip_.c http_ssl_.c main_.c sqlite3.h th.h include/VERSION.h makeheaders 
+status=unknown
+  var genheaders=add_.c:include/add.h allrepo_.c:include/allrepo.h attach_.c:include/attach.h bag_.c:include/bag.h bisect_.c:include/bisect.h blob_.c:include/blob.h branch_.c:include/branch.h browse_.c:include/browse.h captcha_.c:include/captcha.h cgi_.c:include/cgi.h checkin_.c:include/checkin.h checkout_.c:include/checkout.h clearsign_.c:include/clearsign.h clone_.c:include/clone.h comformat_.c:include/comformat.h configure_.c:include/configure.h content_.c:include/content.h db_.c:include/db.h delta_.c:include/delta.h deltacmd_.c:include/deltacmd.h descendants_.c:include/descendants.h diff_.c:include/diff.h diffcmd_.c:include/diffcmd.h doc_.c:include/doc.h encode_.c:include/encode.h event_.c:include/event.h export_.c:include/export.h file_.c:include/file.h finfo_.c:include/finfo.h glob_.c:include/glob.h graph_.c:include/graph.h gzip_.c:include/gzip.h http_.c:include/http.h http_socket_.c:include/http_socket.h http_transport_.c:include/http_transport.h import_.c:include/import.h info_.c:include/info.h leaf_.c:include/leaf.h login_.c:include/login.h manifest_.c:include/manifest.h md5_.c:include/md5.h merge_.c:include/merge.h merge3_.c:include/merge3.h name_.c:include/name.h path_.c:include/path.h pivot_.c:include/pivot.h popen_.c:include/popen.h pqueue_.c:include/pqueue.h printf_.c:include/printf.h rebuild_.c:include/rebuild.h report_.c:include/report.h rss_.c:include/rss.h schema_.c:include/schema.h search_.c:include/search.h setup_.c:include/setup.h sha1_.c:include/sha1.h shun_.c:include/shun.h skins_.c:include/skins.h sqlcmd_.c:include/sqlcmd.h stash_.c:include/stash.h stat_.c:include/stat.h style_.c:include/style.h sync_.c:include/sync.h tag_.c:include/tag.h tar_.c:include/tar.h th_main_.c:include/th_main.h timeline_.c:include/timeline.h tkt_.c:include/tkt.h tktsetup_.c:include/tktsetup.h undo_.c:include/undo.h update_.c:include/update.h url_.c:include/url.h user_.c:include/user.h verify_.c:include/verify.h vfile_.c:include/vfile.h wiki_.c:include/wiki.h wikiformat_.c:include/wikiformat.h winhttp_.c:include/winhttp.h xfer_.c:include/xfer.h zip_.c:include/zip.h http_ssl_.c:include/http_ssl.h main_.c:include/main.h sqlite3.h th.h include/VERSION.h
+	run ./makeheaders $genheaders
+
+-------------------------------------------
+@build.spec:44
+info_.c: translate info.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+info_.o: info_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+install: all 
+status=unknown
+
+-------------------------------------------
+@build.spec:44
+leaf_.c: translate leaf.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+leaf_.o: leaf_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:68
+libfossil.a: add_.o allrepo_.o attach_.o bag_.o bisect_.o blob_.o branch_.o browse_.o captcha_.o cgi_.o checkin_.o checkout_.o clearsign_.o clone_.o comformat_.o configure_.o content_.o db_.o delta_.o deltacmd_.o descendants_.o diff_.o diffcmd_.o doc_.o encode_.o event_.o export_.o file_.o finfo_.o glob_.o graph_.o gzip_.o http_.o http_socket_.o http_transport_.o import_.o info_.o leaf_.o login_.o manifest_.o md5_.o merge_.o merge3_.o name_.o path_.o pivot_.o popen_.o pqueue_.o printf_.o rebuild_.o report_.o rss_.o schema_.o search_.o setup_.o sha1_.o shun_.o skins_.o sqlcmd_.o stash_.o stat_.o style_.o sync_.o tag_.o tar_.o th_main_.o timeline_.o tkt_.o tktsetup_.o undo_.o update_.o url_.o user_.o verify_.o vfile_.o wiki_.o wikiformat_.o winhttp_.o xfer_.o zip_.o http_ssl_.o th.o th_lang.o sqlite3.o shell.o
+status=unknown
+	run $AR $ARFLAGS $target $inputs
+	run $RANLIB $target
+
+-------------------------------------------
+@build.spec:44
+login_.c: translate login.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+login_.o: login_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:66, build.spec:44
+main_.c: page_index.h translate main.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:70
+main_.o: main_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:13
+makeheaders: makeheaders.c
+status=unknown
+	run $CC_FOR_BUILD -o $target $inputs
+
+-------------------------------------------
+@build.spec:44
+manifest_.c: translate manifest.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+manifest_.o: manifest_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+md5_.c: translate md5.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+md5_.o: md5_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+merge3_.c: translate merge3.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+merge3_.o: merge3_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+merge_.c: translate merge.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+merge_.o: merge_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:13
+mkindex: mkindex.c
+status=unknown
+	run $CC_FOR_BUILD -o $target $inputs
+
+-------------------------------------------
+@build.spec:13
+mkversion: mkversion.c
+status=unknown
+	run $CC_FOR_BUILD -o $target $inputs
+
+-------------------------------------------
+@build.spec:44
+name_.c: translate name.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+name_.o: name_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:36
+page_index.h: mkindex add.c allrepo.c attach.c bag.c bisect.c blob.c branch.c browse.c captcha.c cgi.c checkin.c checkout.c clearsign.c clone.c comformat.c configure.c content.c db.c delta.c deltacmd.c descendants.c diff.c diffcmd.c doc.c encode.c event.c export.c file.c finfo.c glob.c graph.c gzip.c http.c http_socket.c http_transport.c import.c info.c leaf.c login.c manifest.c md5.c merge.c merge3.c name.c path.c pivot.c popen.c pqueue.c printf.c rebuild.c report.c rss.c schema.c search.c setup.c sha1.c shun.c skins.c sqlcmd.c stash.c stat.c style.c sync.c tag.c tar.c th_main.c timeline.c tkt.c tktsetup.c undo.c update.c url.c user.c verify.c vfile.c wiki.c wikiformat.c winhttp.c xfer.c zip.c http_ssl.c
+status=unknown
+  var script=mkindex
+	run ./mkindex $inputs >$target
+
+-------------------------------------------
+@build.spec:44
+path_.c: translate path.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+path_.o: path_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+pivot_.c: translate pivot.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+pivot_.o: pivot_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+popen_.c: translate popen.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+popen_.o: popen_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+pqueue_.c: translate pqueue.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+pqueue_.o: pqueue_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+printf_.c: translate printf.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+printf_.o: printf_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+rebuild_.c: translate rebuild.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+rebuild_.o: rebuild_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+report_.c: translate report.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+report_.o: report_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+rss_.c: translate rss.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+rss_.o: rss_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+schema_.c: translate schema.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+schema_.o: schema_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+search_.c: translate search.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+search_.o: search_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+setup_.c: translate setup.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+setup_.o: setup_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+sha1_.c: translate sha1.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+sha1_.o: sha1_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:68, build.spec:64
+shell.o: shell.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN 
+status=unknown
+  var OBJCFLAGS=-Dmain=sqlite3_shell -DSQLITE_OMIT_LOAD_EXTENSION=1
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+shun_.c: translate shun.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+shun_.o: shun_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+skins_.c: translate skins.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+skins_.o: skins_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+sqlcmd_.c: translate sqlcmd.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+sqlcmd_.o: sqlcmd_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:68, build.spec:62, build.spec:61
+sqlite3.o: sqlite3.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN 
+status=unknown
+  var OBJCFLAGS=-DSQLITE_OMIT_LOAD_EXTENSION=1 -DSQLITE_THREADSAFE=0 -DSQLITE_DEFAULT_FILE_FORMAT=4 -DSQLITE_ENABLE_STAT2 -Dlocaltime=fossil_localtime -DSQLITE_ENABLE_LOCKING_STYLE=0
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+stash_.c: translate stash.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+stash_.o: stash_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+stat_.c: translate stat.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+stat_.o: stat_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+style_.c: translate style.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+style_.o: style_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+sync_.c: translate sync.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+sync_.o: sync_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+tag_.c: translate tag.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+tag_.o: tag_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+tar_.c: translate tar.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+tar_.o: tar_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+test: 
+status=unknown
+	# XXX: Need this to be a "run-anyway" command so that even if some tests fail it will still run
+	# Actually, tests should not be targets.
+	puts [format "Test Summary: %d of %d passed" $tmake(testpasscount) $tmake(testruncount)]
+
+-------------------------------------------
+@build.spec:68
+th.o: th.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:68
+th_lang.o: th_lang.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+th_main_.c: translate th_main.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+th_main_.o: th_main_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+timeline_.c: translate timeline.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+timeline_.o: timeline_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+tkt_.c: translate tkt.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+tkt_.o: tkt_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+tktsetup_.c: translate tktsetup.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+tktsetup_.o: tktsetup_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:13
+translate: translate.c
+status=unknown
+	run $CC_FOR_BUILD -o $target $inputs
+
+-------------------------------------------
+@build.spec:44
+undo_.c: translate undo.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+undo_.o: undo_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+uninstall: 
+status=unknown
+  var cleanfiles=
+	note "Clean $target"
+	if {[llength $cleanfiles]} {
+		vputs "rm $cleanfiles"
+		file delete {*}$cleanfiles
+	}
+
+-------------------------------------------
+@build.spec:44
+update_.c: translate update.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+update_.o: update_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+url_.c: translate url.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+url_.o: url_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+user_.c: translate user.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+user_.o: user_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+verify_.c: translate verify.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+verify_.o: verify_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+vfile_.c: translate vfile.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+vfile_.o: vfile_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+wiki_.c: translate wiki.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+wiki_.o: wiki_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+wikiformat_.c: translate wikiformat.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+wikiformat_.o: wikiformat_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+winhttp_.c: translate winhttp.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+winhttp_.o: winhttp_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+xfer_.c: translate xfer.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+xfer_.o: xfer_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+-------------------------------------------
+@build.spec:44
+zip_.c: translate zip.c
+status=unknown
+  var script=translate
+	run ./$script $inputs >$target
+
+-------------------------------------------
+@build.spec:68
+zip_.o: zip_.c
+dyndep=header-scan-regexp-recursive $HDRPATTERN
+status=unknown
+	run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target
+
+  118ms[b] all has unknown status, so checking dependencies
+  118ms[b] all is phony, so rebuilding
+  118ms  [b] fossil has unknown status, so checking dependencies
+  118ms    [b] main_.o has unknown status, so checking dependencies
+  119ms      [b] main_.c has unknown status, so checking dependencies
+  119ms        [b] page_index.h has unknown status, so checking dependencies
+  119ms          [b] mkindex has unknown status, so checking dependencies
+  121ms        [b] translate has unknown status, so checking dependencies
+  128ms      [b] include/main.h has unknown status, so checking dependencies
+  128ms        [b] add_.c has unknown status, so checking dependencies
+  128ms        [b] allrepo_.c has unknown status, so checking dependencies
+  128ms        [b] attach_.c has unknown status, so checking dependencies
+  128ms        [b] bag_.c has unknown status, so checking dependencies
+  129ms        [b] bisect_.c has unknown status, so checking dependencies
+  129ms        [b] blob_.c has unknown status, so checking dependencies
+  129ms        [b] branch_.c has unknown status, so checking dependencies
+  129ms        [b] browse_.c has unknown status, so checking dependencies
+  129ms        [b] captcha_.c has unknown status, so checking dependencies
+  129ms        [b] cgi_.c has unknown status, so checking dependencies
+  129ms        [b] checkin_.c has unknown status, so checking dependencies
+  130ms        [b] checkout_.c has unknown status, so checking dependencies
+  130ms        [b] clearsign_.c has unknown status, so checking dependencies
+  130ms        [b] clone_.c has unknown status, so checking dependencies
+  130ms        [b] comformat_.c has unknown status, so checking dependencies
+  130ms        [b] configure_.c has unknown status, so checking dependencies
+  130ms        [b] content_.c has unknown status, so checking dependencies
+  130ms        [b] db_.c has unknown status, so checking dependencies
+  131ms        [b] delta_.c has unknown status, so checking dependencies
+  131ms        [b] deltacmd_.c has unknown status, so checking dependencies
+  131ms        [b] descendants_.c has unknown status, so checking dependencies
+  131ms        [b] diff_.c has unknown status, so checking dependencies
+  131ms        [b] diffcmd_.c has unknown status, so checking dependencies
+  131ms        [b] doc_.c has unknown status, so checking dependencies
+  131ms        [b] encode_.c has unknown status, so checking dependencies
+  131ms        [b] event_.c has unknown status, so checking dependencies
+  132ms        [b] export_.c has unknown status, so checking dependencies
+  132ms        [b] file_.c has unknown status, so checking dependencies
+  132ms        [b] finfo_.c has unknown status, so checking dependencies
+  132ms        [b] glob_.c has unknown status, so checking dependencies
+  132ms        [b] graph_.c has unknown status, so checking dependencies
+  132ms        [b] gzip_.c has unknown status, so checking dependencies
+  132ms        [b] http_.c has unknown status, so checking dependencies
+  132ms        [b] http_socket_.c has unknown status, so checking dependencies
+  133ms        [b] http_transport_.c has unknown status, so checking dependencies
+  133ms        [b] import_.c has unknown status, so checking dependencies
+  133ms        [b] info_.c has unknown status, so checking dependencies
+  133ms        [b] leaf_.c has unknown status, so checking dependencies
+  133ms        [b] login_.c has unknown status, so checking dependencies
+  133ms        [b] manifest_.c has unknown status, so checking dependencies
+  133ms        [b] md5_.c has unknown status, so checking dependencies
+  134ms        [b] merge_.c has unknown status, so checking dependencies
+  134ms        [b] merge3_.c has unknown status, so checking dependencies
+  134ms        [b] name_.c has unknown status, so checking dependencies
+  134ms        [b] path_.c has unknown status, so checking dependencies
+  134ms        [b] pivot_.c has unknown status, so checking dependencies
+  134ms        [b] popen_.c has unknown status, so checking dependencies
+  134ms        [b] pqueue_.c has unknown status, so checking dependencies
+  134ms        [b] printf_.c has unknown status, so checking dependencies
+  135ms        [b] rebuild_.c has unknown status, so checking dependencies
+  135ms        [b] report_.c has unknown status, so checking dependencies
+  135ms        [b] rss_.c has unknown status, so checking dependencies
+  135ms        [b] schema_.c has unknown status, so checking dependencies
+  135ms        [b] search_.c has unknown status, so checking dependencies
+  135ms        [b] setup_.c has unknown status, so checking dependencies
+  135ms        [b] sha1_.c has unknown status, so checking dependencies
+  136ms        [b] shun_.c has unknown status, so checking dependencies
+  136ms        [b] skins_.c has unknown status, so checking dependencies
+  136ms        [b] sqlcmd_.c has unknown status, so checking dependencies
+  136ms        [b] stash_.c has unknown status, so checking dependencies
+  136ms        [b] stat_.c has unknown status, so checking dependencies
+  136ms        [b] style_.c has unknown status, so checking dependencies
+  136ms        [b] sync_.c has unknown status, so checking dependencies
+  136ms        [b] tag_.c has unknown status, so checking dependencies
+  137ms        [b] tar_.c has unknown status, so checking dependencies
+  137ms        [b] th_main_.c has unknown status, so checking dependencies
+  137ms        [b] timeline_.c has unknown status, so checking dependencies
+  137ms        [b] tkt_.c has unknown status, so checking dependencies
+  137ms        [b] tktsetup_.c has unknown status, so checking dependencies
+  137ms        [b] undo_.c has unknown status, so checking dependencies
+  137ms        [b] update_.c has unknown status, so checking dependencies
+  138ms        [b] url_.c has unknown status, so checking dependencies
+  138ms        [b] user_.c has unknown status, so checking dependencies
+  138ms        [b] verify_.c has unknown status, so checking dependencies
+  138ms        [b] vfile_.c has unknown status, so checking dependencies
+  138ms        [b] wiki_.c has unknown status, so checking dependencies
+  138ms        [b] wikiformat_.c has unknown status, so checking dependencies
+  138ms        [b] winhttp_.c has unknown status, so checking dependencies
+  138ms        [b] xfer_.c has unknown status, so checking dependencies
+  139ms        [b] zip_.c has unknown status, so checking dependencies
+  139ms        [b] http_ssl_.c has unknown status, so checking dependencies
+  139ms        [b] include/VERSION.h has unknown status, so checking dependencies
+  139ms          [b] mkversion has unknown status, so checking dependencies
+  139ms        [b] makeheaders has unknown status, so checking dependencies
+  140ms        [b] include/main.h is older than include/VERSION.h, so forcing rebuild
+  140ms        [b] Building include/main.h <= main_.o <= fossil <= all with rule @build.spec:55
+GenerateHeaders
+  240ms      [b] Rebuilding main_.o because include/main.h was built
+  240ms      [b] Building main_.o <= fossil <= all with rule @build.spec:70
+Cc main_.o
+  370ms    [b] Rebuilding fossil because main_.o was built
+  370ms    [b] libfossil.a has unknown status, so checking dependencies
+  370ms      [b] add_.o has unknown status, so checking dependencies
+  373ms      [b] allrepo_.o has unknown status, so checking dependencies
+  376ms      [b] attach_.o has unknown status, so checking dependencies
+  378ms      [b] bag_.o has unknown status, so checking dependencies
+  380ms      [b] bisect_.o has unknown status, so checking dependencies
+  383ms      [b] blob_.o has unknown status, so checking dependencies
+  385ms      [b] branch_.o has unknown status, so checking dependencies
+  388ms      [b] browse_.o has unknown status, so checking dependencies
+  391ms      [b] captcha_.o has unknown status, so checking dependencies
+  393ms      [b] cgi_.o has unknown status, so checking dependencies
+  397ms      [b] checkin_.o has unknown status, so checking dependencies
+  399ms      [b] checkout_.o has unknown status, so checking dependencies
+  402ms      [b] clearsign_.o has unknown status, so checking dependencies
+  403ms      [b] clone_.o has unknown status, so checking dependencies
+  405ms      [b] comformat_.o has unknown status, so checking dependencies
+  407ms      [b] configure_.o has unknown status, so checking dependencies
+  410ms      [b] content_.o has unknown status, so checking dependencies
+  412ms      [b] db_.o has unknown status, so checking dependencies
+  415ms      [b] delta_.o has unknown status, so checking dependencies
+  417ms      [b] deltacmd_.o has unknown status, so checking dependencies
+  419ms      [b] descendants_.o has unknown status, so checking dependencies
+  421ms      [b] diff_.o has unknown status, so checking dependencies
+  424ms      [b] diffcmd_.o has unknown status, so checking dependencies
+  426ms      [b] doc_.o has unknown status, so checking dependencies
+  429ms      [b] encode_.o has unknown status, so checking dependencies
+  431ms      [b] event_.o has unknown status, so checking dependencies
+  434ms      [b] export_.o has unknown status, so checking dependencies
+  437ms      [b] file_.o has unknown status, so checking dependencies
+  439ms      [b] finfo_.o has unknown status, so checking dependencies
+  442ms      [b] glob_.o has unknown status, so checking dependencies
+  444ms      [b] graph_.o has unknown status, so checking dependencies
+  446ms      [b] gzip_.o has unknown status, so checking dependencies
+  448ms      [b] http_.o has unknown status, so checking dependencies
+  450ms      [b] http_socket_.o has unknown status, so checking dependencies
+  453ms      [b] http_transport_.o has unknown status, so checking dependencies
+  455ms      [b] import_.o has unknown status, so checking dependencies
+  458ms      [b] info_.o has unknown status, so checking dependencies
+  461ms      [b] leaf_.o has unknown status, so checking dependencies
+  462ms      [b] login_.o has unknown status, so checking dependencies
+  465ms      [b] manifest_.o has unknown status, so checking dependencies
+  468ms      [b] md5_.o has unknown status, so checking dependencies
+  470ms      [b] merge_.o has unknown status, so checking dependencies
+  472ms      [b] merge3_.o has unknown status, so checking dependencies
+  475ms      [b] name_.o has unknown status, so checking dependencies
+  477ms      [b] path_.o has unknown status, so checking dependencies
+  479ms      [b] pivot_.o has unknown status, so checking dependencies
+  481ms      [b] popen_.o has unknown status, so checking dependencies
+  483ms      [b] pqueue_.o has unknown status, so checking dependencies
+  484ms      [b] printf_.o has unknown status, so checking dependencies
+  487ms      [b] rebuild_.o has unknown status, so checking dependencies
+  489ms      [b] report_.o has unknown status, so checking dependencies
+  493ms      [b] rss_.o has unknown status, so checking dependencies
+  495ms      [b] schema_.o has unknown status, so checking dependencies
+  497ms      [b] search_.o has unknown status, so checking dependencies
+  499ms      [b] setup_.o has unknown status, so checking dependencies
+  502ms      [b] sha1_.o has unknown status, so checking dependencies
+  504ms      [b] shun_.o has unknown status, so checking dependencies
+  506ms      [b] skins_.o has unknown status, so checking dependencies
+  509ms      [b] sqlcmd_.o has unknown status, so checking dependencies
+  511ms      [b] stash_.o has unknown status, so checking dependencies
+  513ms      [b] stat_.o has unknown status, so checking dependencies
+  515ms      [b] style_.o has unknown status, so checking dependencies
+  518ms      [b] sync_.o has unknown status, so checking dependencies
+  520ms      [b] tag_.o has unknown status, so checking dependencies
+  523ms      [b] tar_.o has unknown status, so checking dependencies
+  525ms      [b] th_main_.o has unknown status, so checking dependencies
+  528ms      [b] timeline_.o has unknown status, so checking dependencies
+  531ms      [b] tkt_.o has unknown status, so checking dependencies
+  533ms      [b] tktsetup_.o has unknown status, so checking dependencies
+  536ms      [b] undo_.o has unknown status, so checking dependencies
+  538ms      [b] update_.o has unknown status, so checking dependencies
+  541ms      [b] url_.o has unknown status, so checking dependencies
+  543ms      [b] user_.o has unknown status, so checking dependencies
+  546ms      [b] verify_.o has unknown status, so checking dependencies
+  547ms      [b] vfile_.o has unknown status, so checking dependencies
+  550ms      [b] wiki_.o has unknown status, so checking dependencies
+  553ms      [b] wikiformat_.o has unknown status, so checking dependencies
+  555ms      [b] winhttp_.o has unknown status, so checking dependencies
+  558ms      [b] xfer_.o has unknown status, so checking dependencies
+  560ms      [b] zip_.o has unknown status, so checking dependencies
+  563ms      [b] http_ssl_.o has unknown status, so checking dependencies
+  565ms      [b] th.o has unknown status, so checking dependencies
+  567ms      [b] th_lang.o has unknown status, so checking dependencies
+  569ms      [b] sqlite3.o has unknown status, so checking dependencies
+  571ms      [b] shell.o has unknown status, so checking dependencies
+  574ms    [b] Building fossil <= all with rule @build.spec:70
+Link fossil
+Built 3 target(s) in 0.87 seconds
