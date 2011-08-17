@@ -324,6 +324,7 @@ proc user-error {msg} {
 #
 # Indicate that something failed to build and set exitcode=1
 proc build-error {msg} {
+	dputs b "BUILD ERROR: $msg"
 	puts stderr $msg
 	set ::tmake(exitcode) 1
 }
@@ -368,7 +369,9 @@ proc dputs {types msg} {
 }
 
 proc dbg-msg-indent {} {
-	string repeat "  " [llength $::tmake(current)]
+	set now [clock-millis]
+	set elapsed [expr {$now - $::tmake(start)}]
+	return [format %5dms $elapsed][string repeat "  " [llength $::tmake(current)]]
 }
 
 # Pretty-print the commands for a rule
@@ -395,7 +398,12 @@ proc show-rule-commands {do} {
 #
 proc show-rule {target} {
 	if {[is-target? $target]} {
-		array set t [get-target-rule $target]
+		set ruletarget [get-rule-target $target]
+	} else {
+		set ruletarget $target
+	}
+	if {[is-rule? $ruletarget]} {
+		array set t [get-rule $ruletarget]
 		set flags {}
 		set lines {}
 		foreach n [lsort [array names t]] {
@@ -439,7 +447,7 @@ proc show-rule {target} {
 		if {[llength $flags]} {
 			append target " \[$flags\]"
 		}
-		puts "$target: $t(depends)"
+		puts "$t(target): $t(depends)"
 		if {[llength $lines]} {
 			puts [join $lines \n]
 		}
@@ -447,7 +455,7 @@ proc show-rule {target} {
 			show-rule-commands $do
 		}
 	} else {
-		puts "No rule to make $target"
+		puts "No rule for $ruletarget"
 	}
 }
 
@@ -615,27 +623,44 @@ proc writefile {filename value} {
 # Rule Handling
 # ==================================================================
 
-# Returns 1 if the target is a rule target or an individual target
+# Returns 1 if the target is an individual target
 proc is-target? {target} {
-	if {[dict exists $::tmake(rules) $target]} {
-		return 1
-	}
 	dict exists $::tmake(targets) $target
 }
 
-# Returns the rule for a rule target or individual target
+# Returns 1 if the target is a rule target
+proc is-rule? {target} {
+	dict exists $::tmake(rules) $target
+}
+
+# Converts a target to the rule target
+proc get-rule-target {target} {
+	dict get $::tmake(targets) $target
+}
+
+# Returns the rule for an individual target
 proc get-target-rule {target} {
-	if {[dict exists $::tmake(targets) $target]} {
-		set target [dict get $::tmake(targets) $target]
-	}
+	get-rule [get-rule-target $target]
+}
+
+# Returns the rule for a rule target
+proc get-rule {target} {
 	dict get $::tmake(rules) $target
 }
 
-proc set-target-rule {target dict} {
-	dict set ::tmake(rules) $target $dict
-	foreach t $target {
-		dict set ::tmake(targets) $t $target
+proc update-rule {ruledict} {
+	set ruletarget [dict get $ruledict target]
+	if {![is-rule? $ruletarget]} {
+		# Haven't seen this rule before so individual target pointers
+		foreach t $ruletarget {
+			if {[dict exists $::tmake(targets) $t]} {
+				set orig [get-target-rule $t]
+				dev-error "Rule for $t was already specified at [make-source-location $t(source)]"
+			}
+			dict set ::tmake(targets) $t $ruletarget
+		}
 	}
+	dict set ::tmake(rules) $ruletarget $ruledict
 }
 
 proc show-this-rule {} {
@@ -655,8 +680,18 @@ proc make-source-location {list {prefix {}} {suffix {}}} {
 #
 # Parses the arguments and adds them to the rule base
 #
-proc target {target args} {
-	array set info [parse-target-rule $target $args]
+proc target {ruletarget args} {
+	# If the rule aready exists, we are updating
+	if {[is-rule? $ruletarget]} {
+		array set orig [get-rule $ruletarget]
+	} elseif {[is-target? $ruletarget]} {
+		# Can't update a rule via the invidual target
+		array set orig [get-target-rule $ruletarget]
+		dev-error "Multiple-target rule for $ruletarget was already specified at [make-source-location $orig(source) @]"
+	}
+	# XXX: Where to we check that we don't have rules {a b} and {b a}? In update-rule?
+
+	array set info [parse-rule $ruletarget $args]
 
 	#show-this-rule
 
@@ -666,15 +701,12 @@ proc target {target args} {
 	# And -inputs are also -depends
 	set info(depends) [concat $info(depends) $info(inputs)]
 
-	if {[is-target? $target]} {
-		array set orig [get-target-rule $target]
-	}
 	if {$replace} {
 		if {[info exists orig]} {
-			dputs t "Replacing existing rule for $target @$orig(source)"
+			dputs t "Replacing existing rule for $ruletarget @$orig(source)"
 			unset orig
 		} else {
-			dputs t "Rule for $target with -replace but not existing target @$info(source)"
+			dputs t "Rule for $ruletarget with -replace but not existing target @$info(source)"
 		}
 	}
 	if {[info exists orig]} {
@@ -682,10 +714,10 @@ proc target {target args} {
 		# to merge the two rules
 
 		if {[llength $info(do)] && [llength $orig(do)]} {
-			dev-error "$target already has '-do' @$orig(source)"
+			dev-error "$ruletarget already has '-do' @$orig(source)"
 		}
 		if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
-			dev-error "$target already has '-dyndep' @$orig(source)"
+			dev-error "$ruletarget already has '-dyndep' @$orig(source)"
 		}
 		lappend info(depends) {*}$orig(depends)
 		lappend info(inputs) {*}$orig(inputs)
@@ -716,33 +748,32 @@ proc target {target args} {
 	}
 
 	# Now create/update the rule
-	set-target-rule $target [array get info]
+	update-rule [array get info]
 }
 
 proc resolve-deferred-dependencies {} {
 	global tmake
-	foreach target [dict keys $tmake(rules)] {
+	foreach ruletarget [dict keys $tmake(rules)] {
 		array unset t
-		array set t [get-target-rule $target]
+		array set t [get-rule $ruletarget]
 		foreach dd $t(maybe-depends) {
 			if {[is-target? $dd]} {
-				dputs m "Resolving deferred dependency $dd for $target"
+				dputs m "Resolving deferred dependency $dd for $ruletarget"
 				lappend t(depends) $dd
 			} else {
-				dputs m "Discarding deferred dependency $dd for $target"
+				dputs m "Discarding deferred dependency $dd for $ruletarget"
 			}
 		}
 		unset t(maybe-depends)
-		set-target-rule $target [array get t]
+		update-rule [array get t]
 	}
 }
 
 # Returns a dictionary (list) representing the parsed target rule
 #
-proc parse-target-rule {target arglist} {
+proc parse-rule {target arglist} {
 	set info(source) [find-source-location]
-	set info(result) 0
-	set info(building) 0
+	set info(status) unknown
 	set info(target) $target
 	set info(add-do) {}
 
@@ -858,17 +889,10 @@ proc clear-target-vars {vars} {
 	}
 }
 
-proc get-target-result {target} {
-	if {![is-target? $target]} {
-		return -1
-	}
-	array set t [get-target-rule $target]
-	return $t(result)
-}
-
 proc set-target-result {target result} {
-	if {[get-target-result $target] == 0} {
-		dict set ::tmake(rules) $target result $result
+	set ruletarget [get-real-target $target]
+	if {[dict get $::tmake(rules) $ruletarget result] == 0} {
+		dict set ::tmake(rules) $ruletarget result $result
 	}
 }
 
@@ -918,18 +942,25 @@ proc build {target} {
 		return -1
 	}
 	array set t [get-target-rule $target]
-	if {$t(result) < 0} {
-		#dputs "$target has previously failed to build"
+	set ruletarget $t(target)
+	#puts "status of $ruletarget is $t(status)"
+	if {$t(status) eq "checking"} {
+		dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
+	}
+	if {$t(status) eq "uptodate"} {
+		return 0
+	}
+	if {$t(status) eq "failed"} {
+		dputs b "$target has previously failed to build"
 		return -1
-	} elseif {$t(result) > 0} {
-		#dputs "$target has previously been built"
+	}
+	if {$t(status) eq "built"} {
+		dputs b "$target has previously been built"
 		return 1
 	}
-	if {$t(building)} {
-		puts stderr "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
-		exit 1
-	}
-	dict set tmake(rules) $target building 1
+
+	set t(status) checking
+	update-rule [array get t]
 
 	set reason {}
 	if {$t(phony)} {
@@ -937,7 +968,7 @@ proc build {target} {
 		lappend reason phony
 		set result 1
 	} elseif {![file exists $target]} {
-		dputs b "$target doesn't exist, so rebuilding"
+		dputs b "$target doesn't exist, so rebuilding (status=$t(status))"
 		lappend reason noexist
 		set result 1
 	} else {
@@ -965,8 +996,7 @@ proc build {target} {
 	foreach i $depends {
 		set rc [build $i]
 		if {$rc < 0} {
-			set faildep
-			if {[get-target-result $target] >= 0 && $tmake(exitcode) == 0} {
+			if {$tmake(exitcode) == 0} {
 				build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
 			}
 			set result -1
@@ -974,9 +1004,11 @@ proc build {target} {
 				break
 			}
 		} elseif {$rc > 0} {
-			dputs b "Rebuilding $target because $i was built"
 			lappend reason depend $i
-			set result 1
+			if {$result == 0} {
+				dputs b "Rebuilding $target because $i was built"
+				set result 1
+			}
 		}
 	}
 
@@ -987,7 +1019,7 @@ proc build {target} {
 
 			set rc [build $i]
 			if {$rc < 0} {
-				if {[get-target-result $target] >= 0 && $tmake(exitcode) == 0} {
+				if {$tmake(exitcode) == 0} {
 					build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
 				}
 				set result -1
@@ -995,9 +1027,11 @@ proc build {target} {
 					break
 				}
 			} elseif {$rc > 0} {
-				dputs b "Rebuilding $target because $i was built"
 				lappend reason depend $i
-				set result 1
+				if {$result == 0} {
+					dputs b "Rebuilding $target because $i was built"
+					set result 1
+				}
 			}
 		}
 	}
@@ -1105,15 +1139,16 @@ proc build {target} {
 		clear-target-vars $t(vars)
 	}
 
-	# For each target, mark it as made (> 0) or unmakeable(< 0)
-	if {$result != 0} {
-		#puts "Marking target result=$result for $current"
-		foreach c $current {
-			set-target-result $c $result
-		}
+	if {$result < 0} {
+		set t(status) failed
+	} elseif {$result > 1} {
+		set t(status) built
+	} else {
+		set t(status) uptodate
 	}
+	update-rule [array get t]
+
 	set tmake(current) $oldcurrent
-	dict set tmake(rules) $target building 0
 	return $result
 }
 
