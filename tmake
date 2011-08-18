@@ -38,7 +38,6 @@ set tmake(cache) {}
 set tmake(subdirvars) {}
 
 # Should these really be here?
-set tmake(includepaths) .
 set tmake(headerscan) {}
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
@@ -802,6 +801,8 @@ proc parse-rule {target arglist} {
 	set info(target) $target
 	set info(add-do) {}
 
+	# XXX: This approach to parsing is really ugly!
+
 	set -inputs {}
 	set -depends {}
 	set -maybe-depends {}
@@ -834,6 +835,8 @@ proc parse-rule {target arglist} {
 		} else {
 			if {$skip} {
 				incr skip -1
+			} elseif {$current eq "-vars"} {
+				set skip 1
 			}
 			lappend $current $a
 		}
@@ -1050,6 +1053,9 @@ proc build {target} {
 
 	if {$result >= 0} {
 		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
+		# Need to set target vars before doing this
+		set-target-vars [array get t]
+
 		foreach i [calc-dyndeps $target] {
 			lappend depends $i
 
@@ -1236,10 +1242,11 @@ proc find-file {filename paths} {
 }
 
 # XXX: This could be done better
-proc header-scan-regexp-recursive {regex filename} {
+proc header-scan-regexp-recursive {incpaths regex filename} {
 	if {![file exists $filename]} {
 		return {}
 	}
+	dputs d "Scanning $filename for headers: incpaths=$incpaths"
 	array set deps {}
 	set scanned($filename) 1
 	set toscan [header-scan-regexp $regex $filename]
@@ -1247,7 +1254,7 @@ proc header-scan-regexp-recursive {regex filename} {
 		set newscan {}
 		foreach d $toscan {
 			if {![info exists scanned($d)]} {
-				set df [find-file $d $::tmake(includepaths)]
+				set df [find-file $d $incpaths]
 				if {$df ne ""} {
 					set d $df
 					set deps($d) 1

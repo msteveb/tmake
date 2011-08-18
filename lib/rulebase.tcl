@@ -20,6 +20,7 @@ set LDFLAGS ""
 set LOCAL_LIBS ""
 set DESTDIR ""
 set OBJCFLAGS ""
+set INCPATHS .
 
 # XXX Should be $TOP/publish
 set PUBLISH publish
@@ -37,22 +38,23 @@ set SYSLIBS ""
 
 set OBJRULES(.c) {run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target}
 set OBJMSG(.c) {note Cc $target}
-set OBJVARS(.c) {CFLAGS}
+set OBJVARS(.c) {CFLAGS INCPATHS HDRPATTERN}
 set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS $OBJCFLAGS -c $inputs -o $target}
-set OBJVARS(.cpp) {CXXFLAGS}
+set OBJVARS(.cpp) {CXXFLAGS INCPATHS HDRPATTERN}
 set OBJMSG(.cpp) {note C++ $target}
 set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
-set HDRSCAN(.c) {header-scan-regexp-recursive $HDRPATTERN}
-set HDRSCAN(.cpp) {header-scan-regexp-recursive $HDRPATTERN}
+set HDRSCAN(.c) {header-scan-regexp-recursive $INCPATHS $HDRPATTERN}
+set HDRSCAN(.cpp) {header-scan-regexp-recursive $INCPATHS $HDRPATTERN}
 
 set EXERULE {run $CC $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS}
+set EXEVARS {SH_LINKFLAGS LDFLAGS SYSLIBS}
 set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
 set ARRULE {
 	run $AR $ARFLAGS $target $inputs
 	run $RANLIB $target
 }
 
-lappend tmake(subdirvars) CFLAGS CXXFLAGS LDFLAGS PROJLIBS SYSLIBS tmake(includepaths)
+lappend tmake(subdirvars) CFLAGS CXXFLAGS LDFLAGS PROJLIBS SYSLIBS INCPATHS
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
@@ -98,7 +100,11 @@ proc Executable {args} {
 # Link an executable from objects
 proc Link {target args} {
 	show-this-rule
-	target $target -inputs {*}$args -do $::EXERULE -msg {note Link $target}
+	set extra -vars
+	foreach v $::EXEVARS {
+		lappend extra $v [set ::$v]
+	}
+	target $target -inputs {*}$args -do $::EXERULE -msg {note Link $target} {*}$extra
 	Clean clean $target
 }
 
@@ -233,8 +239,9 @@ proc UseLibs {args} {
 proc IncludePaths {args} {
 	show-this-rule
 	set paths [make-local {*}$args]
-	lappend ::tmake(includepaths) $paths
+	define-append INCPATHS $paths
 	CFlags [prefix -I $paths]
+	C++Flags [prefix -I $paths]
 }
 
 proc Load {filename} {
