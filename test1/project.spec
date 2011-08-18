@@ -1,4 +1,3 @@
 Load settings.conf
 
-CFlags -g
-LinkFlags -g
+IncludePaths publish/include

@@ -37,7 +37,9 @@ set SYSLIBS ""
 
 set OBJRULES(.c) {run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target}
 set OBJMSG(.c) {note Cc $target}
+set OBJVARS(.c) {CFLAGS}
 set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS $OBJCFLAGS -c $inputs -o $target}
+set OBJVARS(.cpp) {CXXFLAGS}
 set OBJMSG(.cpp) {note C++ $target}
 set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 set HDRSCAN(.c) {header-scan-regexp-recursive $HDRPATTERN}
@@ -49,6 +51,8 @@ set ARRULE {
 	run $AR $ARFLAGS $target $inputs
 	run $RANLIB $target
 }
+
+lappend tmake(subdirvars) CFLAGS CXXFLAGS LDFLAGS PROJLIBS SYSLIBS tmake(includepaths)
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
@@ -75,6 +79,10 @@ proc BuildSpecEpilog {} {
 proc Executable {args} {
 	show-this-rule
 	getopt {--test --publish --install: target args} args
+	if {$publish} {
+		# Revisit: --publish=newname?
+		Publish bin $target
+	}
 	set target [make-local $target]
 	Link $target {*}[Objects {*}[join $args]] $::LOCAL_LIBS {*}$::PROJLIBS
 	if {[info exists install]} {
@@ -84,10 +92,6 @@ proc Executable {args} {
 		Test $target
 	} else {
 		Phony [make-local all] $target
-	}
-	if {$publish} {
-		# Revisit: --publish=newname?
-		Publish bin $target
 	}
 }
 
@@ -100,7 +104,7 @@ proc Link {target args} {
 
 proc Publish {dir args} {
 	show-this-rule
-	foreach t $args {
+	foreach t [make-local $args] {
 		set dest [file join $dir [file tail $t]]
 		HardLink [file join $::PUBLISH $dest] $t -vars dest $dest -msg {note Publish $dest}
 	}
@@ -120,7 +124,7 @@ proc ArchiveLib {args} {
 		Install $install $target
 	}
 	if {$publish} {
-		Publish lib $target
+		Publish lib lib$libname.a
 	}
 }
 
@@ -180,6 +184,12 @@ proc Object {obj src} {
 		if {[info exists ::OBJMSG($ext)]} {
 			lappend extra -msg $::OBJMSG($ext)
 		}
+		if {[info exists ::OBJVARS($ext)]} {
+			lappend extra -vars
+			foreach v $::OBJVARS($ext) {
+				lappend extra $v [set ::$v]
+			}
+		}
 		if {[info exists ::HDRSCAN($ext)]} {
 			lappend extra -dyndep $::HDRSCAN($ext)
 		}
@@ -199,6 +209,7 @@ proc ObjectCFlags {srcs args} {
 }
 
 proc CFlags {args} {
+	show-this-rule
 	define-append CFLAGS {*}$args
 }
 
@@ -215,11 +226,12 @@ proc UseLibs {args} {
 		# REVISIT: If we are to support linking against project shared libs, PROJLIBS
 		#          needs to be just a list of libs which will then be resolved to actual
 		#          targets (archive or shared) at deferred resolution time
-		define-append PROJLIBS [file join $::PUBLISH lib $lib]
+		define-append PROJLIBS [file join $::PUBLISH lib lib$lib.a]
 	}
 }
 
 proc IncludePaths {args} {
+	show-this-rule
 	set paths [make-local {*}$args]
 	lappend ::tmake(includepaths) $paths
 	CFlags [prefix -I $paths]
@@ -240,12 +252,6 @@ proc UseSystemLibs {args} {
 proc PublishIncludes {args} {
 	foreach a [join $args] {
 		Publish include $a
-	}
-}
-
-proc PublishArchiveLibs {args} {
-	foreach a [join $args] {
-		Publish lib $a
 	}
 }
 
@@ -396,3 +402,6 @@ Phony test -do {
 	# Actually, tests should not be targets. 
 	puts [format "Test Summary: %d of %d passed" $tmake(testpasscount) $tmake(testruncount)]
 }
+
+# XXX: Should be a better way to do this
+IncludePaths $PUBLISH/include

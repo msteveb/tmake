@@ -35,8 +35,9 @@ set tmake(modules) {}
 set tmake(autosubdirs) 1
 set tmake(subdirs) {}
 set tmake(cache) {}
+set tmake(subdirvars) {}
 
-# Should this really be here?
+# Should these really be here?
 set tmake(includepaths) .
 set tmake(headerscan) {}
 set tmake(testruncount) 0
@@ -237,6 +238,20 @@ proc SubDirs {args} {
 	lappend ::tmake(subdirs) {*}$args
 }
 
+proc save-subdir-vars {} {
+	set saved {}
+	foreach n $::tmake(subdirvars) {
+		dict set saved $n [set ::$n]
+	}
+	return $saved
+}
+
+proc restore-subdir-vars {dict} {
+	foreach {n v} $dict {
+		set ::$n $v
+	}
+}
+
 # Read in the given spec file in the given directory (relative to topdir)
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir} {
@@ -258,9 +273,13 @@ proc process-build-spec-file {dir} {
 		user-error "$path does not exist"
 	}
 
+	set saved [save-subdir-vars]
+
 	BuildSpecProlog
 	invoke-spec-file $path
 	BuildSpecEpilog
+
+	restore-subdir-vars $saved
 
 	# Now subdirectories
 	incr tmake(depth)
