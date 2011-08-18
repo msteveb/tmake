@@ -1,3 +1,15 @@
+Subdirectories
+--------------
+
+Note that Jam allows the rule to capture per-rule flags.
+e.g.
+
+    CCFLAGS on $(<) += $(CCFLAGS) $(SUBDIRCCFLAGS) $(OPTIM) ;
+
+Why can't we do the same? I think the problem is that OBJRULE()
+is a simple rule. Perhaps it needs to be a proc which returns
+-vars and other args to target
+
 Publish
 -------
 The idea here is that normally any files referred to in a build.spec

@@ -903,14 +903,19 @@ proc file-virtual-mtime {filename} {
 # Both $target and $source must exist.
 # Returns 1 if $target is older than $source or 0 otherwise
 #
-proc needbuild? {target source} {
-	if {[file-virtual-mtime $target] >= [file-real-mtime $source]} {
-		dputs n "$target is newer than $source, so not forcing rebuild"
-		return 0
-	} else {
-		dputs b "$target is older than $source, so forcing rebuild"
-		return 1
+# XXX: We may spend a lot of time comparing modification times.
+#      Can we do anthing to speed this up?
+#
+proc needbuild? {targetlist source} {
+	set source_mtime [file-real-mtime $source]
+	foreach target $targetlist {
+		if {[file-virtual-mtime $target] < $source_mtime} {
+			dputs b "$target is older than $source, so forcing rebuild"
+			return 1
+		}
 	}
+	dputs n "$targetlist is newer than $source, so not forcing rebuild"
+	return 0
 }
 
 # Sets target-local variables. e.g. $inputs, $depends and $target
@@ -956,7 +961,7 @@ proc run {args} {
 }
 
 proc calc-dyndeps {target} {
-	array set t [get-target-rule $target]
+	array set t [get-rule $target]
 
 	set dyndeps {}
 	if {$t(dyndep) ne ""} {
@@ -966,6 +971,15 @@ proc calc-dyndeps {target} {
 		dputs d "Dynamic dependencies for $target: $dyndeps"
 	}
 	return $dyndeps
+}
+
+proc file-exists-all {list} {
+	foreach f $list {
+		if {![file exists $f]} {
+			return 0
+		}
+	}
+	return 1
 }
 
 proc build {target} {
@@ -982,7 +996,6 @@ proc build {target} {
 	}
 	array set t [get-target-rule $target]
 	set ruletarget $t(target)
-	#puts "status of $ruletarget is $t(status)"
 	if {$t(status) eq "checking"} {
 		dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
 	}
@@ -1006,12 +1019,12 @@ proc build {target} {
 		dputs b "$target is phony, so rebuilding"
 		lappend reason phony
 		set result 1
-	} elseif {![file exists $target]} {
-		dputs b "$target doesn't exist, so rebuilding (status=$t(status))"
+	} elseif {![file-exists-all $ruletarget]} {
+		dputs b "$ruletarget doesn't exist, so rebuilding (status=$t(status))"
 		lappend reason noexist
 		set result 1
 	} else {
-		#dputs b "$target exists, so checking dependencies"
+		#dputs b "$ruletarget exists, so checking dependencies"
 		set result 0
 	}
 
@@ -1056,7 +1069,7 @@ proc build {target} {
 		# Need to set target vars before doing this
 		set-target-vars [array get t]
 
-		foreach i [calc-dyndeps $target] {
+		foreach i [calc-dyndeps $ruletarget] {
 			lappend depends $i
 
 			set rc [build $i]
@@ -1071,7 +1084,7 @@ proc build {target} {
 			} elseif {$rc > 0} {
 				lappend reason depend $i
 				if {$result == 0} {
-					dputs b "Rebuilding $target because $i was built"
+					dputs b "Rebuilding $ruletarget because $i was built"
 					set result 1
 				}
 			}
@@ -1085,7 +1098,7 @@ proc build {target} {
 	if {$result == 0} {
 		# 3.  Target exists but no dependencies were built so check time dependencies
 		foreach i $depends {
-			if {[needbuild? $target $i]} {
+			if {[needbuild? $ruletarget $i]} {
 				lappend reason older $i
 				set result 1
 				break
@@ -1100,12 +1113,12 @@ proc build {target} {
 	}
 
 	if {$result > 0 && [llength $t(do)]} {
-		#puts "Running rules for $target"
+		#puts "Running rules for $ruletarget"
 		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $t(source) "with rule @"]"
 		set-target-vars [array get t]
 		uplevel #0 $t(msg)
 		if {[dict get $tmake(debugtypes) r]} {
-			show-rule $target
+			show-rule $ruletarget
 		}
 		if {$tmake(norun)} {
 			foreach do $t(do) {
@@ -1146,7 +1159,7 @@ proc build {target} {
 		# Did the rule make the targets?
 		if {$rc == 0 && !$t(phony) && !$tmake(norun)} {
 			set now [clock seconds]
-			foreach f $target {
+			foreach f $ruletarget {
 				if {![file exists $f]} {
 					# XXX: Should onerror run here if --quickstop is set?
 					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s)"
@@ -1163,7 +1176,7 @@ proc build {target} {
 			incr tmake(numtargets)
 		} else {
 			# On failure, delete the target(s)
-			file delete {*}$target
+			file delete {*}$ruletarget
 
 			# Try to run onerror
 			if {[catch {
