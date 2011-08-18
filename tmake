@@ -116,6 +116,9 @@ proc make {argv} {
 				--dry-run - --just-print - -n {
 					set tmake(norun) 1
 				}
+				-N {
+					set tmake(norun) 2
+				}
 				--tim* - -t {
 					incr tmake(showtime)
 				}
@@ -1010,9 +1013,11 @@ proc calc-dyndeps {target} {
 	return $dyndeps
 }
 
-proc file-exists-all {list} {
+proc file-exists-all {list missingname} {
 	foreach f $list {
 		if {![file exists $f]} {
+			upvar $missingname missing
+			set missing $f
 			return 0
 		}
 	}
@@ -1056,8 +1061,8 @@ proc build {target} {
 		dputs b "$target is phony, so rebuilding"
 		lappend reason phony
 		set result 1
-	} elseif {![file-exists-all $ruletarget]} {
-		dputs b "$ruletarget doesn't exist, so rebuilding (status=$t(status))"
+	} elseif {![file-exists-all $ruletarget missing]} {
+		dputs b "$missing doesn't exist, so rebuilding"
 		lappend reason noexist
 		set result 1
 	} else {
@@ -1161,7 +1166,9 @@ proc build {target} {
 					# doesn't exist, so show it without the subst
 					set expanded $do
 				}
-				show-rule-commands $expanded
+				if {$tmake(norun) == 1} {
+					show-rule-commands $expanded
+				}
 			}
 			set rc 0
 		} else {

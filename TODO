@@ -89,6 +89,8 @@ Also migration from automake
 tmake TODO
 ----------
 * Does .makecache and tmake(cache) ever need to be cleaned up?
+  - Should record the real mtime as well as the virtual mtime.
+    If the real mtime changes (or the file disappears) we need to flush the entry
 * Add support for per-directory rules. Probably need something like Jam's <grist>
   - except I will probably use "path/from/top" as the grist
 * Read project.spec and build.spec in subdirs
