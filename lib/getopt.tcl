@@ -53,7 +53,7 @@ proc getopt {optdef argvname} {
 
 		if {[regexp {^--([^=]+)=(.*)} $arg -> name value]} {
 			# --abc=def
-			if {![info exists valopts($name)} {
+			if {![info exists valopts($name)]} {
 				if {[info exists boolopts($name)]} {
 					dev-error "Option --$name does not accept a parameter"
 				}

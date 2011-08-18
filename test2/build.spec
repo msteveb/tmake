@@ -41,8 +41,6 @@ ifconfig JIM_UTF8 {
 	Generate _unicode_mapping.c parse-unidata.tcl UnicodeData.txt {
 		run $tclsh $script $inputs >$target
 	}
-	# This should be found by the dynamic dependency rules
-	#Depends utf8.o _unicode_mapping.c
 }
 
 ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $SRCS
@@ -59,4 +57,3 @@ Install $prefix/docs Tcl.html
 Phony docs Tcl.html
 
 Clean distclean jim-config.h jimautoconf.h config.log settings.conf
-Clean clean [glob -nocomplain *.o *.a. *.so]

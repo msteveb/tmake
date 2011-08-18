@@ -900,21 +900,58 @@ proc file-virtual-mtime {filename} {
 	file-real-mtime $filename
 }
 
-# Both $target and $source must exist.
-# Returns 1 if $target is older than $source or 0 otherwise
-#
-# XXX: We may spend a lot of time comparing modification times.
-#      Can we do anthing to speed this up?
-#
-proc needbuild? {targetlist source} {
-	set source_mtime [file-real-mtime $source]
-	foreach target $targetlist {
-		if {[file-virtual-mtime $target] < $source_mtime} {
-			dputs b "$target is older than $source, so forcing rebuild"
-			return 1
+proc find-oldest-time {list name} {
+	upvar $name oldestname
+	if {[llength $list] == 1} {
+		lassign $list oldestname
+		return [file-real-mtime $oldestname]
+	}
+	set oldesttime [file-real-mtime [lindex $list 0]]
+	foreach file $list {
+		set t [file-real-mtime $file]
+		if {$t < $oldesttime} {
+			set oldesttime $t
+			set oldestname $file
 		}
 	}
-	dputs n "$targetlist is newer than $source, so not forcing rebuild"
+	return $oldesttime
+}
+
+proc find-newest-time {list name} {
+	upvar $name newestname
+	if {[llength $list] == 1} {
+		lassign $list newestname
+		return [file-virtual-mtime $newestname]
+	}
+	set newesttime 0
+	foreach file $list {
+		set t [file-virtual-mtime $file]
+		if {$t > $newesttime} {
+			set newesttime $t
+			set newestname $file
+		}
+	}
+	return $newesttime
+}
+
+# Both $targets and $depends are lists of files which must exist
+# If any file is $targets is older than any file in $depends, the
+# targets are out of date and 1 is returned. In this case the 
+# variable named $depname is set to the name of the newest
+# file in $depends
+# Otherwise 0 is returned.
+#
+proc needbuild? {targets depends depname} {
+	upvar $depname newest_depends
+	set depends_time [find-newest-time $depends newest_depends]
+	#puts "newest depends: [clock format $depends_time] $newest_depends"
+	set targets_time [find-oldest-time $targets oldest_target]
+	#puts "oldest targets: [clock format $targets_time] $oldest_target"
+	if {$targets_time < $depends_time} {
+		dputs b "$oldest_target is older than $newest_depends, so forcing rebuild"
+		return 1
+	}
+	dputs n "$targets is newer than $depends, so not forcing rebuild"
 	return 0
 }
 
@@ -1097,12 +1134,9 @@ proc build {target} {
 
 	if {$result == 0} {
 		# 3.  Target exists but no dependencies were built so check time dependencies
-		foreach i $depends {
-			if {[needbuild? $ruletarget $i]} {
-				lappend reason older $i
-				set result 1
-				break
-			}
+		if {[needbuild? $ruletarget $depends depfile]} {
+			lappend reason older $depfile
+			set result 1
 		}
 	}
 
