@@ -13,14 +13,21 @@ set CXX c++
 set AR ar
 set RANLIB ranlib
 set ARFLAGS cr
-set CFLAGS ""
-set CXXFLAGS ""
 set SH_LINKFLAGS ""
 set LDFLAGS ""
 set LOCAL_LIBS ""
 set DESTDIR ""
 set OBJCFLAGS ""
 set INCPATHS .
+
+# These are normally specified by the user, either with configure
+# or overridden on the command line or the environment
+set CFLAGS ""
+set CXXFLAGS ""
+
+# These are set by the project via CFlags, ObjectCFlags, etc.
+set C_FLAGS ""
+set CXX_FLAGS ""
 
 # XXX Should be $TOP/publish
 set PUBLISH publish
@@ -36,15 +43,25 @@ define SHOBJ_LDFLAGS "-bundle -undefined dynamic_lookup"
 set PROJLIBS ""
 set SYSLIBS ""
 
-set OBJRULES(.c) {run $CCACHE $CC $CFLAGS $OBJCFLAGS -c $inputs -o $target}
-set OBJMSG(.c) {note Cc $target}
-set OBJVARS(.c) {CFLAGS INCPATHS HDRPATTERN}
-set OBJRULES(.cpp) {run $CCACHE $CXX $CXXFLAGS $OBJCFLAGS -c $inputs -o $target}
-set OBJVARS(.cpp) {CXXFLAGS INCPATHS HDRPATTERN}
-set OBJMSG(.cpp) {note C++ $target}
+proc ObjectRule.c {obj src} {
+	# Capture the current value of C_FLAGS and INCPATHS
+	target $obj -inputs $src -msg {note Cc $target} -vars C_FLAGS $::C_FLAGS INCPATHS $::INCPATHS -do {
+		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+	} -dyndep {
+		header-scan-regexp-recursive $INCPATHS $HDRPATTERN
+	}
+}
+
+proc ObjectRule.cpp {obj src} {
+	# Capture the current value of CXX_FLAGS and INCPATHS
+	target $obj -inputs $src -msg {note C++ $target} -vars CXX_FLAGS $::CXX_FLAGS INCPATHS $::INCPATHS -do {
+		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
+	} -dyndep {
+		header-scan-regexp-recursive $INCPATHS $HDRPATTERN
+	}
+}
+
 set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
-set HDRSCAN(.c) {header-scan-regexp-recursive $INCPATHS $HDRPATTERN}
-set HDRSCAN(.cpp) {header-scan-regexp-recursive $INCPATHS $HDRPATTERN}
 
 set EXERULE {run $CC $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS}
 set EXEVARS {SH_LINKFLAGS LDFLAGS SYSLIBS}
@@ -184,43 +201,31 @@ proc Object {obj src} {
 	set src [make-local $src]
 	if {$ext ne ".o"} {
 		set extra {}
-		if {![info exists ::OBJRULES($ext)]} {
+		if {[info procs ObjectRule$ext] eq ""} {
 			dev-error "Don't know how to build Object from $src"
 		}
-		if {[info exists ::OBJMSG($ext)]} {
-			lappend extra -msg $::OBJMSG($ext)
-		}
-		if {[info exists ::OBJVARS($ext)]} {
-			lappend extra -vars
-			foreach v $::OBJVARS($ext) {
-				lappend extra $v [set ::$v]
-			}
-		}
-		if {[info exists ::HDRSCAN($ext)]} {
-			lappend extra -dyndep $::HDRSCAN($ext)
-		}
-		target $obj -inputs $src -do $::OBJRULES($ext) {*}$extra
+		ObjectRule$ext $obj $src
 		Clean clean $obj
 	}
 	return $obj
 }
 
-# Set object-specific CFLAGS
+# Add object-specific CFLAGS
 proc ObjectCFlags {srcs args} {
 	show-this-rule
 	foreach src $srcs {
 		set obj [change-ext .o $src]
-		target $obj -vars OBJCFLAGS [join $args]
+		target [make-local $obj] -vars C_FLAGS [join $args]
 	}
 }
 
 proc CFlags {args} {
 	show-this-rule
-	define-append CFLAGS {*}$args
+	define-append C_FLAGS {*}$args
 }
 
 proc C++Flags {args} {
-	define-append CXXFLAGS {*}$args
+	define-append CXX_FLAGS {*}$args
 }
 
 proc LinkFlags {args} {

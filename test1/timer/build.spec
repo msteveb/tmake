@@ -2,7 +2,7 @@
 PublishIncludes include/timer.h include/timerqueue.h
 
 # Test building one object with different flags
-#ObjectCFlags timerqueue.c -DDUMMY_DEFINE
+ObjectCFlags timerqueue.c -DDUMMY_DEFINE
 
 IncludePaths include
 
