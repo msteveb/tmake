@@ -312,6 +312,25 @@ proc process-build-spec-file {dir} {
 	incr tmake(depth) -1
 }
 
+# Returns a list of all files which were once a target but are no longer
+proc get-orphan-targets {} {
+	set result {}
+	foreach i [dict keys $::tmake(cache)] {
+		if {![is-target? $i]} {
+			lappend result $i
+		}
+	}
+	return $result
+}
+
+proc discard-orphan-targets {} {
+	foreach i [dict keys $::tmake(cache)] {
+		if {![is-target? $i]} {
+			dict unset ::tmake(cache) $i
+		}
+	}
+}
+
 # ==================================================================
 # Module Loading
 # ==================================================================
@@ -897,43 +916,54 @@ proc file-real-mtime {filename} {
 }
 
 proc file-virtual-mtime {filename} {
+	set mtime [file-real-mtime $filename]
 	if {[dict exists $::tmake(cache) $filename]} {
-		return [dict get $::tmake(cache) $filename]
+		lassign [dict get $::tmake(cache) $filename] vmtime omtime
+		# If the actual mtime is different from the saved mtime, we
+		# ignore and discard the cached (virtual) mtime.
+		if {$omtime == $mtime} {
+			# The cache is up to date, so use the virtual mtime
+			set mtime $vmtime
+		} else {
+			dict unset ::tmake(cache) $filename
+		}
 	}
-	file-real-mtime $filename
+	return $mtime
 }
 
 proc find-oldest-time {list name} {
 	upvar $name oldestname
-	if {[llength $list] == 1} {
-		lassign $list oldestname
-		return [file-real-mtime $oldestname]
-	}
-	set oldesttime [file-real-mtime [lindex $list 0]]
-	foreach file $list {
-		set t [file-real-mtime $file]
-		if {$t < $oldesttime} {
-			set oldesttime $t
-			set oldestname $file
+	lassign $list oldestname
+	set oldesttime [file-virtual-mtime $oldestname]
+
+	if {[llength $list] > 1} {
+		foreach file $list {
+			set t [file-virtual-mtime $file]
+			if {$t < $oldesttime} {
+				set oldesttime $t
+				set oldestname $file
+			}
 		}
 	}
+	#puts "find-oldest-time: $oldestname $oldesttime ($list)"
 	return $oldesttime
 }
 
 proc find-newest-time {list name} {
 	upvar $name newestname
-	if {[llength $list] == 1} {
-		lassign $list newestname
-		return [file-virtual-mtime $newestname]
-	}
-	set newesttime 0
-	foreach file $list {
-		set t [file-virtual-mtime $file]
-		if {$t > $newesttime} {
-			set newesttime $t
-			set newestname $file
+	lassign $list newestname
+	set newesttime [file-real-mtime $newestname]
+
+	if {[llength $list] > 1} {
+		foreach file $list {
+			set t [file-real-mtime $file]
+			if {$t > $newesttime} {
+				set newesttime $t
+				set newestname $file
+			}
 		}
 	}
+	#puts "find-newest-time: $newestname $newesttime ($list)"
 	return $newesttime
 }
 
@@ -1207,8 +1237,8 @@ proc build {target} {
 					# Use break to indicate that we have already output the message
 					set rc 3
 				} else {
-					# Record the time that this target was created
-					dict set tmake(cache) $f $now
+					# Record the time that this target was created, along with the real mtime
+					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
 				}
 			}
 		}

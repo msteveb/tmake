@@ -410,5 +410,16 @@ Phony test -do {
 	puts [format "Test Summary: %d of %d passed" $tmake(testpasscount) $tmake(testruncount)]
 }
 
+# XXX: Is this the best way to do this?
+proc clean-orphan-targets {} {
+	set cleanfiles [get-orphan-targets]
+	if {[llength $cleanfiles]} {
+		note "Clean [llength $cleanfiles] orphan targets"
+		file delete {*}$cleanfiles
+		discard-orphan-targets
+	}
+}
+target clean -add -do clean-orphan-targets
+
 # XXX: Should be a better way to do this
 IncludePaths $PUBLISH/include
