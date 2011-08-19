@@ -35,6 +35,7 @@ set tmake(modules) {}
 set tmake(autosubdirs) 1
 set tmake(subdirs) {}
 set tmake(cache) {}
+set tmake(writecache) 0
 set tmake(subdirvars) {}
 
 # Should these really be here?
@@ -363,7 +364,7 @@ proc use {args} {
 proc user-error {msg} {
 	puts stderr "Error: $msg"
 	puts stderr "Try: 'tmake --help' for options"
-	exit 1
+	tmake-exit 1
 }
 
 # @build-error msg
@@ -385,7 +386,15 @@ proc user-notice {msg} {
 # Incorrect usage in the build.spec file. Identify the location.
 proc dev-error {msg} {
 	puts stderr [error-location $msg]
-	exit 1
+	tmake-exit 1
+}
+
+proc tmake-exit {code} {
+	# Write the cache before exiting
+	if {$::tmake(writecache)} {
+		writefile .makecache [list set tmake(cache) $::tmake(cache)]
+	}
+	exit $code
 }
 
 # Output a message to stdout if --verbose is set.
@@ -920,12 +929,10 @@ proc file-virtual-mtime {filename} {
 	if {[dict exists $::tmake(cache) $filename]} {
 		lassign [dict get $::tmake(cache) $filename] vmtime omtime
 		# If the actual mtime is different from the saved mtime, we
-		# ignore and discard the cached (virtual) mtime.
+		# ignore the cached (virtual) mtime.
 		if {$omtime == $mtime} {
 			# The cache is up to date, so use the virtual mtime
 			set mtime $vmtime
-		} else {
-			dict unset ::tmake(cache) $filename
 		}
 	}
 	return $mtime
@@ -1164,7 +1171,7 @@ proc build {target} {
 	}
 
 	if {$tmake(quickstop) && $tmake(exitcode)} {
-		exit $tmake(exitcode)
+		tmake-exit $tmake(exitcode)
 	}
 
 	if {$result == 0} {
@@ -1239,6 +1246,7 @@ proc build {target} {
 				} else {
 					# Record the time that this target was created, along with the real mtime
 					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
+					set tmake(writecache) 1
 				}
 			}
 		}
@@ -1263,7 +1271,7 @@ proc build {target} {
 		}
 
 		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
-			exit $tmake(exitcode)
+			tmake-exit $tmake(exitcode)
 		}
 
 		clear-target-vars $t(vars)
@@ -1368,12 +1376,9 @@ if {[catch {make $argv} msg]} {
 	set tmake(exitcode) 1
 }
 
-# Write the cache
-writefile .makecache [list set tmake(cache) $tmake(cache)]
-
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
 	puts "Built $tmake(numtargets) target(s) in [format %.2f $elapsed] seconds"
 }
 
-exit $tmake(exitcode)
+tmake-exit $tmake(exitcode)
