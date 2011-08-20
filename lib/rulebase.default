@@ -8,13 +8,13 @@
 
 set CCACHE ""
 set CC cc
+set CCLD cc
 set CC_FOR_BUILD cc
 set CXX c++
 set AR ar
 set RANLIB ranlib
 set ARFLAGS cr
 set SH_LINKFLAGS ""
-set LDFLAGS ""
 set LOCAL_LIBS ""
 set DESTDIR ""
 set OBJCFLAGS ""
@@ -24,10 +24,12 @@ set INCPATHS .
 # or overridden on the command line or the environment
 set CFLAGS ""
 set CXXFLAGS ""
+set LDFLAGS ""
 
-# These are set by the project via CFlags, ObjectCFlags, etc.
+# These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
 set C_FLAGS ""
 set CXX_FLAGS ""
+set LD_FLAGS ""
 
 # XXX Should be $TOP/publish
 set PUBLISH publish
@@ -45,7 +47,7 @@ set SYSLIBS ""
 
 proc ObjectRule.c {obj src} {
 	# Capture the current value of C_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note Cc $target} -vars C_FLAGS $::C_FLAGS INCPATHS $::INCPATHS -do {
+	target $obj -inputs $src -msg {note Cc $target} -getvars C_FLAGS INCPATHS -do {
 		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 	} -dyndep {
 		header-scan-regexp-recursive $INCPATHS $HDRPATTERN
@@ -54,7 +56,7 @@ proc ObjectRule.c {obj src} {
 
 proc ObjectRule.cpp {obj src} {
 	# Capture the current value of CXX_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note C++ $target} -vars CXX_FLAGS $::CXX_FLAGS INCPATHS $::INCPATHS -do {
+	target $obj -inputs $src -msg {note C++ $target} -getvars CXX_FLAGS INCPATHS -do {
 		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
 	} -dyndep {
 		header-scan-regexp-recursive $INCPATHS $HDRPATTERN
@@ -63,13 +65,7 @@ proc ObjectRule.cpp {obj src} {
 
 set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
-set EXERULE {run $CC $SH_LINKFLAGS $LDFLAGS -o $target $inputs $SYSLIBS}
-set EXEVARS {SH_LINKFLAGS LDFLAGS SYSLIBS}
 set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
-set ARRULE {
-	run $AR $ARFLAGS $target $inputs
-	run $RANLIB $target
-}
 
 lappend tmake(subdirvars) CFLAGS CXXFLAGS LDFLAGS PROJLIBS SYSLIBS INCPATHS
 
@@ -103,7 +99,7 @@ proc Executable {args} {
 		Publish bin $target
 	}
 	set target [make-local $target]
-	Link $target {*}[Objects {*}[join $args]] $::LOCAL_LIBS {*}$::PROJLIBS
+	Link $target {*}[Objects {*}[join $args]] {*}$::LOCAL_LIBS {*}$::PROJLIBS
 	if {[info exists install]} {
 		Install --bin $install $target
 	}
@@ -117,11 +113,11 @@ proc Executable {args} {
 # Link an executable from objects
 proc Link {target args} {
 	show-this-rule
-	set extra -vars
-	foreach v $::EXEVARS {
-		lappend extra $v [set ::$v]
+
+	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
+	target $target -inputs {*}$args -msg {note Link $target} -getvars CCLD LD_FLAGS SYSLIBS -do {
+		run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $SYSLIBS
 	}
-	target $target -inputs {*}$args -do $::EXERULE -msg {note Link $target} {*}$extra
 	Clean clean $target
 }
 
@@ -135,10 +131,15 @@ proc Publish {dir args} {
 
 proc ArchiveLib {args} {
 	show-this-rule
-	getopt {--publish --install: libname args} args
+	getopt {--publish --install: basename args} args
 
-	set target [make-local lib$libname.a]
-	target $target -inputs {*}[Objects {*}[join $args]] -do $::ARRULE -msg {note Ar $target}
+	set libname lib$basename.a
+
+	set target [make-local $libname]
+	target $target -inputs {*}[Objects {*}[join $args]] -msg {note Ar $target} -do {
+		run $AR $ARFLAGS $target $inputs
+		run $RANLIB $target
+	}
 	Phony [make-local all] $target
 	Clean clean $target
 	define-append LOCAL_LIBS $target
@@ -147,7 +148,7 @@ proc ArchiveLib {args} {
 		Install $install $target
 	}
 	if {$publish} {
-		Publish lib lib$libname.a
+		Publish lib $libname
 	}
 }
 
@@ -155,10 +156,7 @@ alias Lib ArchiveLib
 
 proc SharedObject {args} {
 	show-this-rule
-	# REVISIT: Should allow getopt to also checked fixed args too
-	#          so we can produce a nice error message
-	# Like: getopt SharedObject {install: test} target srcs...
-	#
+
 	getopt {--install: sharedobj args} args
 
 	set sharedobj [make-local $sharedobj]
@@ -229,7 +227,11 @@ proc C++Flags {args} {
 }
 
 proc LinkFlags {args} {
-	define-append LDFLAGS {*}$args
+	define-append LD_FLAGS {*}$args
+}
+
+proc Linker {linker} {
+	define CCLD $linker
 }
 
 proc UseLibs {args} {
@@ -405,6 +407,7 @@ CleanTarget clean
 CleanTarget distclean
 CleanTarget uninstall
 
+Depends clean clean-orphans
 Depends distclean clean
 
 Phony all
@@ -415,8 +418,7 @@ Phony test -do {
 	puts [format "Test Summary: %d of %d passed" $tmake(testpasscount) $tmake(testruncount)]
 }
 
-# XXX: Is this the best way to do this?
-proc clean-orphan-targets {} {
+Phony clean-orphans -do {
 	set cleanfiles [get-orphan-targets]
 	if {[llength $cleanfiles]} {
 		note "Clean [llength $cleanfiles] orphan targets"
@@ -424,7 +426,6 @@ proc clean-orphan-targets {} {
 		discard-orphan-targets
 	}
 }
-target clean -add -do clean-orphan-targets
 
-# XXX: Should be a better way to do this
-IncludePaths $PUBLISH/include
+# XXX: Use an official API for this
+lappend tmake(deferred) {IncludePaths $PUBLISH/include}

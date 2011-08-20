@@ -37,6 +37,7 @@ set tmake(subdirs) {}
 set tmake(cache) {}
 set tmake(writecache) 0
 set tmake(subdirvars) {}
+set tmake(deferred) {}
 
 # Should these really be here?
 set tmake(headerscan) {}
@@ -152,13 +153,21 @@ proc make {argv} {
 
 	set tmake(prefix) ""
 
-	use rulebase
+	if {[info exists rulebase.spec]} {
+		invoke-spec-file rulebase.spec
+	} else {
+		invoke-spec-file $tmake(libdir)/rulebase.default
+	}
 
 	invoke-spec-file project.spec
 
 	# Loaded in the global scope 
 	if {![file exists build.spec]} {
 		user-error "No build.spec in the current directory"
+	}
+
+	foreach i $tmake(deferred) {
+		uplevel #0 $i
 	}
 
 	# Now load the cache if it exists
@@ -824,88 +833,106 @@ proc resolve-deferred-dependencies {} {
 	}
 }
 
+proc parse-rule-args {arglistname optname} {
+	upvar $arglistname arglist
+	upvar $optname opt
+	set arglist [lassign $arglist opt]
+
+	if {![string match -* $opt]} {
+		dev-error "Unexpected parameter for rule: $opt"
+	}
+	set opt [string range $opt 1 end]
+	if {$opt eq "vars"} {
+		set incr 2
+	} else {
+		set incr 1
+	}
+
+	for {set i 0} {$i < [llength $arglist]} {incr i $incr} {
+		if {[string match -* [lindex $arglist $i]]} {
+			incr i -1
+			break
+		}
+	}
+	set optlist [lrange $arglist 0 $i]
+	incr i
+	set arglist [lrange $arglist $i end]
+	return $optlist
+}
+
 # Returns a dictionary (list) representing the parsed target rule
 #
 proc parse-rule {target arglist} {
 	set info(source) [find-source-location]
-	set info(status) unknown
 	set info(target) $target
-	set info(add-do) {}
 
-	# XXX: This approach to parsing is really ugly!
+	array set info {
+		status unknown
+		inputs {} depends {} maybe-depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
+		replace 0 add 0 nofail 0 phony 0
+	}
 
-	set -inputs {}
-	set -depends {}
-	set -maybe-depends {}
-	set -clean {}
-	set -do {}
-	set -onerror {}
-	set -msg {}
-	set -vars {}
-	set -dyndep {}
-	set -add 0
-	set -replace 0
-	set -nofail 0
-	set -phony 0
-
-	set skip 0
-
-	foreach a $arglist {
-		if {$a in {-phony -add -replace -nofail}} {
-			incr $a
-			continue
+	# Parse an option followed by multiple non-options
+	while {[llength $arglist]} {
+		set optargs [parse-rule-args arglist opt]
+		switch -exact -- $opt {
+			phony - nofail - replace - add {
+				if {[llength $optargs]} {
+					dev-error "Rule for $target has non-option parameters after -$opt: $optargs"
+				}
+				set info($opt) 1
+			}
+			inputs - depends - maybe-depends {
+				lappend info($opt) {*}[join $optargs]
+			}
+			clean {
+				set info($opt) $optargs
+			}
+			do - msg - dyndep {
+				if {[llength $optargs] > 1} {
+					dev-error "Rule for $target has more than one '-$opt' parameter"
+				}
+				if {$opt eq "do"} {
+					set info($opt) $optargs
+				} else {
+					set info($opt) [lindex $optargs 0]
+				}
+			}
+			onerror {
+				lappend info($opt) {*}$optargs
+			}
+			vars {
+				if {[llength $optargs] % 2} {
+					dev-error "Rule for $target has an odd number of parameters to '-vars'"
+				}
+				lappend info($opt) {*}$optargs
+			}
+			getvars {
+				foreach v $optargs {
+					if {![info exists ::$v]} {
+						dev-error "Rule for $target has -getvars for non-existent variable: $v"
+					}
+					lappend info(vars) $v [set ::$v]
+				}
+			}
+			default {
+				dev-error "Rule for $target has unknown option: -$opt"
+			}
 		}
-		if {$skip == 0 && [string match -* $a]} {
-			if {![info exists $a]} {
-				error "Unknown option to target: $a"
-			}
-			set current $a
-			if {$a eq "-vars"} {
-				incr skip 2
-			}
-		} else {
-			if {$skip} {
-				incr skip -1
-			} elseif {$current eq "-vars"} {
-				set skip 1
-			}
-			lappend $current $a
-		}
 	}
 
-	if {[llength ${-vars}] % 2} {
-		dev-error "Rule for $target has an odd number of parameters to '-vars'"
-	}
-	if {[llength ${-do}] > 1} {
-		dev-error "Rule for $target has more than one '-do' parameter"
-	}
-	if {[llength ${-msg}] > 1} {
-		dev-error "Rule for $target has more than one '-msg' parameter"
-	}
-	if {[llength ${-dyndep}] > 1} {
-		dev-error "Rule for $target has more than one '-dyndep' parameter"
-	}
-	if {${-add} && ${-replace}} {
+	if {$info(add) && $info(replace)} {
 		dev-error "Rule for $target has both '-add' and '-replace'"
 	}
-	if {${-add}} {
-		if {![llength ${-do}]} {
+	if {$info(add)} {
+		if {![llength $info(do)]} {
 			dev-error "Rule for $target has '-add' but no '-do'"
 		}
 		# Transfer -do to add-do
-		set info(add-do) ${-do}
-		set -do ""
+		set info(add-do) $info(do)
+		set info(do) {}
 	}
-
-	set info(inputs) [join ${-inputs}]
-	set info(depends) [join ${-depends}]
-	set info(maybe-depends) [join ${-maybe-depends}]
-	set info(onerror) [lindex ${-onerror} 0]
-	set info(msg) [lindex ${-msg} 0]
-	set info(dyndep) [lindex ${-dyndep} 0]
-	foreach i {replace phony nofail vars do clean} {
-		set info($i) [set -$i]
-	}
+	unset info(add)
 
 	if {[llength $info(do)] == 0 && [llength $info(inputs)]} {
 		dev-error "Rule for $target has '-inputs' but no '-do'"
@@ -913,6 +940,7 @@ proc parse-rule {target arglist} {
 	if {[llength $info(do)] == 0 && $info(msg) ne ""} {
 		dev-error "Rule for $target has '-msg' but no '-do'"
 	}
+
 	array get info
 }
 
