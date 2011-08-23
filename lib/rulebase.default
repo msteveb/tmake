@@ -350,7 +350,7 @@ proc Install {args} {
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] src target
 			lappend srcs $src
-			InstallFile [file join $dest $target] $src $bin
+			InstallFile [file join $dest $target] [make-local $src] $bin
 			continue
 		} else {
 			set flist $i
@@ -358,9 +358,9 @@ proc Install {args} {
 		foreach j $flist {
 			lappend srcs $j
 			if {$keepdir} {
-				InstallFile [file join $dest $j] $j $bin
+				InstallFile [file join $dest $j] [make-local $j] $bin
 			} else {
-				InstallFile [file join $dest [file tail $j]] $j $bin
+				InstallFile [file join $dest [file tail $j]] [make-local $j] $bin
 			}
 		}
 	}
@@ -386,7 +386,11 @@ proc Clean {type args} {
 
 proc Generate {target script inputs rules} {
 	# XXX: Would be nice if script and inputs were optional
-	target $target -inputs {*}$inputs -depends $script -vars script $script -do $rules -msg {note Generate $target}
+	set target [make-local {*}$target]
+	if {$script ne ""} {
+		set script [make-local $script]
+	}
+	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $script -do $rules -msg {note Generate $target}
 	Clean clean $target
 }
 

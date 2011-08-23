@@ -1,3 +1,5 @@
+*** Should have Clean, Distclean and Uninstall which call clean and add make-local
+
 Subdirectories
 --------------
 

@@ -288,10 +288,18 @@ proc process-build-spec-file {dir} {
 	set saved [save-subdir-vars]
 
 	BuildSpecProlog
-	invoke-spec-file $path
+	set rc [catch {invoke-spec-file $path} msg opts]
 	BuildSpecEpilog
 
 	restore-subdir-vars $saved
+
+	if {$rc == 20} {
+		puts "Skipping $path"
+		return
+	}
+	if {$rc != 0 && $rc != 2} {
+		return -code $rc {*}$opts $msg 
+	}
 
 	# Now subdirectories
 	incr tmake(depth)
@@ -888,7 +896,7 @@ proc parse-rule {target arglist} {
 			clean {
 				set info($opt) $optargs
 			}
-			do - msg - dyndep {
+			do - msg - dyndep - onerror {
 				if {[llength $optargs] > 1} {
 					dev-error "Rule for $target has more than one '-$opt' parameter"
 				}
@@ -897,9 +905,6 @@ proc parse-rule {target arglist} {
 				} else {
 					set info($opt) [lindex $optargs 0]
 				}
-			}
-			onerror {
-				lappend info($opt) {*}$optargs
 			}
 			vars {
 				if {[llength $optargs] % 2} {
@@ -1268,7 +1273,7 @@ proc build {target} {
 			foreach f $ruletarget {
 				if {![file exists $f]} {
 					# XXX: Should onerror run here if --quickstop is set?
-					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s)"
+					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s) $f"
 					# Use break to indicate that we have already output the message
 					set rc 3
 				} else {

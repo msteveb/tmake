@@ -9,7 +9,7 @@
 proc do_ifconfig {name expr exprargs} {
 	if {[llength $exprargs] == 0} {
 		# bare 'ifconfig expr'
-		do_if_else 3 $expr "" "error .skip"
+		do_if_else 3 $expr "" "return -code 20 skip"
 		return
 	}
 
