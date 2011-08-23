@@ -1207,7 +1207,7 @@ proc build {target} {
 		tmake-exit $tmake(exitcode)
 	}
 
-	if {$result == 0} {
+	if {$result == 0 && [llength $depends]} {
 		# 3.  Target exists but no dependencies were built so check time dependencies
 		if {[needbuild? $ruletarget $depends depfile]} {
 			lappend reason older $depfile
