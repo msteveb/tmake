@@ -388,7 +388,13 @@ proc Generate {target script inputs rules} {
 	# XXX: Would be nice if script and inputs were optional
 	set target [make-local {*}$target]
 	if {$script ne ""} {
-		set script [make-local $script]
+		set localscript [make-local $script]
+		if {[is-target? $localscript] || [file exists $localscript]} {
+			set script $localscript
+		} else {
+			# A non-local generator script must be in publish/bin
+			set script [file join $::PUBLISH bin $script]
+		}
 	}
 	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $script -do $rules -msg {note Generate $target}
 	Clean clean $target
