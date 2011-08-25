@@ -251,9 +251,13 @@ proc IncludePaths {args} {
 	C++Flags [prefix -I $paths]
 }
 
-proc Load {filename} {
+proc Load {args} {
+	getopt {--required filename} args
 	set filename [make-local $filename]
 	if {![file exists $filename]} {
+		if {$required} {
+			user-error "$filename does not exist, do you need run ./configure?"
+		}
 		puts "Warning: $filename does not yet exist"
 	} else {
 		uplevel #0 [list source $filename]
