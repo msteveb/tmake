@@ -12,6 +12,7 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 set tmake(version) 0.1
 set tmake(debug) 0
 #  d = dynamic dependency
+#  D = ignored dynamic dependency 
 #  b = reasons for building
 #  n = reasons for not building
 #  r = show rule for target being considered (combines with -db, -dn)
@@ -20,7 +21,7 @@ set tmake(debug) 0
 #  g = graph dependencies executed
 #  p = show high level rules as they are parsed
 #  m = miscellaneous debug
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(showtime) 0
@@ -1418,7 +1419,7 @@ proc find-file {filename paths} {
 			return $f
 		}
 	}
-	dputs d "Not a file and not a target, $filename"
+	dputs D "Not a file and not a target, $filename"
 	return ""
 }
 
