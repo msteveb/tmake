@@ -1,5 +1,5 @@
 _all:
-	$(MAKE) -C .. $(MFLAGS) subdir/all
+	+@/Volumes/Development/tmake/tmake $(MFLAGS) subdir/all
 
-$(.TARGETS) $(MAKECMDGOALS):
-	$(MAKE) -C .. $(MFLAGS) subdir/$@
+ $(.TARGETS) $(MAKECMDGOALS):
+	+@/Volumes/Development/tmake/tmake $(MFLAGS) subdir/$@

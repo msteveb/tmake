@@ -51,6 +51,7 @@ proc init-tmake {} {
 	set tmake(subdirvars) {}
 	set tmake(subdirs) {}
 	set tmake(prefix) ""
+	set tmake(localmakefile) Makefile
 }
 
 init-tmake
@@ -69,7 +70,8 @@ proc make {argv} {
 
 	use compat
 
-	set tmake(dir) [file-normalize [file dirname $::argv0]]
+	set tmake(exe) [file-normalize $::argv0]
+	set tmake(dir) [file dirname $tmake(exe)]
 	set tmake(libdir) $tmake(dir)/lib
 	set tmake(start) [clock-millis]
 

@@ -87,6 +87,14 @@ proc BuildSpecProlog {} {
 }
 
 proc BuildSpecEpilog {} {
+	if {$::tmake(localmakefile) ni {none -none}} {
+		set makefile [make-local $::tmake(localmakefile)]
+		if {![file exists $makefile]} {
+			writefile $makefile "_all:\n\t+@$::tmake(exe) \$(MFLAGS) $::tmake(prefix)all\n\n\
+\$(.TARGETS) \$(MAKECMDGOALS):\n\t+@$::tmake(exe) \$(MFLAGS) $::tmake(prefix)\$@\n"
+		}
+		Clean distclean $makefile
+	}
 }
 
 # ==================================================================
@@ -416,6 +424,10 @@ proc Depends {target args} {
 proc Phony {target args} {
 	show-this-rule
 	Depends $target -phony -depends {*}$args
+}
+
+proc LocalMakefile {name} {
+	set ::tmake(localmakefile) $name
 }
 
 # ==================================================================

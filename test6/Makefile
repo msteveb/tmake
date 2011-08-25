@@ -1,5 +1,5 @@
 _all:
-	+@jimsh ../tmake $(MFLAGS) all
+	+@/Volumes/Development/tmake/tmake $(MFLAGS) all
 
-$(.TARGETS) $(MAKECMDGOALS):
-	+@jimsh ../tmake $(MFLAGS) $@
+ $(.TARGETS) $(MAKECMDGOALS):
+	+@/Volumes/Development/tmake/tmake $(MFLAGS) $@
