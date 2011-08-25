@@ -155,13 +155,8 @@ if {[opt-bool references]} {
     msg-result "Enabling references"
     define JIM_REFERENCES
 }
-if {[opt-bool shared with-jim-shared]} {
-    msg-result "Building shared library"
-    define JIM_LIBTYPE shared
-} else {
-    msg-result "Building static library"
-    define JIM_LIBTYPE static
-}
+define JIM_SHAREDLIB [opt-bool shared with-jim-shared]
+
 if {[opt-bool install-jim]} {
     define install_jim 1
 } else {
@@ -325,7 +320,7 @@ foreach i [lsort $ext_all] {
 if {[have-feature windows]} {
     lappend extra_objs jim-win32compat.o
 
-    if {$extmod ne "" && [get-define JIM_LIBTYPE] eq "static"} {
+    if {$extmod ne "" && ![get-define JIM_SHAREDLIB]} {
         user-error "cygwin/mingw require --shared for dynamic modules"
     }
 }
@@ -343,7 +338,7 @@ if {$jimregexp || [opt-bool jim-regexp]} {
 
     # If the built-in regexp overrides the system regcomp, etc.
     # jim must be built shared so that the correct symbols are found
-    if {"regexp" in $extmod && [get-define JIM_LIBTYPE] eq "static" && [have-feature regcomp]} {
+    if {"regexp" in $extmod && ![get-define JIM_SHAREDLIB] && [have-feature regcomp]} {
         user-error "Must use --shared with regexp module and built-in regexp"
     }
 }

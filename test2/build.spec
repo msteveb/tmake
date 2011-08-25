@@ -1,4 +1,14 @@
-Load settings.conf
+# vim:set syntax=tcl:
+
+Load --required settings.conf
+Depends settings.conf auto.def -do {
+	note "Configure"
+	run $AUTOREMAKE >config.out
+}
+
+if {$JIM_SHAREDLIB} {
+	dev-error "Sorry, --shared not yet implemented in tmake"
+}
 
 set SRCS {}
 define? DESTDIR _install
@@ -33,9 +43,8 @@ Generate _initjimsh.c make-c-ext.tcl initjimsh.tcl {
 }
 
 Generate _loadstatic.c make-load-static-exts.tcl {} {
-	run $tclsh $script $exts >$target
+	run $tclsh $script $JIM_STATIC_TCL_EXTS $JIM_STATIC_C_EXTS >$target
 }
-target _loadstatic.c -vars exts "$JIM_STATIC_TCL_EXTS $JIM_STATIC_C_EXTS"
 
 ifconfig JIM_UTF8 {
 	Generate _unicode_mapping.c parse-unidata.tcl UnicodeData.txt {
