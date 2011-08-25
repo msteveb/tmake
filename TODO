@@ -1,16 +1,10 @@
-*** Should have Clean, Distclean and Uninstall which call clean and add make-local
+Reloading build definitions
+---------------------------
+It's possible to run a command which updates the build definition,
+probably via Load.
 
-Subdirectories
---------------
-
-Note that Jam allows the rule to capture per-rule flags.
-e.g.
-
-    CCFLAGS on $(<) += $(CCFLAGS) $(SUBDIRCCFLAGS) $(OPTIM) ;
-
-Why can't we do the same? I think the problem is that OBJRULE()
-is a simple rule. Perhaps it needs to be a proc which returns
--vars and other args to target
+The idea is to detect when one of these files is modified and
+reload the build definition and restart.
 
 Publish
 -------
@@ -34,7 +28,7 @@ If hard links aren't supported, soft links or simply copying will work too.
 Unlike Install where the installed files are never dependencies, these
 published files become the dependency via the chain:
 
-  dir2/target.o <- _publish/include/file.h <- dir1/file.h
+  dir2/target.o <- publish/include/file.h <- dir1/file.h
 
 A typical scenario is where a library and some header files need to be exported
 from a directory. build.spec would look something like this.
@@ -50,16 +44,34 @@ To publish an executable (say, needed during the build):
 
   HostExecutable --publish generate generate.c
 
-Now the direction which uses these published files does something like:
+Now the directory which uses these published files does something like:
 
   # Note that published header files are found automatically
 
-  Generate table.c input.txt [FindBin generate] {
+  Generate table.c [FindBin generate] input.txt {
     run $script $inputs >$target
   }
   Executable xyz main.c table.c [FindLib my]
 
-Here FindBin and FindLib return the path to the published files
+Here FindBin and FindLib return the path to the published files.
+
+Currently it isn't done this way.
+One of the reasons is that the appropriate build.spec may not have been parsed,
+so it's not clear where to search.
+Instead, Generate assumes that if the file or target isn't found locally it
+must be in publish/bin, and non-local libs are always searched in publish/lib.
+
+This may be a problem when we have both shared and archive libs.
+In that case, we will need to create a dependency on (.e.g publish/lib/libname.stamp)
+but link with -Lpublish/lib -llibname
+
+So currently we have:
+
+  Generate table.c generate input.txt {
+    run $script $inputs >$target
+  }
+  UseLibs my
+  Executable xyz main.c table.c
 
 Out of tree build
 -----------------
@@ -121,6 +133,8 @@ tmake TODO
   ifconfig should look there
   - Perhaps it is possible to also import certain of these settings (by glob)
     as global variables
+* archive libraries uses a pretty simple format.
+  we could parse these libraries for timestamps directly in Tcl if required
 
 Done
 ----
@@ -151,3 +165,13 @@ Done
 * There is a problem in handling rules which run but don't update the target because
   nothing has changed. Ideally we would record the fact that the rule had run in
   a cache file along with the time that the rule ran. See .makecache
+
+Subdirectories
+--------------
+
+Note that Jam allows the rule to capture per-rule flags.
+e.g.
+
+    CCFLAGS on $(<) += $(CCFLAGS) $(SUBDIRCCFLAGS) $(OPTIM) ;
+
+tmake does something similar with C_FLAGS and CCFLAGS.

@@ -252,11 +252,14 @@ proc IncludePaths {args} {
 }
 
 proc Load {filename} {
+	set filename [make-local $filename]
 	if {![file exists $filename]} {
 		puts "Warning: $filename does not yet exist"
 	} else {
 		uplevel #0 [list source $filename]
 	}
+	# Add a build dependency
+	lappend ::tmake(projfiles) $filename
 }
 
 proc UseSystemLibs {args} {

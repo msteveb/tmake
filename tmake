@@ -23,26 +23,34 @@ set tmake(debug) 0
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0}
 set tmake(verbose) 0
 set tmake(norun) 0
-set tmake(current) {}
-set tmake(rules) {}
-set tmake(targets) {}
-set tmake(numtargets) 0
 set tmake(showtime) 0
 set tmake(quickstop) 0
 set tmake(showrules) 0
 set tmake(exitcode) 0
 set tmake(modules) {}
 set tmake(autosubdirs) 1
-set tmake(subdirs) {}
 set tmake(cache) {}
 set tmake(writecache) 0
-set tmake(subdirvars) {}
 set tmake(deferred) {}
 
 # Should these really be here?
 set tmake(headerscan) {}
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
+
+proc init-tmake {} {
+	global tmake
+
+	set tmake(current) {}
+	set tmake(rules) {}
+	set tmake(targets) {}
+	set tmake(numtargets) 0
+	set tmake(subdirvars) {}
+	set tmake(subdirs) {}
+	set tmake(prefix) ""
+}
+
+init-tmake
 
 # ==================================================================
 # Argument Processing
@@ -159,34 +167,57 @@ proc make {argv} {
 		invoke-spec-file $tmake(libdir)/rulebase.default
 	}
 
-	invoke-spec-file project.spec
+	while {1} {
+		invoke-spec-file project.spec
 
-	# Loaded in the global scope 
-	if {![file exists build.spec]} {
-		user-error "No build.spec in the current directory"
+		# Loaded in the global scope 
+		if {![file exists build.spec]} {
+			user-error "No build.spec in the current directory"
+		}
+
+		foreach i $tmake(deferred) {
+			uplevel #0 $i
+		}
+
+		# Now load the cache if it exists
+		if {[file exists .makecache]} {
+			source .makecache
+		}
+
+		process-build-spec-file .
+
+		resolve-deferred-dependencies
+
+		if {$tmake(showrules)} {
+			show-all-rules
+		}
+
+		# If any files specified to Load are targets,
+		# build them before anything else
+		set reload 0
+		foreach t $tmake(projfiles) {
+			set rc [build $t]
+			if {$rc < 0} {
+				if {$tmake(exitcode) == 0} {
+					build-error "Error: Don't know how to build $t"
+				}
+				break
+			}
+			if {$rc > 0} {
+				dputs m "$t has changed, reloading..."
+				set reload 1
+			}
+		}
+		if {!$reload} {
+			break
+		}
+		init-tmake
 	}
-
-	foreach i $tmake(deferred) {
-		uplevel #0 $i
-	}
-
-	# Now load the cache if it exists
-	if {[file exists .makecache]} {
-		source .makecache
-	}
-
-	process-build-spec-file .
-
-	resolve-deferred-dependencies
 
 	# Now build the targets
 
 	if {[llength $targets] == 0} {
 		set targets all
-	}
-
-	if {$tmake(showrules)} {
-		show-all-rules
 	}
 
 	foreach t $targets {

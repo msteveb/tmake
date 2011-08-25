@@ -7,7 +7,8 @@ options {
 }
 
 set f [open settings.conf w]
-foreach {n v} [all-defines] {
+foreach n [lsort [dict keys [all-defines]]] {
+    set v [get-define $n]
     puts $f "set $n [list $v]"
 }
 close $f
