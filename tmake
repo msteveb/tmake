@@ -385,6 +385,7 @@ proc discard-orphan-targets {} {
 			catch {
 				dict unset ::tmake(cmdcache) [get-rule-target $i]
 			}
+			set ::tmake(writecache) 1
 		}
 	}
 }
