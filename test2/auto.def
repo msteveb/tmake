@@ -382,6 +382,6 @@ set f [open settings.conf w]
 foreach n [lsort [dict keys $d]] {
     set v [dict get $d $n]
     set v [string map [list \${prefix} [get-define prefix] \${exec_prefix} [get-define prefix]] $v]
-    puts $f "set $n [list $v]"
+    puts $f "define? $n [list $v]"
 }
 close $f

@@ -6,25 +6,27 @@
 # Default variable settings and rules
 # ==================================================================
 
-set CCACHE ""
-set CC cc
-set CCLD cc
-set CC_FOR_BUILD cc
-set CXX c++
-set AR ar
-set RANLIB ranlib
-set ARFLAGS cr
-set SH_LINKFLAGS ""
-set LOCAL_LIBS ""
-set DESTDIR ""
-set OBJCFLAGS ""
-set INCPATHS .
+# XXX: If settings are loaded via Load, these should all be ignored
+
+define? CCACHE ""
+define? CC cc
+define? CCLD cc
+define? CC_FOR_BUILD cc
+define? CXX c++
+define? AR ar
+define? RANLIB ranlib
+define? ARFLAGS cr
+define? SH_LINKFLAGS ""
+define? LOCAL_LIBS ""
+define? DESTDIR ""
+define? OBJCFLAGS ""
+define? INCPATHS .
 
 # These are normally specified by the user, either with configure
 # or overridden on the command line or the environment
-set CFLAGS ""
-set CXXFLAGS ""
-set LDFLAGS ""
+define? CFLAGS ""
+define? CXXFLAGS ""
+define? LDFLAGS ""
 
 # These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
 set C_FLAGS ""
@@ -37,10 +39,10 @@ set PUBLISH publish
 # XXX: Either reuse cc-shared.tcl or expect these to be set
 #      in settings.conf
 #
-define SH_CFLAGS -dynamic
-define SH_LDFLAGS "-dynamiclib"
-define SHOBJ_CFLAGS "-dynamic -fno-common"
-define SHOBJ_LDFLAGS "-bundle -undefined dynamic_lookup"
+define? SH_CFLAGS -dynamic
+define? SH_LDFLAGS "-dynamiclib"
+define? SHOBJ_CFLAGS "-dynamic -fno-common"
+define? SHOBJ_LDFLAGS "-bundle -undefined dynamic_lookup"
 
 set PROJLIBS ""
 set SYSLIBS ""

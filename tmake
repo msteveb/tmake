@@ -30,6 +30,7 @@ set tmake(exitcode) 0
 set tmake(modules) {}
 set tmake(autosubdirs) 1
 set tmake(cache) {}
+set tmake(cmdcache) {}
 set tmake(writecache) 0
 set tmake(deferred) {}
 
@@ -89,6 +90,7 @@ proc make {argv} {
 			} elseif {$n eq "Q"} {
 				incr tmake(quickstop)
 			} else {
+				dputs m "define $n $v"
 				define $n $v
 			}
 		} elseif {[string match -* $a]} {
@@ -141,6 +143,8 @@ proc make {argv} {
 				-C* {
 					# XXX: Should be "-C dir" but that is waiting for getopt
 					cd [string range $a 2 end]
+				}
+				-- {
 				}
 				--* {
 					user-error "Unknown option $a"
@@ -376,6 +380,9 @@ proc discard-orphan-targets {} {
 	foreach i [dict keys $::tmake(cache)] {
 		if {![is-target? $i]} {
 			dict unset ::tmake(cache) $i
+			catch {
+				dict unset ::tmake(cmdcache) [get-rule-target $i]
+			}
 		}
 	}
 }
@@ -440,7 +447,7 @@ proc dev-error {msg} {
 proc tmake-exit {code} {
 	# Write the cache before exiting
 	if {$::tmake(writecache)} {
-		writefile .makecache [list set tmake(cache) $::tmake(cache)]
+		writefile .makecache "set tmake(cache) [list $::tmake(cache)]\nset tmake(cmdcache) [list $::tmake(cmdcache)]"
 	}
 	exit $code
 }
@@ -1246,6 +1253,22 @@ proc build {target} {
 		}
 	}
 
+	set-target-vars [array get t]
+
+	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(cmdcache) $ruletarget]} {
+		set rc [catch {uplevel #0 [list subst $t(do)]} do]
+		if {$rc != 0} {
+			dputs m "Warning: subst failed for rule $ruletarget"
+		}
+		set prevdo [dict get $tmake(cmdcache) $ruletarget]
+		if {$rc == 0 && $do ne $prevdo} {
+			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
+			set result 1
+		} else {
+			dputs n "Commands for $ruletarget are unchanged"
+		}
+	}
+
 	if {$result > 0} {
 		if {[debug-is-set g]} {
 			puts "\[g\] [join $current { --> }] ($reason)"
@@ -1255,7 +1278,6 @@ proc build {target} {
 	if {$result > 0 && [llength $t(do)]} {
 		#puts "Running rules for $ruletarget"
 		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $t(source) "with rule @"]"
-		set-target-vars [array get t]
 		uplevel #0 $t(msg)
 		if {[dict get $tmake(debugtypes) r]} {
 			show-rule $ruletarget
@@ -1311,6 +1333,9 @@ proc build {target} {
 					# Record the time that this target was created, along with the real mtime
 					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
 					set tmake(writecache) 1
+
+					# And save the commands in the command cache
+					dict set tmake(cmdcache) $ruletarget [uplevel #0 [list subst $t(do)]]
 				}
 			}
 		}
