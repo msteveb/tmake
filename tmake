@@ -34,6 +34,7 @@ set tmake(cache) {}
 set tmake(cmdcache) {}
 set tmake(writecache) 0
 set tmake(deferred) {}
+set tmake(projfiles) {}
 
 # Should these really be here?
 set tmake(headerscan) {}
