@@ -11,26 +11,8 @@ UseSystemLibs -luweb -ltcl6
 
 CFlags -Wall -g -Os -I. -I$UWEB/include
 
-set srcs {}
-
-foreach i [glob *.page *.app *.menus] {
-	Generate $i.c {} $i {
-		switch -glob -- $inputs {
-			*.page {
-				run $UWEB/bin/parse-page $inputs -o $target
-			}
-			*.app {
-				run $UWEB/bin/parse-app $inputs -o $target
-			}
-			*.menus {
-				run $UWEB/bin/parse-layout $inputs -o $target
-			}
-		}
-	}
-	define-append srcs $i.c
-}
-
-Executable --install=/home/httpd/cgi-bin web auth.c customstorage.c init.c main.c tclcustom.c $srcs
+Executable --install=/home/httpd/cgi-bin web auth.c customstorage.c init.c main.c tclcustom.c \
+	[CgiSources *.page *.app *.menus]
 
 Install /home/httpd/css *.css $THEMES/basic.css=basic1.css
 Install /home/httpd/javascript *.js
@@ -45,5 +27,3 @@ Phony run install -do {
 	puts "Point your browser to http://localhost:8000/"
 	run $DESTDIR/home/httpd/cgi-bin/web server 8000
 }
-
-Phony server run
