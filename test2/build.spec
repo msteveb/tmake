@@ -1,7 +1,7 @@
 # vim:set syntax=tcl:
 
 Load --required settings.conf
-Depends settings.conf auto.def -do {
+Depends {settings.conf jimautoconf.h jim-config.h} auto.def -do {
 	note "Configure"
 	run $AUTOREMAKE >config.out
 }
@@ -9,6 +9,8 @@ Depends settings.conf auto.def -do {
 if {$JIM_SHAREDLIB} {
 	dev-error "Sorry, --shared not yet implemented in tmake"
 }
+
+UseSystemLibs $LIBS
 
 set SRCS {}
 define? DESTDIR _install

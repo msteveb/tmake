@@ -9,7 +9,7 @@ options {
     lineedit=1      => "disable line editing"
     references=1    => "disable support for references"
     math            => "include support for math functions"
-    ipv6            => "include ipv6 support in the aio extension"
+    ipv6=1            => "include ipv6 support in the aio extension"
     maintainer      => {enable the [debug] command and JimPanic}
     full            => "Enable some optional features: ipv6, math, utf8, binary, oo, tree"
     with-jim-shared shared => "build a shared library instead of a static library"
@@ -382,6 +382,6 @@ set f [open settings.conf w]
 foreach n [lsort [dict keys $d]] {
     set v [dict get $d $n]
     set v [string map [list \${prefix} [get-define prefix] \${exec_prefix} [get-define prefix]] $v]
-    puts $f "define? $n [list $v]"
+    puts $f "define $n [list $v]"
 }
 close $f

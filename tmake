@@ -35,26 +35,21 @@ set tmake(cmdcache) {}
 set tmake(writecache) 0
 set tmake(deferred) {}
 set tmake(projfiles) {}
+set tmake(fixedvars) {}
 
 # Should these really be here?
 set tmake(headerscan) {}
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
 
-proc init-tmake {} {
-	global tmake
-
-	set tmake(current) {}
-	set tmake(rules) {}
-	set tmake(targets) {}
-	set tmake(numtargets) 0
-	set tmake(subdirvars) {}
-	set tmake(subdirs) {}
-	set tmake(prefix) ""
-	set tmake(localmakefile) Makefile
-}
-
-init-tmake
+set tmake(current) {}
+set tmake(rules) {}
+set tmake(targets) {}
+set tmake(numtargets) 0
+set tmake(subdirvars) {}
+set tmake(subdirs) {}
+set tmake(prefix) ""
+set tmake(localmakefile) Makefile
 
 # ==================================================================
 # Argument Processing
@@ -95,7 +90,7 @@ proc make {argv} {
 				incr tmake(quickstop)
 			} else {
 				dputs m "define $n $v"
-				define $n $v
+				define! $n $v
 			}
 		} elseif {[string match -* $a]} {
 			if {$a eq "-d*"} {
@@ -175,6 +170,19 @@ proc make {argv} {
 		invoke-spec-file $tmake(libdir)/rulebase.default
 	}
 
+	# Save the global state unless we need to reload
+	# XXX: It would be MUCH nicer of this wasn't held in global vars!
+	#      Maybe 'dict with' ?
+
+	set tmake_save $tmake
+	set gobalvars {}
+	# And save all the global vars too
+	foreach i [info globals {[A-Z]*}] {
+		dict set globalvars $i [set ::$i]
+	}
+
+	set maybereload 1
+
 	while {1} {
 		invoke-spec-file project.spec
 
@@ -187,8 +195,8 @@ proc make {argv} {
 			uplevel #0 $i
 		}
 
-		# Now load the cache if it exists
-		if {[file exists .makecache]} {
+		# Now load the cache if it exists and it isn't the second time through
+		if {$maybereload && [file exists .makecache]} {
 			source .makecache
 		}
 
@@ -200,26 +208,46 @@ proc make {argv} {
 			show-all-rules
 		}
 
-		# If any files specified to Load are targets,
-		# build them before anything else
 		set reload 0
-		foreach t $tmake(projfiles) {
-			set rc [build $t]
-			if {$rc < 0} {
-				if {$tmake(exitcode) == 0} {
-					build-error "Error: Don't know how to build $t"
+		if {$maybereload} {
+			# If any files specified to Load are targets,
+			# build them before anything else
+			foreach t $tmake(projfiles) {
+				set rc [build $t]
+				if {$rc < 0} {
+					if {$tmake(exitcode) == 0} {
+						build-error "Error: Don't know how to build $t"
+					}
+					break
 				}
-				break
-			}
-			if {$rc > 0} {
-				dputs m "$t has changed, reloading..."
-				set reload 1
+				if {$rc > 0} {
+					dputs m "$t has changed, reloading..."
+					set reload 1
+				}
 			}
 		}
 		if {!$reload} {
+			unset tmake_save
+			unset globalvars
 			break
 		}
-		init-tmake
+
+		if {$tmake(writecache)} {
+			# Cache has been updated, so save it
+			dict set tmake_save cache $tmake(cache)
+			dict set tmake_save cmdcache $tmake(cmdcache)
+			dict set tmake_save writecache 1
+		}
+
+		# Restore the state
+		set tmake $tmake_save
+
+		# Including global vars
+		foreach i [dict keys $globalvars] {
+			set ::$i [dict get $globalvars $i]
+		}
+		# Will only do this once
+		set maybereload 0
 	}
 
 	# Now build the targets
@@ -591,6 +619,16 @@ proc show-all-rules {} {
 # e.g. define CC arm-linux-gcc -mbig-endian
 #
 proc define {name args} {
+	#puts "define $name $args"
+	if {![dict exists $::tmake(fixedvars) $name]} {
+		upvar #0 $name n
+		set n [join $args]
+	}
+}
+
+proc define! {name args} {
+	#puts "define! $name $args"
+	dict set ::tmake(fixedvars) $name 1
 	upvar #0 $name n
 	set n [join $args]
 }
@@ -599,9 +637,10 @@ proc define {name args} {
 # unless it is already set to a non-empty value.
 #
 proc define? {name args} {
+	#puts "define? $name $args"
 	upvar #0 $name n
 	if {![info exists n] || $n eq ""} {
-		set n [join $args]
+		define $name {*}$args
 	}
 }
 
@@ -1283,6 +1322,12 @@ proc build {target} {
 		set prevdo [dict get $tmake(cmdcache) $ruletarget]
 		if {$rc == 0 && $do ne $prevdo} {
 			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
+			#puts "=== old ==="
+			#puts $prevdo
+			#puts "=== new ==="
+			#puts $do
+			#puts "-----------"
+			lappend reason commands
 			set result 1
 		} else {
 			dputs n "Commands for $ruletarget are unchanged"
@@ -1353,6 +1398,7 @@ proc build {target} {
 					# Record the time that this target was created, along with the real mtime
 					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
 					set tmake(writecache) 1
+					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 
 					# And save the commands in the command cache
 					dict set tmake(cmdcache) $ruletarget [uplevel #0 [list subst $t(do)]]

@@ -1,11 +1,5 @@
-# Avoid built-in rules and variables
-MAKEFLAGS += rR
+_all:
+	+@/Volumes/Development/tmake/tmake $(MFLAGS) all
 
-all clean distclean:
-	+@jimsh ../tmake $(MFLAGS) $@
-
-%:
-	+@jimsh ../tmake $(MFLAGS) $(MAKECMDGOALS)
-
-.EXPORT_ALL_VARIABLES:
-
+ $(.TARGETS) $(MAKECMDGOALS):
+	+@/Volumes/Development/tmake/tmake $(MFLAGS) $@

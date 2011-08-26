@@ -6,6 +6,10 @@ probably via Load.
 The idea is to detect when one of these files is modified and
 reload the build definition and restart.
 
+This is currently done partially manually.
+After parsing, any targets of Load are built.
+If anything changes, parsing is restarted.
+
 Publish
 -------
 The idea here is that normally any files referred to in a build.spec
@@ -91,6 +95,13 @@ Integrating foreign projects
 ----------------------------
 autotools-based, make-based
 
+We can just add a call to make or something similar,
+but what if the external project builds libraries, etc.
+which we need? We kind of want a "prebuild" dependency
+which will be built before any of the given targets.
+But what if we are just building clean or some local target?
+What is the scope of this external dependency?
+
 Combining tmake-based projects
 ------------------------------
 Adding a tmake project as a subproject
@@ -102,27 +113,30 @@ Also migration from automake
 
 tmake TODO
 ----------
-* Does .makecache and tmake(cache) ever need to be cleaned up?
-  - Should record the real mtime as well as the virtual mtime.
-    If the real mtime changes (or the file disappears) we need to flush the entry
-* Add support for per-directory rules. Probably need something like Jam's <grist>
-  - except I will probably use "path/from/top" as the grist
-* Read project.spec and build.spec in subdirs
+* Properly manage the precedence of vars:
+  - command line => make these as "fixed"
+  - environment => these need to be made fixed with 'import'
+  - Load settings.conf => use define to override everything which is not "fixed"
+  - Defaults in rulebase.* => use define? as a last resort
+* I think I plan to set all variables and execute rules in a separate interpreter
+  - But what about parsing of rules? Currently we rely on having access to variables
+    in build.spec and rulebase.
 * Have a 'tmake -init' which will generate stub Makefiles (if they don't exist)
   - This should probably be run by configure
-* Allow detection of build rule dependencies (project.spec, build.spec, settings.conf)
-  and reload rules.
+  - Currently they are always created if they don't exist
 * Work out a good arrangement for the distribution of:
-  - low level rules
-  - high level rules
-  - default rule base
-  - local customisations
+  - low level rules (tmake)
+  - high level rules (lib/rulebase.default or rulebase.spec)
+  - default rule base (lib/rulebase.default)
+  - local customisations (rulebase.spec)
 * Add parallel build support.
   - With exec &, and os.wait
+  - This is actually quite hard to do
 * Support Test
+  - Got something. Do we need more?
+  - cd [make-local .]?
 * Support shared libraries
 * Do proper getopt processing for the tmake command line
-* Record commands used to build targets in a cache
 * Need support for host executables with (at least):
   - HostExecutable
   - HostCFlags
@@ -138,6 +152,7 @@ tmake TODO
 
 Done
 ----
+* Record commands used to build targets in a cache
 * Add a version number and --version
 * Add --help
 * Add getopt and use it like automf for Executable --test --install=/blah ...
@@ -165,6 +180,14 @@ Done
 * There is a problem in handling rules which run but don't update the target because
   nothing has changed. Ideally we would record the fact that the rule had run in
   a cache file along with the time that the rule ran. See .makecache
+* Does .makecache and tmake(cache) ever need to be cleaned up?
+  - Should record the real mtime as well as the virtual mtime.
+    If the real mtime changes (or the file disappears) we need to flush the entry
+* Add support for per-directory rules. Probably need something like Jam's <grist>
+  - except I will probably use "path/from/top" as the grist
+* Read project.spec and build.spec in subdirs
+* Allow detection of build rule dependencies (project.spec, build.spec, settings.conf)
+  and reload rules.
 
 Subdirectories
 --------------

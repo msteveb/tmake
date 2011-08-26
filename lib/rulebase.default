@@ -7,26 +7,28 @@
 # ==================================================================
 
 # XXX: If settings are loaded via Load, these should all be ignored
-
 define? CCACHE ""
 define? CC cc
-define? CCLD cc
 define? CC_FOR_BUILD cc
 define? CXX c++
 define? AR ar
 define? RANLIB ranlib
 define? ARFLAGS cr
 define? SH_LINKFLAGS ""
+define? CFLAGS ""
+define? CXXFLAGS ""
+define? LDFLAGS ""
+
+define? SH_CFLAGS ""
+define? SH_LDFLAGS ""
+define? SHOBJ_CFLAGS ""
+define? SHOBJ_LDFLAGS ""
+
+
 define? LOCAL_LIBS ""
 define? DESTDIR ""
 define? OBJCFLAGS ""
 define? INCPATHS .
-
-# These are normally specified by the user, either with configure
-# or overridden on the command line or the environment
-define? CFLAGS ""
-define? CXXFLAGS ""
-define? LDFLAGS ""
 
 # These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
 set C_FLAGS ""
@@ -35,14 +37,6 @@ set LD_FLAGS ""
 
 # XXX Should be $TOP/publish
 set PUBLISH publish
-
-# XXX: Either reuse cc-shared.tcl or expect these to be set
-#      in settings.conf
-#
-define? SH_CFLAGS -dynamic
-define? SH_LDFLAGS "-dynamiclib"
-define? SHOBJ_CFLAGS "-dynamic -fno-common"
-define? SHOBJ_LDFLAGS "-bundle -undefined dynamic_lookup"
 
 set PROJLIBS ""
 set SYSLIBS ""
@@ -69,7 +63,7 @@ set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
 
-lappend tmake(subdirvars) CFLAGS CXXFLAGS LDFLAGS PROJLIBS SYSLIBS INCPATHS
+lappend tmake(subdirvars) C_FLAGS CXX_FLAGS LD_FLAGS PROJLIBS SYSLIBS INCPATHS
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
@@ -77,12 +71,13 @@ lappend tmake(subdirvars) CFLAGS CXXFLAGS LDFLAGS PROJLIBS SYSLIBS INCPATHS
 proc BuildSpecProlog {} {
 	# Local phony targets build from the current directory down
 	if {[local-prefix] ne ""} {
-		foreach t {all clean distclean test} {
+		foreach t {all clean distclean test uninstall} {
 			Phony $t [make-local $t]
 			Phony [make-local $t]
 		}
 		CleanTarget clean
 		CleanTarget distclean
+		CleanTarget uninstall
 	}
 }
 
@@ -123,6 +118,8 @@ proc Executable {args} {
 # Link an executable from objects
 proc Link {target args} {
 	show-this-rule
+
+	define? CCLD $::CC
 
 	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
 	target $target -inputs {*}$args -msg {note Link $target} -getvars CCLD LD_FLAGS SYSLIBS -do {
@@ -462,4 +459,6 @@ Phony clean-orphans -do {
 }
 
 # XXX: Use an official API for this
-lappend tmake(deferred) {IncludePaths $PUBLISH/include}
+lappend tmake(deferred) {
+	IncludePaths $PUBLISH/include
+}
