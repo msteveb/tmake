@@ -398,7 +398,10 @@ proc CleanTarget {type} {
 # This adds files to be cleaned for the given type
 #
 proc Clean {type args} {
-	Phony [make-local $type] -vars cleanfiles [join $args]
+	# This could be done with Depends or target, but it is much
+	# faster to simply append to the rule variable directly
+	#Depends [make-local $type] -vars cleanfiles [join $args]
+	target-add-var [make-local $type] cleanfiles [join $args]
 }
 
 proc Generate {target script inputs rules} {

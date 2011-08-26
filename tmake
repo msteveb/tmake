@@ -554,7 +554,7 @@ proc show-rule {target} {
 				}
 				default {
 					if {$v ne ""} {
-						lappend lines "$n=$v"
+						lappend lines "$n=[string trim $v]"
 					}
 				}
 			}
@@ -864,6 +864,21 @@ proc target {ruletarget args} {
 
 	# Now create/update the rule
 	update-rule [array get info]
+}
+
+# Adds the list elements to the target-specific variable.
+#
+# This a much faster equivalent of:
+#
+#     target $ruletarget -vars $varname {*}$list
+#
+proc target-add-var {ruletarget varname list} {
+	# The rule must already exist
+	if {![is-rule? $ruletarget]} {
+		dev-error "$ruletarget is not a rule target"
+	}
+
+	dict-lappend ::tmake(rules) [list $ruletarget vars $varname] {*}$list
 }
 
 proc resolve-deferred-dependencies {} {
