@@ -37,23 +37,23 @@ Generate page_index.h mkindex [suffix .c $src] {
 	run ./mkindex $inputs >$target
 }
 
-set genheaders {}
+set gen_headers {}
 set headers {}
-set headerdeps {}
+set header_deps {}
 foreach b "$src main" {
 	Generate ${b}_.c translate $b.c {
 		run ./$script $inputs >$target
 	}
-	lappend genheaders ${b}_.c:include/$b.h
+	lappend gen_headers ${b}_.c:include/$b.h
 	lappend headers include/$b.h
-	lappend headerdeps ${b}_.c
+	lappend header_deps ${b}_.c
 }
-# REVISIT: makeheaders can do all headers in one invocation
-lappend genheaders sqlite3.h th.h include/VERSION.h
-lappend headerdeps sqlite3.h th.h include/VERSION.h
 
-target $headers -depends $headerdeps makeheaders -vars genheaders $genheaders -msg {note GenerateHeaders} -do {
-	run ./makeheaders $genheaders
+lappend gen_headers sqlite3.h th.h include/VERSION.h
+lappend header_deps sqlite3.h th.h include/VERSION.h
+
+target $headers -depends $header_deps makeheaders -vars gen_headers $gen_headers -msg {note GenerateHeaders} -do {
+	run ./makeheaders $gen_headers
 }
 Clean clean $headers
 
@@ -62,8 +62,6 @@ ObjectCFlags sqlite3.c -DSQLITE_OMIT_LOAD_EXTENSION=1 -DSQLITE_THREADSAFE=0 -DSQ
 ObjectCFlags sqlite3.c -DSQLITE_ENABLE_STAT2 -Dlocaltime=fossil_localtime -DSQLITE_ENABLE_LOCKING_STYLE=0
 
 ObjectCFlags shell.c -Dmain=sqlite3_shell -DSQLITE_OMIT_LOAD_EXTENSION=1
-
-Depends main_.c page_index.h
 
 Lib fossil [suffix _.c $src] th.c th_lang.c sqlite3.c shell.c
 
