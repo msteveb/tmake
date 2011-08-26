@@ -1,3 +1,13 @@
+Performance
+-----------
+Should cache the results of dyndep header scan.
+In order to use the cache, we need:
+- command needs to be identical
+- real mtime of the file needs to be unchanged
+- cache the results of header-scan-regexp, not header-scan-regexp-recursive
+  so we don't need to care if the targets or incpaths change
+- when to discard the cache results?
+
 Reloading build definitions
 ---------------------------
 It's possible to run a command which updates the build definition,

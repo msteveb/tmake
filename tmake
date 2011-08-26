@@ -18,10 +18,11 @@ set tmake(debug) 0
 #  r = show rule for target being considered (combines with -db, -dn)
 #  t = target rule creation/update
 #  c = configuration checking
+#  C = cache
 #  g = graph dependencies executed
 #  p = show high level rules as they are parsed
 #  m = miscellaneous debug
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(showtime) 0
@@ -38,7 +39,7 @@ set tmake(projfiles) {}
 set tmake(fixedvars) {}
 
 # Should these really be here?
-set tmake(headerscan) {}
+set tmake(headerscancache) {}
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
 
@@ -197,7 +198,8 @@ proc make {argv} {
 
 		# Now load the cache if it exists and it isn't the second time through
 		if {$maybereload && [file exists .makecache]} {
-			source .makecache
+			lassign [time {source .makecache}] us
+			dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
 		}
 
 		process-build-spec-file .
@@ -415,7 +417,10 @@ proc discard-orphan-targets {} {
 			catch {
 				dict unset ::tmake(cmdcache) [get-rule-target $i]
 			}
-			set ::tmake(writecache) 1
+			if {$::tmake(writecache) == 0} {
+				dputs C "discarding orphans, updated cache"
+				set ::tmake(writecache) 1
+			}
 		}
 	}
 }
@@ -478,9 +483,18 @@ proc dev-error {msg} {
 }
 
 proc tmake-exit {code} {
+	global tmake
+
 	# Write the cache before exiting
-	if {$::tmake(writecache)} {
-		writefile .makecache "set tmake(cache) [list $::tmake(cache)]\nset tmake(cmdcache) [list $::tmake(cmdcache)]"
+	if {$tmake(writecache)} {
+		lassign [time {
+			set f [open .makecache w]
+			puts $f [list set tmake(cache) $tmake(cache)]
+			puts $f [list set tmake(cmdcache) $tmake(cmdcache)]
+			puts $f [list set tmake(headerscancache) $tmake(headerscancache)]
+			close $f
+		}] us
+		dputs C "Wrote cache, .makecache in [expr {($us + 500) / 1000}]ms"
 	}
 	exit $code
 }
@@ -507,7 +521,7 @@ proc debug-is-set {types} {
 #
 proc dputs {types msg} {
 	if {[debug-is-set $types]} {
-		puts "[dbg-msg-indent]\[$types\] $msg"
+		puts "[dbg-msg-indent] \[$types\] $msg"
 	}
 }
 
@@ -1397,7 +1411,10 @@ proc build {target} {
 				} else {
 					# Record the time that this target was created, along with the real mtime
 					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
-					set tmake(writecache) 1
+					if {$tmake(writecache) == 0} {
+						dputs C "Targets built, updating cache"
+						set tmake(writecache) 1
+					}
 					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 
 					# And save the commands in the command cache
@@ -1452,9 +1469,19 @@ proc build {target} {
 # XXX: Stops scanning after 200 lines with no #include - should be at least configurable
 # 
 proc header-scan-regexp {regex filename} {
+	global tmake
+
 	# memoize the result
-	if {[dict exists $::tmake(headerscan) $filename,$regex]} {
-		return [dict get $::tmake(headerscan) $filename,$regex]
+	set mtime [file-real-mtime $filename]
+	if {[dict exists $tmake(headerscancache) $filename]} {
+		lassign [dict get $tmake(headerscancache) $filename] cache_mtime cache_regex headers
+		if {$cache_mtime == $mtime && $cache_regex eq $regex} {
+			# Can reuse the cache
+			dputs d "header-scan-regexp $filename (cached) => $headers"
+			return $headers
+		}
+		# Stale
+		dict unset tmake(headerscancache) $filename
 	}
 	set headers {}
 	set f [open $filename]
@@ -1468,7 +1495,11 @@ proc header-scan-regexp {regex filename} {
 		}
 	}
 	close $f
-	dict set ::tmake(headerscan) $filename,$regex $headers
+	dict set tmake(headerscancache) $filename [list $mtime $regex $headers]
+	if {$tmake(writecache) == 0} {
+		dputs C "New header scan, updating cache"
+		set tmake(writecache) 1
+	}
 	dputs d "header-scan-regexp $filename => $headers"
 	return $headers
 }
