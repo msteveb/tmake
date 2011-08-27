@@ -144,6 +144,7 @@ proc ArchiveLib {args} {
 
 	set target [make-local $libname]
 	target $target -inputs {*}[Objects {*}[join $args]] -msg {note Ar $target} -do {
+		file delete $target
 		run $AR $ARFLAGS $target $inputs
 		run $RANLIB $target
 	}

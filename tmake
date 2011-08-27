@@ -175,7 +175,7 @@ proc make {argv} {
 	# XXX: It would be MUCH nicer of this wasn't held in global vars!
 	#      Maybe 'dict with' ?
 
-	set tmake_save $tmake
+	set tmake_save [array get tmake]
 	set gobalvars {}
 	# And save all the global vars too
 	foreach i [info globals {[A-Z]*}] {
@@ -242,7 +242,8 @@ proc make {argv} {
 		}
 
 		# Restore the state
-		set tmake $tmake_save
+		unset tmake
+		array set tmake $tmake_save
 
 		# Including global vars
 		foreach i [dict keys $globalvars] {
@@ -1171,7 +1172,7 @@ proc run {args} {
 	set cmdline [join $args]
 	vputs [string trim $cmdline]
 	set rc [catch {
-		exec >@stdout {*}$cmdline
+		exec-save-stderr {*}$cmdline
 	} msg opts]
 	if {$rc == 1} {
 		# On error, display the command and the error and return break

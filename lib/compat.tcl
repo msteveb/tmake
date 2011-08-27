@@ -30,11 +30,6 @@ if {$tmakecompat(iswin)} {
 	}
 }
 
-# Assume that exec can return stdout and stderr
-proc exec-with-stderr {args} {
-	exec {*}$args 2>@1
-}
-
 if {$tmakecompat(istcl)} {
 	# Tcl doesn't have the env command
 	proc getenv {name args} {
@@ -49,6 +44,9 @@ if {$tmakecompat(istcl)} {
 	proc alias {new orig} {
 		interp alias {} $new {} $orig
 	}
+	proc exec-save-stderr {args} {
+		exec -ignorestderr -- >@stdout {*}$args
+	}
 } elseif {$tmakecompat(iswin)} {
 	# On Windows, backslash convert all environment variables
 	# (Assume that Tcl does this for us)
@@ -56,10 +54,10 @@ if {$tmakecompat(istcl)} {
 		string map {\\ /} [env $name {*}$args]
 	}
 	# Jim uses system() for exec under mingw, so
-	# we need to fetch the output ourselves
-	proc exec-with-stderr {args} {
+	# we need to fetch the stderr output ourselves
+	proc exec-save-stderr {args} {
 			set tmpfile /tmp/tcl.[format %05x [rand 10000]].tmp
-			set rc [catch [list exec {*}$args >$tmpfile 2>&1] result]
+			set rc [catch [list exec {*}$args 2>$tmpfile] result]
 			set result [readfile $tmpfile]
 			file delete $tmpfile
 			return -code $rc $result
@@ -67,6 +65,9 @@ if {$tmakecompat(istcl)} {
 } else {
 	# Jim on unix is simple
 	alias getenv env
+	proc exec-save-stderr {args} {
+		exec >@stdout {*}$args
+	}
 }
 
 # In case 'file normalize' doesn't exist
