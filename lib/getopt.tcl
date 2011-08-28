@@ -79,5 +79,9 @@ proc getopt {optdef argvname} {
 	if {!$haveargs && [llength $nargv] > [llength $named]} {
 		dev-error "Too many parameters"
 	}
-	set argv [uplevel 1 [list lassign $nargv {*}$named]]
+	if {[llength $named]} {
+		set argv [uplevel 1 [list lassign $nargv {*}$named]]
+	} else {
+		set argv $nargv
+	}
 }

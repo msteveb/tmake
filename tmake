@@ -76,7 +76,7 @@ proc make {argv} {
 	# Parse the user options
 	set targets {}
 	foreach a $argv {
-		if {[regexp {([^=]*)=(.*)} $a -> n v]} {
+		if {[regexp {^(\w[^=]*)=(.*)} $a -> n v]} {
 			if {$n eq "V"} {
 				set tmake(verbose) $v
 			} elseif {$n eq "D"} {
@@ -101,6 +101,9 @@ proc make {argv} {
 				continue
 			}
 			switch -glob -- $a {
+				--find=* {
+					regexp {^--find=(.*)} $a -> tmake(findtarget)
+				}
 				-d* {
 					foreach i [split [string range $a 2 end] {}] {
 						dict-incr tmake(debugtypes) $i 1
@@ -182,58 +185,32 @@ proc make {argv} {
 		dict set globalvars $i [set ::$i]
 	}
 
-	set maybereload 1
+	load-build-description 1
 
-	while {1} {
-		invoke-spec-file project.spec
+	if {$tmake(showrules)} {
+		show-all-rules
+	}
 
-		# Loaded in the global scope 
-		if {![file exists build.spec]} {
-			user-error "No build.spec in the current directory"
-		}
+	# Try to build all Load targets
 
-		foreach i $tmake(deferred) {
-			uplevel #0 $i
-		}
-
-		# Now load the cache if it exists and it isn't the second time through
-		if {$maybereload && [file exists .makecache]} {
-			lassign [time {source .makecache}] us
-			dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
-		}
-
-		process-build-spec-file .
-
-		resolve-deferred-dependencies
-
-		if {$tmake(showrules)} {
-			show-all-rules
-		}
-
-		set reload 0
-		if {$maybereload} {
-			# If any files specified to Load are targets,
-			# build them before anything else
-			foreach t $tmake(projfiles) {
-				set rc [build $t]
-				if {$rc < 0} {
-					if {$tmake(exitcode) == 0} {
-						build-error "Error: Don't know how to build $t"
-					}
-					break
-				}
-				if {$rc > 0} {
-					dputs m "$t has changed, reloading..."
-					set reload 1
-				}
+	# If any files specified to Load are targets,
+	# build them before anything else
+	set reload 0
+	foreach t $tmake(projfiles) {
+		set rc [build $t]
+		if {$rc < 0} {
+			if {$tmake(exitcode) == 0} {
+				build-error "Error: Don't know how to build $t"
 			}
-		}
-		if {!$reload} {
-			unset tmake_save
-			unset globalvars
 			break
 		}
+		if {$rc > 0} {
+			dputs m "$t has changed, reloading..."
+			set reload 1
+		}
+	}
 
+	if {$reload} {
 		if {$tmake(writecache)} {
 			# Cache has been updated, so save it
 			dict set tmake_save cache $tmake(cache)
@@ -249,11 +226,26 @@ proc make {argv} {
 		foreach i [dict keys $globalvars] {
 			set ::$i [dict get $globalvars $i]
 		}
-		# Will only do this once
-		set maybereload 0
+		load-build-description 0
 	}
 
+	unset tmake_save
+	unset globalvars
+
 	# Now build the targets
+	if {[info exists tmake(findtarget)]} {
+		if {[is-target? $tmake(findtarget)]} {
+			show-rule [get-target-rule $tmake(findtarget)]
+			tmake-exit 0
+		}
+		foreach target [dict keys $tmake(targets)] {
+			if {[string match *$tmake(findtarget)* $target]} {
+				show-rule $target
+				puts ""
+			}
+		}
+		tmake-exit 0
+	}
 
 	if {[llength $targets] == 0} {
 		set targets all
@@ -267,6 +259,31 @@ proc make {argv} {
 			break
 		}
 	}
+}
+
+proc load-build-description {loadcache} {
+	global tmake
+
+	invoke-spec-file project.spec
+
+	# Loaded in the global scope 
+	if {![file exists build.spec]} {
+		user-error "No build.spec in the current directory"
+	}
+
+	foreach i $tmake(deferred) {
+		uplevel #0 $i
+	}
+
+	# Now load the cache if it exists and it isn't the second time through
+	if {$loadcache && [file exists .makecache]} {
+		lassign [time {source .makecache}] us
+		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
+	}
+
+	process-build-spec-file .
+
+	resolve-deferred-dependencies
 }
 
 # ==================================================================
@@ -1264,6 +1281,8 @@ proc build {target} {
 	#    - If 'build' returns 1, the target needs to be built
 	# 3. If nothing was built ($result is 0), check each static+dynamic dependency for time
 	#    - If needbuild? returns 1, the target needs to be built
+	# 4. If build not forced, check substituted '-do' against any cached value
+	#    - If cached commands exists and they are different, the target needs to be built
 
 	# First check dynamic dependencies
 	set depends $t(depends)
@@ -1330,6 +1349,7 @@ proc build {target} {
 	set-target-vars [array get t]
 
 	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(cmdcache) $ruletarget]} {
+		# 4. Compare previous '-do' commands with current commands
 		set rc [catch {uplevel #0 [list subst $t(do)]} do]
 		if {$rc != 0} {
 			dputs m "Warning: subst failed for rule $ruletarget"

@@ -56,7 +56,7 @@ ifconfig JIM_UTF8 {
 
 ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $SRCS
 
-Executable --install=$exec_prefix jimsh jimsh.c
+Executable --install=$exec_prefix/bin jimsh jimsh.c
 
 Test --runwith=jimsh regtest.tcl
 

@@ -1,12 +1,13 @@
 Performance
 -----------
-Should cache the results of dyndep header scan.
+Should cache the results of dyndep header scan. [DONE]
 In order to use the cache, we need:
 - command needs to be identical
 - real mtime of the file needs to be unchanged
 - cache the results of header-scan-regexp, not header-scan-regexp-recursive
   so we don't need to care if the targets or incpaths change
-- when to discard the cache results?
+
+When to discard the cache results?
 
 Reloading build definitions
 ---------------------------
@@ -100,6 +101,12 @@ Explain the install philosophy
 Build from any directory within the tree
 ----------------------------------------
 Stub makefiles, search for project.spec
+
+- If tmake is installed as autosetup/tmake, it won't be in the PATH
+  so it is hard to run with debugging options, etc.
+  So normally we would have to run it via the stub Makefile. 
+  Do we create a tmake wrapper at the project top?
+  Do we run "make M="-dgn -t -p mytarget"?
 
 Integrating foreign projects
 ----------------------------
