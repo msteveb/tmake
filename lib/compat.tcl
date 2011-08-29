@@ -248,8 +248,13 @@ proc clock-millis {} {
 
 if {[info commands signal] ne ""} {
 	signal ignore SIGINT SIGTERM
-	proc check-signal {} {
-		if {[signal check -clear] ne ""} {
+	proc check-signal {{clear 0}} {
+		if {$clear} {
+			set clear -clear
+		} else {
+			set clear ""
+		}
+		if {[signal check {*}$clear] ne ""} {
 			return 1
 		}
 		return 0

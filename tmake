@@ -1315,6 +1315,11 @@ proc build {target} {
 		foreach i [calc-dyndeps $ruletarget] {
 			lappend depends $i
 
+			if {[check-signal]} {
+				set result -1
+				break
+			}
+
 			set rc [build $i]
 			if {$rc < 0} {
 				if {$tmake(exitcode) == 0} {
@@ -1409,7 +1414,7 @@ proc build {target} {
 			}
 		}
 
-		if {[check-signal]} {
+		if {[check-signal 1]} {
 			puts ""
 			set tmake(exitcode) 2
 			set rc 5
@@ -1553,6 +1558,7 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 		set newscan {}
 		foreach d $toscan {
 			if {![info exists scanned($d)]} {
+				set scanned($d) 1
 				set df [find-file $d $incpaths]
 				if {$df ne ""} {
 					set d $df
@@ -1561,7 +1567,6 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 						lappend newscan {*}[header-scan-regexp $regex $d]
 					}
 				}
-				set scanned($d) 1
 			}
 		}
 		set toscan $newscan
