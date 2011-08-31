@@ -8,9 +8,8 @@ echo "In make-two"
 # Uncomment this to have time to send SIGINT to test cleanup processing
 #sleep 5
 
-echo "Building $c and $h"
+echo "Building $c and $i"
 
-mkdir -p `dirname $c` `dirname $i`
 echo "#include \"`basename $i`\"" >$c
 echo "int main() { return 1; }" >>$c
 echo "#define header" >$i

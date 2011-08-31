@@ -12,8 +12,7 @@ Generate {blah.c include/blah.h} make-two {} {
 	note "MakeTwo $target"
 	writefile tempfile.dat "This is a temp file"
 	run sh $script $target
-}
-target [make-local {blah.c include/blah.h}] -onerror {
+} -onerror {
 	note "MakeTwo failed, so cleaning up..."
 } -clean tempfile.dat
 
