@@ -14,7 +14,7 @@ CFlags -Wall -g -Os -I. -I$UWEB/include
 Executable --install=/home/httpd/cgi-bin web auth.c customstorage.c init.c main.c tclcustom.c \
 	[CgiSources *.page *.app *.menus]
 
-Install /home/httpd/css *.css $THEMES/basic.css=basic1.css
+Install /home/httpd/css *.css basic1.css=$THEMES/basic.css
 Install /home/httpd/javascript *.js
 Install /home/httpd/img img/*.{png,gif,ico,jp*} $THEMES/black_icons/*checked.png
 Install /lib/tcl6 $UWEB/lib/tcl6/*.tcl *.tcl

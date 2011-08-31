@@ -1,6 +1,6 @@
 # vim:set syntax=tcl:
 
-Load settings.conf
+Load --required settings.conf
 
 IncludePaths include
 

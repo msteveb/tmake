@@ -102,7 +102,7 @@ proc expand-wildcards {arglist} {
 		if {[string match {*[*?]*} $i]} {
 			set flist [glob $i]
 		} elseif {[string match *=* $i]} {
-			lassign [split $i =] src target
+			lassign [split $i =] target src
 			lappend pairs $src $target
 			continue
 		} else {
@@ -180,7 +180,7 @@ proc ArchiveLib {args} {
 	define-append LOCAL_LIBS $target
 
 	if {[info exists install]} {
-		Install $install $target
+		InstallFile [file join $install $libname] $target
 	}
 	if {$publish} {
 		Publish lib $libname
@@ -318,22 +318,34 @@ proc PublishIncludes {args} {
 }
 
 proc Test {args} {
-	getopt {--runwith: command args} args
-	set testid test:[incr ::testid]
+	getopt {--runwith: --chdir --quiet command args} args
+	set testid [make-local test:[incr ::testid]]
 	set depends {}
+	set command $command
+	set localcommand [make-local $command]
+	set extra {}
+	if {$chdir} {
+		lappend extra -chdir
+		set runcmd $command
+	} else {
+		set runcmd $localcommand
+	}
+	if {!$quiet} {
+		lappend extra -msg {note "Test $command"}
+	}
 	# XXX: If cross compiling, the existence of $runwith
 	#      and $command as targets is no guarantee that they
 	#      can run.
 	set maybe-depends $command
 	if {[info exists runwith]} {
-		set testcommand "$runwith $command [join $args]"
+		set testcommand "$runwith $runcmd [join $args]"
 		lappend maybe-depends $runwith
 	} else {
-		set testcommand "./$command [join $args]"
+		set testcommand "$runcmd [join $args]"
 	}
 	# Note: We don't yet know if $runwith and/or $command are targets, so defer until all rules are read.
 	# 
-	Phony $testid -maybe-depends {*}${maybe-depends} -vars testcommand $testcommand command $command -msg {note "Test $command"} -do {
+	Phony $testid -maybe-depends {*}${maybe-depends} -vars testcommand $testcommand command $localcommand {*}$extra -do {
 		incr ::tmake(testruncount)
 		run {*}$testcommand
 		incr ::tmake(testpasscount)
@@ -361,6 +373,7 @@ proc HardLink {args} {
 	# and then to file copy
 	# Want to depend on the existence of the dir, not the time
 	target $dest -inputs $source -do {
+		file delete $target
 		exec ln $inputs $target
 	} {*}$args
 	Clean clean $dest

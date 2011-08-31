@@ -602,7 +602,7 @@ proc show-rule {target} {
 						puts @[join $v {, }]
 					}
 				}
-				phony - nofail {
+				phony - nofail - chdir {
 					if {$v} {
 						lappend flags $n
 					}
@@ -852,8 +852,8 @@ proc update-rule {ruledict} {
 		# Haven't seen this rule before so individual target pointers
 		foreach t $ruletarget {
 			if {[dict exists $::tmake(targets) $t]} {
-				set orig [get-target-rule $t]
-				dev-error "Rule for $t was already specified at [make-source-location $t(source)]"
+				array set orig [get-target-rule $t]
+				dev-error "Rule for $t was already specified at [make-source-location $orig(source)]"
 			}
 			dict set ::tmake(targets) $t $ruletarget
 		}
@@ -922,6 +922,7 @@ proc target {ruletarget args} {
 		lappend info(clean) {*}$orig(clean)
 		incr info(phony) $orig(phony)
 		incr info(nofail) $orig(nofail)
+		incr info(chdir) $orig(chdir)
 		append-with-space info(onerror) $orig(onerror) \n
 		# Only one of these will be non-blank
 		lappend orig(do) {*}$info(add-do)
@@ -1020,14 +1021,14 @@ proc parse-rule {target arglist} {
 	array set info {
 		status unknown
 		inputs {} depends {} maybe-depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
-		replace 0 add 0 nofail 0 phony 0
+		replace 0 add 0 nofail 0 phony 0 chdir 0
 	}
 
 	# Parse an option followed by multiple non-options
 	while {[llength $arglist]} {
 		set optargs [parse-rule-args arglist opt]
 		switch -exact -- $opt {
-			phony - nofail - replace - add {
+			phony - nofail - replace - add - chdir {
 				if {[llength $optargs]} {
 					dev-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
@@ -1419,7 +1420,12 @@ proc build {target} {
 				file mkdir [file dirname $i]
 			}
 			foreach do $t(do) {
+				if {$t(chdir)} {
+					cd [file dirname [lindex $ruletarget 0]]
+				}
 				set rc [catch {uplevel #0 $do} msg opts]
+				# Always restore the current dir afterwards
+				cd $tmake(topdir)
 				if {$rc} {
 					# XXX: Check for signal?
 					if {$t(nofail)} {
