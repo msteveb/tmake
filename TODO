@@ -130,6 +130,16 @@ Also migration from automake
 
 tmake TODO
 ----------
+* It is hard to do 'tmake clean' if settings.conf
+  is required but hasn't been created yet.
+  We don't want to required settings.conf to exist
+  in order to clean, but things like "UseSystemLibs $LIBS" will fail
+  if LIBS isn't defined.
+  Can we require the use of something like: "UseSystemLibs [var LIBS]"
+  when vars are used outside of rule commands? This would solve several
+  problems at the cost of being a bit ugly.
+  Ideally we could have a trace callback on access to an undefined variable.
+  But Tcl can't do this anyway :-(
 * Properly manage the precedence of vars:
   - command line => make these as "fixed"
   - environment => these need to be made fixed with 'import'

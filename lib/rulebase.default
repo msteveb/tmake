@@ -343,6 +343,14 @@ proc Test {args} {
 	return $testid
 }
 
+proc CopyFile {dest source} {
+	show-this-rule
+	target [make-local $dest] -inputs [make-local $source] -msg "note Copy $dest" -do {
+		file copy $inputs $target
+	}
+	Clean clean [make-local $dest]
+}
+
 proc HardLink {args} {
 	show-this-rule
 
@@ -351,8 +359,8 @@ proc HardLink {args} {
 	# XXX: If the platform doesn't support hard links
 	# and --fallback is set, fall back to soft links
 	# and then to file copy
+	# Want to depend on the existence of the dir, not the time
 	target $dest -inputs $source -do {
-		file mkdir [file dirname $target]
 		exec ln $inputs $target
 	} {*}$args
 	Clean clean $dest
@@ -360,7 +368,6 @@ proc HardLink {args} {
 
 # Helper for installing files
 proc install-file {target source bin} {
-	file mkdir [file dirname $target]
 	vputs "Copy $source $target"
 	file copy -force $source $target
 	if {$bin} {
@@ -407,7 +414,7 @@ proc Install {args} {
 proc CleanTarget {type} {
 	Phony [make-local $type] -nofail -vars cleanfiles {} -do {
 		note "Clean $target"
-		if {[llength $cleanfiles]} {
+		if {$cleanfiles ne ""} {
 			vputs "rm $cleanfiles"
 			file delete {*}$cleanfiles
 		}
@@ -423,7 +430,7 @@ proc Clean {type args} {
 	target-add-var [make-local $type] cleanfiles [join $args]
 }
 
-proc Generate {target script inputs rules} {
+proc Generate {target script inputs rules args} {
 	# XXX: Would be nice if script and inputs were optional
 	set target [make-local {*}$target]
 	if {$script ne ""} {
@@ -435,7 +442,7 @@ proc Generate {target script inputs rules} {
 			set script [file join $::PUBLISH bin $script]
 		}
 	}
-	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $script -do $rules -msg {note Generate $target}
+	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $script -do $rules -msg {note Generate $target} {*}$args
 	Clean clean $target
 }
 
@@ -465,11 +472,7 @@ Depends distclean clean
 
 Phony all
 Phony install all
-Phony test -do {
-	# XXX: Need this to be a "run-anyway" command so that even if some tests fail it will still run
-	# Actually, tests should not be targets. 
-	puts [format "Test Summary: %d of %d passed" $tmake(testpasscount) $tmake(testruncount)]
-}
+Phony test
 
 Phony clean-orphans -do {
 	set cleanfiles [get-orphan-targets]

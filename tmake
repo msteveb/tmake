@@ -50,6 +50,7 @@ set tmake(numtargets) 0
 set tmake(subdirvars) {}
 set tmake(subdirs) {}
 set tmake(prefix) ""
+set tmake(localdir) .
 set tmake(localmakefile) Makefile
 
 # ==================================================================
@@ -193,6 +194,11 @@ proc make {argv} {
 
 	# Try to build all Load targets
 
+	# But not if cleaning!
+	if {"clean" in $targets} {
+		set tmake(projfiles) ""
+	}
+
 	# If any files specified to Load are targets,
 	# build them before anything else
 	set reload 0
@@ -307,6 +313,10 @@ proc local-prefix {} {
 	return $::tmake(prefix)
 }
 
+proc local-dir {} {
+	return $::tmake(localdir)
+}
+
 proc make-local {args} {
 	prefix [local-prefix] $args
 }
@@ -361,11 +371,13 @@ proc process-build-spec-file {dir} {
 	# XXX: Need to save and restore the following:
 	#      autosubdirs, subdirs?
 
+	set tmake(localdir) $dir
 	if {$dir eq "."} {
 		set tmake(prefix) ""
 	} else {
 		set tmake(prefix) $dir/
 	}
+
 	set path $tmake(prefix)build.spec
 
 	if {![file exists $path]} {
@@ -932,6 +944,8 @@ proc target {ruletarget args} {
 			set info(msg) $orig(msg)
 		}
 	}
+	# Cache the prefix with the rule, also
+	set info(local) [local-dir]
 
 	# Now create/update the rule
 	update-rule [array get info]
@@ -1157,12 +1171,12 @@ proc needbuild? {targets depends depname} {
 	return 0
 }
 
-# Sets target-local variables. e.g. $inputs, $depends and $target
+# Sets target-local variables. e.g. $local, $inputs, $depends and $target
 proc set-target-vars {info} {
 	foreach {n v} [dict get $info vars] {
 		set ::$n $v
 	}
-	foreach n {target depends inputs} {
+	foreach n {local target depends inputs} {
 		set ::$n [dict get $info $n]
 	}
 }
@@ -1354,8 +1368,9 @@ proc build {target} {
 	set-target-vars [array get t]
 
 	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(cmdcache) $ruletarget]} {
+		# XXX: If this contains general Tcl commands it could wreak havoc!
 		# 4. Compare previous '-do' commands with current commands
-		set rc [catch {uplevel #0 [list subst $t(do)]} do]
+		set rc [catch {uplevel #0 [list subst -noc $t(do)]} do]
 		if {$rc != 0} {
 			dputs m "Warning: subst failed for rule $ruletarget"
 		}
@@ -1389,17 +1404,20 @@ proc build {target} {
 		}
 		if {$tmake(norun)} {
 			foreach do $t(do) {
-				if {[catch {uplevel #0 [list subst $do]} expanded]} {
-					# The rule probably refers to a command or variable which
-					# doesn't exist, so show it without the subst
-					set expanded $do
-				}
+				# XXX: If this contains general Tcl commands it could wreak havoc!
+				set expanded [uplevel #0 [list subst -noc $do]]
 				if {$tmake(norun) == 1} {
 					show-rule-commands $expanded
 				}
 			}
 			set rc 0
 		} else {
+			# Create all the target directories as required
+			# XXX: Probably should make this more efficient
+			foreach i $ruletarget {
+				dputs m "mkdir [file dirname $i]"
+				file mkdir [file dirname $i]
+			}
 			foreach do $t(do) {
 				set rc [catch {uplevel #0 $do} msg opts]
 				if {$rc} {
@@ -1443,8 +1461,8 @@ proc build {target} {
 					}
 					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 
-					# And save the commands in the command cache
-					dict set tmake(cmdcache) $ruletarget [uplevel #0 [list subst $t(do)]]
+					# And save the commands in the command cache, but only if subst succeeds
+					dict set tmake(cmdcache) $ruletarget [uplevel #0 [list subst -noc $t(do)]]
 				}
 			}
 		}
