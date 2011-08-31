@@ -260,7 +260,7 @@ if {[info commands signal] ne ""} {
 		return 0
 	}
 } else {
-	proc check-signal {} {
+	proc check-signal {{clear 0}} {
 		return 0
 	}
 }
