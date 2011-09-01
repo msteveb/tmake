@@ -31,7 +31,7 @@ foreach pkg $JIM_MOD_EXTENSIONS {
 	SharedObject --install=$prefix/lib/jim $pkg.so jim-$pkg.c
 }
 foreach pkg $JIM_STATIC_TCL_EXTS {
-	set src _jim$pkg.c 
+	set src _jim$pkg.c
 	Generate $src make-c-ext.tcl $pkg.tcl {
 		run $tclsh $script $inputs >$target
 	}

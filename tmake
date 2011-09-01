@@ -17,12 +17,13 @@ set tmake(debug) 0
 #  n = reasons for not building
 #  r = show rule for target being considered (combines with -db, -dn)
 #  t = target rule creation/update
+#  T = timing
 #  c = configuration checking
 #  C = cache
 #  g = graph dependencies executed
 #  p = show high level rules as they are parsed
 #  m = miscellaneous debug
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(showtime) 0
@@ -166,6 +167,7 @@ proc make {argv} {
 	#parray tmake
 	set tmake(topdir) [find-project-top]
 	cd $tmake(topdir)
+	set ::env(TOPDIR) $tmake(topdir)
 
 	set tmake(prefix) ""
 
@@ -324,9 +326,11 @@ proc make-local {args} {
 proc invoke-spec-file {filename} {
 	global tmake
 	lappend tmake(specfiles) $filename
-	dputs m "Parsing $filename"
+	dputs T "Parsing $filename"
 
 	uplevel #0 source $filename
+
+	dputs T "Done parsing $filename"
 }
 
 proc AutoSubDirs {onoff} {
@@ -365,7 +369,7 @@ proc restore-subdir-vars {dict} {
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir} {
 	global tmake
-	dputs m "process-build-spec dir=$dir"
+	dputs {m T} "process-build-spec dir=$dir"
 	#set dir [make_path $::automf(topdir) $dir]
 
 	# XXX: Need to save and restore the following:
@@ -427,6 +431,8 @@ proc process-build-spec-file {dir} {
 		}
 	}
 	incr tmake(depth) -1
+
+	dputs T "done process-build-spec $dir"
 }
 
 # Returns a list of all files which were once a target but are no longer
@@ -1238,6 +1244,16 @@ proc file-exists-all {list missingname} {
 	return 1
 }
 
+# Unfortunately subst doesn't respect braces, so it is possible
+# for subst to fail on something which isn't supposed to be interepreted
+# by Tcl. So subst, and if that fails, return the script unchanged.
+proc subst-do {script} {
+	if {[catch {uplevel #0 [list subst -noc $script]} expanded]} {
+		return $script
+	}
+	return $expanded
+}
+
 proc build {target} {
 	global tmake
 	set current $tmake(current)
@@ -1369,14 +1385,10 @@ proc build {target} {
 	set-target-vars [array get t]
 
 	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(cmdcache) $ruletarget]} {
-		# XXX: If this contains general Tcl commands it could wreak havoc!
 		# 4. Compare previous '-do' commands with current commands
-		set rc [catch {uplevel #0 [list subst -noc $t(do)]} do]
-		if {$rc != 0} {
-			dputs m "Warning: subst failed for rule $ruletarget"
-		}
+		set do [subst-do $t(do)]
 		set prevdo [dict get $tmake(cmdcache) $ruletarget]
-		if {$rc == 0 && $do ne $prevdo} {
+		if {$do ne $prevdo} {
 			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
 			#puts "=== old ==="
 			#puts $prevdo
@@ -1405,10 +1417,8 @@ proc build {target} {
 		}
 		if {$tmake(norun)} {
 			foreach do $t(do) {
-				# XXX: If this contains general Tcl commands it could wreak havoc!
-				set expanded [uplevel #0 [list subst -noc $do]]
 				if {$tmake(norun) == 1} {
-					show-rule-commands $expanded
+					show-rule-commands [subst-do $do]
 				}
 			}
 			set rc 0
@@ -1468,7 +1478,7 @@ proc build {target} {
 					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 
 					# And save the commands in the command cache, but only if subst succeeds
-					dict set tmake(cmdcache) $ruletarget [uplevel #0 [list subst -noc $t(do)]]
+					dict set tmake(cmdcache) $ruletarget [subst-do $t(do)]
 				}
 			}
 		}
@@ -1561,8 +1571,15 @@ proc find-file {filename paths} {
 		} else {
 			set f [file join $p $filename]
 		}
-		if {[is-target? $f] || [file exists $f]} {
+		if {[file exists $f]} {
 			return $f
+		}
+		if {[is-target? $f]} {
+			# XXX: Is it really OK to build targets here?
+			dputs d "$f is a target, so building first"
+			if {[build $f] >= 0} {
+				return $f
+			}
 		}
 	}
 	dputs D "Not a file and not a target, $filename"
@@ -1585,10 +1602,9 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 				set scanned($d) 1
 				set df [find-file $d $incpaths]
 				if {$df ne ""} {
-					set d $df
-					set deps($d) 1
+					set deps($df) 1
 					if {[file exists $df]} {
-						lappend newscan {*}[header-scan-regexp $regex $d]
+						lappend newscan {*}[header-scan-regexp $regex $df]
 					}
 				}
 			}

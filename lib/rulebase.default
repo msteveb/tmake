@@ -96,20 +96,24 @@ proc BuildSpecEpilog {} {
 # HELPERS
 # ==================================================================
 
+# Returns a list of pairs: src dest
+# The src is a local path, while the dest is relative.
+# so ssl/*.h might return: {axtls/ssl/file.h ssl/file.h}
+#
 proc expand-wildcards {arglist} {
 	set pairs {}
 	foreach i $arglist {
 		if {[string match {*[*?]*} $i]} {
-			set flist [glob $i]
+			set globdir [file dirname $i]
+			foreach j [glob [make-local $i]] {
+				set p [file join $globdir [file tail $j]]
+				lappend pairs [make-local $p] $p
+			}
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] target src
-			lappend pairs $src $target
-			continue
+			lappend pairs [make-local $src] $target
 		} else {
-			set flist $i
-		}
-		foreach j $flist {
-			lappend pairs $j $j
+			lappend pairs [make-local $i] $i
 		}
 	}
 	return $pairs
@@ -155,11 +159,16 @@ proc PublishOneFile {dest src} {
 	HardLink [file join $::PUBLISH $dest] $src -vars dest $dest -msg {note Publish $dest}
 }
 
-proc Publish {dir args} {
+proc Publish {args} {
 	show-this-rule
-	foreach src [make-local $args] {
-		set dest [file join $dir [file tail $src]]
-		PublishOneFile $dest $src
+	getopt {--keepdir dir args} args
+
+	foreach {src dst} [expand-wildcards $args] {
+		if {$keepdir} {
+			PublishOneFile $dir/$dst $src
+		} else {
+			PublishOneFile $dir/[file tail $dst] $src
+		}
 	}
 }
 
@@ -287,6 +296,8 @@ proc IncludePaths {args} {
 }
 
 proc Load {args} {
+	show-this-rule
+
 	getopt {--required filename} args
 	set filename [make-local $filename]
 	if {![file exists $filename]} {
@@ -310,9 +321,9 @@ proc PublishIncludes {args} {
 
 	foreach {src dst} [expand-wildcards $args] {
 		if {$keepdir} {
-			PublishOneFile include/$dst [make-local $src]
+			PublishOneFile include/$dst $src
 		} else {
-			PublishOneFile include/[file tail $dst] [make-local $src]
+			PublishOneFile include/[file tail $dst] $src
 		}
 	}
 }
@@ -415,9 +426,9 @@ proc Install {args} {
 	foreach {src dst} [expand-wildcards $args] {
 		lappend srcs $src
 		if {$keepdir} {
-			InstallFile [file join $destdir $dst] [make-local $src] $bin
+			InstallFile [file join $destdir $dst] $src $bin
 		} else {
-			InstallFile [file join $destdir [file tail $dst]] [make-local $src] $bin
+			InstallFile [file join $destdir [file tail $dst]] $src $bin
 		}
 	}
 }
