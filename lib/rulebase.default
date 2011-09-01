@@ -478,7 +478,13 @@ proc Generate {target script inputs rules args} {
 			set script [file join $::PUBLISH bin $script]
 		}
 	}
-	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $script -do $rules -msg {note Generate $target} {*}$args
+	# If running a script in the current dir need ./$script
+	if {[string match */* $script]} {
+		set runscript $script
+	} else {
+		set runscript [local-dir]/$script
+	}
+	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $runscript -do $rules -msg {note Generate $target} {*}$args
 	Clean clean $target
 }
 
