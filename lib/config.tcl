@@ -27,7 +27,7 @@ proc do_ifconfig {name expr exprargs} {
 			}
 		}
 	}
-	automf_error "should be $name {expr} ?{code}? ?else {code}?"
+	dev-error "should be $name {expr} ?{code}? ?else {code}?"
 }
 
 proc is-defined? {name} {
