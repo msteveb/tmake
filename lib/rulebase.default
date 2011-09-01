@@ -136,7 +136,7 @@ proc Executable {args} {
 		InstallFile [file join $install $target] $localtarget 1
 	}
 	if {$test} {
-		Test $localtarget
+		Test --chdir $target
 	} else {
 		Phony [make-local all] $localtarget
 	}
@@ -329,6 +329,8 @@ proc PublishIncludes {args} {
 }
 
 proc Test {args} {
+	show-this-rule
+
 	getopt {--runwith: --chdir --quiet command args} args
 	set testid [make-local test:[incr ::testid]]
 	set depends {}
@@ -337,7 +339,7 @@ proc Test {args} {
 	set extra {}
 	if {$chdir} {
 		lappend extra -chdir
-		set runcmd $command
+		set runcmd ./$command
 	} else {
 		set runcmd $localcommand
 	}
@@ -347,16 +349,21 @@ proc Test {args} {
 	# XXX: If cross compiling, the existence of $runwith
 	#      and $command as targets is no guarantee that they
 	#      can run.
-	set maybe-depends $command
+	set maybe-depends $localcommand
 	if {[info exists runwith]} {
 		set testcommand "$runwith $runcmd [join $args]"
-		lappend maybe-depends $runwith
+		# I think this is all wrong.
+		# How can the command find where $runwith resolves to (if anywhere)
+		# Want it stored in a variable.
+		# Should it be like header scanning and INCPATHS?
+		lappend maybe-depends $runwith $::PUBLISH/bin/$runwith
 	} else {
 		set testcommand "$runcmd [join $args]"
 	}
+
 	# Note: We don't yet know if $runwith and/or $command are targets, so defer until all rules are read.
 	# 
-	Phony $testid -maybe-depends {*}${maybe-depends} -vars testcommand $testcommand command $localcommand {*}$extra -do {
+	target $testid -phony -maybe-depends {*}${maybe-depends} -vars testcommand $testcommand command $localcommand {*}$extra -do {
 		incr ::tmake(testruncount)
 		run {*}$testcommand
 		incr ::tmake(testpasscount)

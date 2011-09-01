@@ -243,7 +243,7 @@ proc make {argv} {
 	# Now build the targets
 	if {[info exists tmake(findtarget)]} {
 		if {[is-target? $tmake(findtarget)]} {
-			show-rule [get-target-rule $tmake(findtarget)]
+			show-rule $tmake(findtarget)
 			tmake-exit 0
 		}
 		foreach target [dict keys $tmake(targets)] {

@@ -1,3 +1,16 @@
+Which directory as cwd?
+-----------------------
+My inclination is to:
+1. use TOPDIR as the cwd for rules
+The other options are:
+2. use current (local) subdir as cwd and use "../../dir" for other dirs
+3. always cd to the dir for the rule
+
+Options (3) probably means adjusting paths all the time.
+
+If a target is '-chdir', should $target, $inputs and $depends all be adjusted
+for the new dir? Or just $target and $inputs?
+
 Performance
 -----------
 Should cache the results of dyndep header scan. [DONE]
@@ -98,6 +111,9 @@ Install
 -------
 Explain the install philosophy
 
+* We have $local/clean and $local/distclean but not $local/install
+  This is a bit awkward
+
 Build from any directory within the tree
 ----------------------------------------
 Stub makefiles, search for project.spec
@@ -130,6 +146,9 @@ Also migration from automake
 
 tmake TODO
 ----------
+* Does it make sense to support "IncludePaths /abc" to add paths
+  relative to TOPDIR? IncludePaths should never really refer to
+  dirs outside the tree, so it should be OK.
 * It is hard to do 'tmake clean' if settings.conf
   is required but hasn't been created yet.
   We don't want to required settings.conf to exist
