@@ -106,7 +106,7 @@ proc expand-wildcards {arglist} {
 		if {[string match {*[*?]*} $i]} {
 			set globdir [file dirname $i]
 			foreach j [glob [make-local $i]] {
-				set p [file join $globdir [file tail $j]]
+				set p [file-join $globdir [file tail $j]]
 				lappend pairs [make-local $p] $p
 			}
 		} elseif {[string match *=* $i]} {
@@ -133,7 +133,7 @@ proc Executable {args} {
 	set localtarget [make-local $target]
 	Link $localtarget {*}[Objects {*}[join $args]] {*}$::LOCAL_LIBS {*}$::PROJLIBS
 	if {[info exists install]} {
-		InstallFile [file join $install $target] $localtarget 1
+		InstallFile [file-join $install $target] $localtarget 1
 	}
 	if {$test} {
 		Test --chdir $target
@@ -189,7 +189,7 @@ proc ArchiveLib {args} {
 	define-append LOCAL_LIBS $target
 
 	if {[info exists install]} {
-		InstallFile [file join $install $libname] $target
+		InstallFile [file-join $install $libname] $target
 	}
 	if {$publish} {
 		Publish lib $libname
@@ -463,9 +463,9 @@ proc Install {args} {
 	foreach {src dst} [expand-wildcards $args] {
 		lappend srcs $src
 		if {$keepdir} {
-			InstallFile [file join $destdir $dst] $src $bin
+			InstallFile [file-join $destdir $dst] $src $bin
 		} else {
-			InstallFile [file join $destdir [file tail $dst]] $src $bin
+			InstallFile [file-join $destdir [file tail $dst]] $src $bin
 		}
 	}
 }

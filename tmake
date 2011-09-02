@@ -382,7 +382,7 @@ proc process-build-spec-file {dir} {
 		set tmake(prefix) $dir/
 	}
 
-	set path $tmake(prefix)build.spec
+	set path [file-join $dir build.spec]
 
 	if {![file exists $path]} {
 		user-error "$path does not exist"
@@ -407,15 +407,13 @@ proc process-build-spec-file {dir} {
 	# Now subdirectories
 	incr tmake(depth)
 
-	#local_lappend subdirs $dir
-
 	# Find the explicitly set subdirs
 	set subdirs $tmake(subdirs)
 	set tmake(subdirs) {}
 
 	# Normally we search for dirs containing build.spec
 	if {$tmake(autosubdirs)} {
-		foreach d [glob -nocomplain $dir/*] {
+		foreach d [glob -nocomplain $tmake(prefix)*] {
 			if {[file isdirectory $d] && [file exists $d/build.spec] && $d ni $subdirs} {
 				lappend subdirs $d
 			}
@@ -1566,11 +1564,7 @@ proc header-scan-regexp {regex filename} {
 
 proc find-file {filename paths} {
 	foreach p $paths {
-		if {$p eq "" || $p eq "."} {
-			set f $filename
-		} else {
-			set f [file join $p $filename]
-		}
+		set f [file-join $p $filename]
 		if {[file exists $f]} {
 			return $f
 		}

@@ -90,6 +90,13 @@ proc file-normalize {path} {
 	return $result
 }
 
+proc file-join {dir path} {
+	if {$dir eq "."} {
+		return $path
+	}
+	file join $dir $path
+}
+
 ##################################################################
 #
 # Directory/path handling
