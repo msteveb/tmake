@@ -622,7 +622,7 @@ proc show-rule {target} {
 						puts @[join $v {, }]
 					}
 				}
-				phony - nofail - chdir {
+				phony - nofail - chdir - nocache {
 					if {$v} {
 						lappend flags $n
 					}
@@ -953,6 +953,7 @@ proc target {ruletarget args} {
 		incr info(phony) $orig(phony)
 		incr info(nofail) $orig(nofail)
 		incr info(chdir) $orig(chdir)
+		incr info(nocache) $orig(nocache)
 		append-with-space info(onerror) $orig(onerror) \n
 		# Only one of these will be non-blank
 		lappend orig(do) {*}$info(add-do)
@@ -1051,14 +1052,14 @@ proc parse-rule {target arglist} {
 	array set info {
 		status unknown
 		inputs {} depends {} maybe-depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
-		replace 0 add 0 nofail 0 phony 0 chdir 0
+		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
 	}
 
 	# Parse an option followed by multiple non-options
 	while {[llength $arglist]} {
 		set optargs [parse-rule-args arglist opt]
 		switch -exact -- $opt {
-			phony - nofail - replace - add - chdir {
+			phony - nofail - replace - add - chdir - nocache {
 				if {[llength $optargs]} {
 					dev-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
@@ -1492,7 +1493,7 @@ proc build {target} {
 					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s) $f"
 					# Use break to indicate that we have already output the message
 					set rc 3
-				} else {
+				} elseif {!$t(nocache)} {
 					# Record the time that this target was created, along with the real mtime
 					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
 					if {$tmake(writecache) == 0} {
