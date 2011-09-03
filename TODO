@@ -1,3 +1,7 @@
+** clean-orphans should not remove installed files
+** make clean/distclean should not require configure to be run
+** make distclean should remove stub Makefiles (or else tmake --clean should do this)
+
 Which directory as cwd?
 -----------------------
 My inclination is to:

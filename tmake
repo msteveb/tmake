@@ -14,6 +14,7 @@ set tmake(debug) 0
 #  d = dynamic dependency
 #  D = ignored dynamic dependency 
 #  b = reasons for building
+#  B = reasons for building, commands
 #  n = reasons for not building
 #  r = show rule for target being considered (combines with -db, -dn)
 #  t = target rule creation/update
@@ -23,7 +24,7 @@ set tmake(debug) 0
 #  g = graph dependencies executed
 #  p = show high level rules as they are parsed
 #  m = miscellaneous debug
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(showtime) 0
@@ -385,11 +386,7 @@ proc restore-subdir-vars {dict} {
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir} {
 	global tmake
-	dputs {m T} "process-build-spec dir=$dir"
-	#set dir [make_path $::automf(topdir) $dir]
-
-	# XXX: Need to save and restore the following:
-	#      autosubdirs, subdirs?
+	dputs {m T} "process-build-spec $dir"
 
 	set tmake(localdir) $dir
 	if {$dir eq "."} {
@@ -943,7 +940,9 @@ proc target {ruletarget args} {
 		# to merge the two rules
 
 		if {[llength $info(do)] && [llength $orig(do)]} {
-			dev-error "$ruletarget already has '-do' @$orig(source)"
+			#dev-error "$ruletarget already has '-do' @$orig(source)"
+			puts stderr [error-location "Warning: $ruletarget already has '-do' @$orig(source)"]
+			set orig(do) {}
 		}
 		if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
 			dev-error "$ruletarget already has '-dyndep' @$orig(source)"
@@ -1415,11 +1414,11 @@ proc build {target} {
 		set prevdo [dict get $tmake(cmdcache) $ruletarget]
 		if {$do ne $prevdo} {
 			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
-			#puts "=== old ==="
-			#puts $prevdo
-			#puts "=== new ==="
-			#puts $do
-			#puts "-----------"
+			dputs B "=== old ==="
+			dputs B $prevdo
+			dputs B "=== new ==="
+			dputs B $do
+			dputs B "-----------"
 			lappend reason commands
 			set result 1
 		} else {
