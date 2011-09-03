@@ -1,7 +1,7 @@
 # vim:set syntax=tcl:
 
 # load autosetup settings
-Load --required settings.conf
+Load settings.conf
 Clean distclean settings.conf autoconfig.h
 
 IncludePaths . include

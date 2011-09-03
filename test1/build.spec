@@ -1,6 +1,6 @@
 # vim:set syntax=tcl:
 
-Load --required settings.conf
+Load settings.conf
 
 # Arrange to re-run configure if auto.def changes
 Depends settings.conf auto.def -do {

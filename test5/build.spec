@@ -1,5 +1,5 @@
 #LocalMakefile GNUmakefile
-Load settings.conf
+Load --nocare settings.conf
 
 #ifconfig USER_MDNSRESPONDER
 

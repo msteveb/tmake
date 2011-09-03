@@ -28,7 +28,7 @@ define? SHOBJ_LDFLAGS ""
 define? LOCAL_LIBS ""
 define? DESTDIR ""
 define? OBJCFLAGS ""
-define? INCPATHS .
+define? INCPATHS ""
 
 # These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
 set C_FLAGS ""
@@ -79,6 +79,7 @@ proc BuildSpecProlog {} {
 		CleanTarget distclean
 		CleanTarget uninstall
 	}
+	IncludePaths .
 }
 
 proc BuildSpecEpilog {} {
@@ -289,10 +290,18 @@ proc UseLibs {args} {
 
 proc IncludePaths {args} {
 	show-this-rule
-	set paths [make-local {*}$args]
-	define-append INCPATHS $paths
-	CFlags [prefix -I $paths]
-	C++Flags [prefix -I $paths]
+	foreach dir $args {
+		if {$dir eq "." && [local-dir] ne "."} {
+			set dir [local-dir]
+		} else {
+			set dir [make-local $dir]
+		}
+		if {$dir ni $::INCPATHS} {
+			define-append INCPATHS $dir
+			CFlags [prefix -I $dir]
+			C++Flags [prefix -I $dir]
+		}
+	}
 }
 
 proc load-config-file {filename} {
@@ -307,14 +316,15 @@ proc load-config-file {filename} {
 		if {$line eq "" || [string match "#*" $line]} {
 			continue
 		}
-		if {[regexp {^([^=]*)=(.*)} $line -> name value]} {
+		if {[regexp {^([^=:]*):?=(.*)} $line -> name value]} {
+			set value [string trim $value]
 			if {$value eq "y"} {
-				define $name 1
+				set value 1
 			} elseif {[string match {"*"} $value]} {
-				define $name [lindex $value 0]
-			} else {
-				define $name $value
+				set value [lindex $value 0]
 			}
+			#puts "define $name $value"
+			define $name $value
 		} else {
 			puts "$filename:$n: Warning: Failed to parse $line"
 		}
@@ -324,13 +334,12 @@ proc load-config-file {filename} {
 proc Load {args} {
 	show-this-rule
 
-	getopt {--required --config filename} args
+	getopt {--nocare --config filename} args
 	set filename [make-local $filename]
 	if {![file exists $filename]} {
-		if {$required} {
+		if {!$nocare} {
 			user-error "$filename does not exist, do you need run ./configure?"
 		}
-		puts "Warning: $filename does not yet exist"
 	} else {
 		if {$config} {
 			load-config-file $filename

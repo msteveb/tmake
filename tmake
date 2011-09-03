@@ -38,6 +38,7 @@ set tmake(writecache) 0
 set tmake(deferred) {}
 set tmake(projfiles) {}
 set tmake(fixedvars) {}
+set tmake(installed) 0
 
 # Should these really be here?
 set tmake(headerscancache) {}
@@ -63,17 +64,15 @@ proc make {argv} {
 	#puts "make $argv"
 	#parray ::env
 
-	# 'compat' is needed before we can do anything, so set a temporary libdir
-	set tmake(libdir) [file dirname $::argv0]/lib
-
-	use compat
+	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
+	if {!$tmake(installed)} {
+		set tmake(dir) [file dirname $::argv0]
+		use compat
+	}
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
-	set tmake(libdir) $tmake(dir)/lib
 	set tmake(start) [clock-millis]
-
-	use getopt config
 
 	# Parse the user options
 	set targets {}
@@ -111,6 +110,13 @@ proc make {argv} {
 						dict-incr tmake(debugtypes) $i 1
 					}
 					set tmake(debug) 1
+				}
+				--install {
+					if {[file exists autosetup/find-tclsh]} {
+						use install
+						tmake_install autosetup
+					}
+					user-error "No autosetup directory"
 				}
 				--debug {
 					# Equivalent to -dg
@@ -171,10 +177,12 @@ proc make {argv} {
 
 	set tmake(prefix) ""
 
+	use getopt config
+
 	if {[info exists rulebase.spec]} {
 		invoke-spec-file rulebase.spec
 	} else {
-		invoke-spec-file $tmake(libdir)/rulebase.default
+		invoke-spec-file $tmake(dir)/rulebase.default
 	}
 
 	# Save the global state unless we need to reload
@@ -209,6 +217,7 @@ proc make {argv} {
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
 				build-error "Error: Don't know how to build $t"
+				tmake-exit 1
 			}
 			break
 		}
@@ -233,6 +242,13 @@ proc make {argv} {
 		# Including global vars
 		foreach i [dict keys $globalvars] {
 			set ::$i [dict get $globalvars $i]
+		}
+		# XXX: This is *really*, *really* ugly
+		# Discard any global vars we didn't know about before
+		foreach i [info globals {[A-Z]*}] {
+			if {![dict exists $globalvars $i]} {
+				unset ::$i
+			}
 		}
 		load-build-description 0
 	}
@@ -397,7 +413,7 @@ proc process-build-spec-file {dir} {
 	restore-subdir-vars $saved
 
 	if {$rc == 20} {
-		puts "Skipping $path"
+		dputs m "Skipping $path"
 		return
 	}
 	if {$rc != 0 && $rc != 2} {
@@ -464,13 +480,16 @@ proc discard-orphan-targets {} {
 # ==================================================================
 
 proc use {args} {
+	if {$::tmake(installed)} {
+		return
+	}
 	foreach m $args {
 		if {[dict exists $::tmake(modules) $m]} {
 			continue
 		}
 		dict set ::tmake(modules) $m 1
 
-		set source $::tmake(libdir)/${m}.tcl
+		set source $::tmake(dir)/lib/${m}.tcl
 		if {![file exists $source]} {
 			dev-error "use: No such module: $m"
 		}
@@ -669,25 +688,25 @@ proc show-all-rules {} {
 proc define {name args} {
 	#puts "define $name $args"
 	if {![dict exists $::tmake(fixedvars) $name]} {
-		upvar #0 $name n
-		set n [join $args]
+		global $name
+		set $name [join $args]
 	}
 }
 
 proc define! {name args} {
 	#puts "define! $name $args"
 	dict set ::tmake(fixedvars) $name 1
-	upvar #0 $name n
-	set n [join $args]
+	global $name
+	set $name [join $args]
 }
 
 # Set a variable to the given value
 # unless it is already set to a non-empty value.
 #
 proc define? {name args} {
+	global $name
 	#puts "define? $name $args"
-	upvar #0 $name n
-	if {![info exists n] || $n eq ""} {
+	if {![info exists $name] || [set $name] eq ""} {
 		define $name {*}$args
 	}
 }
@@ -697,8 +716,16 @@ proc define? {name args} {
 # separated by a space.
 #
 proc define-append {name args} {
-	upvar #0 $name n
-	append-with-space ::$name [join $args]
+	global $name
+	append-with-space $name [join $args]
+}
+
+proc get-define {name {default ""}} {
+	global $name
+	if {![info exists $name]} {
+		return $default
+	}
+	set $name
 }
 
 # If the given var is not set or is "", sets it to $value
@@ -1607,6 +1634,9 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 	}
 	array names deps
 }
+
+# Embedded modules are inserted below here
+##-- CUT HERE --##
 
 # ==================================================================
 # ENTRY POINT

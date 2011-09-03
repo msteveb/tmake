@@ -1,6 +1,6 @@
 # vim:set syntax=tcl:
 
-Load --required settings.conf
+Load settings.conf
 Depends {settings.conf jimautoconf.h jim-config.h} auto.def -do {
 	note "Configure"
 	run $AUTOREMAKE >config.out

@@ -94,6 +94,9 @@ proc file-join {dir path} {
 	if {$dir eq "."} {
 		return $path
 	}
+	if {$path eq "."} {
+		return $dir
+	}
 	file join $dir $path
 }
 
