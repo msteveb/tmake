@@ -3,6 +3,9 @@
 # load autosetup settings
 Load settings.conf
 Clean distclean settings.conf autoconfig.h
+Depends settings.conf -do {
+	user-error "settings.conf does not exist"
+}
 
 IncludePaths . include
 
@@ -50,12 +53,16 @@ foreach b "$src main" {
 	lappend header_deps ${b}_.c
 }
 
-lappend gen_headers sqlite3.h th.h include/VERSION.h
+# Note: make-local-src is needed here because these filenames are not passed as inputs or dependencies,
+#       and nor are they targets, so tmake doesn't know that they are in the source tree.
+lappend gen_headers {*}[make-local-src sqlite3.h th.h]
+lappend gen_headers include/VERSION.h
 lappend header_deps sqlite3.h th.h include/VERSION.h
 
 Generate $headers makeheaders $header_deps {
+	file mkdir include
 	run $script $gen_headers
-} -vars gen_headers $gen_headers
+} -vars gen_headers $gen_headers -msg {note GenerateHeaders}
 
 # Special flags on some objects
 ObjectCFlags sqlite3.c -DSQLITE_OMIT_LOAD_EXTENSION=1 -DSQLITE_THREADSAFE=0 -DSQLITE_DEFAULT_FILE_FORMAT=4

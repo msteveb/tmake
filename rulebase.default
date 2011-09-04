@@ -1,3 +1,4 @@
+# vim:set syntax=tcl:
 # These are the built-in rules
 #
 # They can be replaced if necessary
@@ -80,6 +81,7 @@ proc BuildSpecProlog {} {
 		CleanTarget uninstall
 	}
 	IncludePaths .
+	SourceIncludePaths .
 }
 
 proc BuildSpecEpilog {} {
@@ -105,10 +107,19 @@ proc expand-wildcards {arglist} {
 	set pairs {}
 	foreach i $arglist {
 		if {[string match {*[*?]*} $i]} {
-			set globdir [file dirname $i]
-			foreach j [glob [make-local $i]] {
-				set p [file-join $globdir [file tail $j]]
-				lappend pairs [make-local $p] $p
+			if {[string match {*{*}*} $i]} {
+				dev-error "Braced wildcards not supported: $i"
+			}
+			set globdir [file-src [file dirname $i]]
+			if {![file isdir $globdir]} {
+				continue
+			}
+			set pattern [file tail $i]
+			foreach j [readdir $globdir] {
+				if {[string match $pattern $j]} {
+					set p [file-join $globdir $j]
+					lappend pairs [make-local $p] $p
+				}
 			}
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] target src
@@ -303,6 +314,23 @@ proc IncludePaths {args} {
 		}
 	}
 }
+
+proc SourceIncludePaths {args} {
+	show-this-rule
+	foreach dir $args {
+		if {$dir eq "." && [local-dir] ne "."} {
+			set dir $::tmake(topsrcdir)
+		} else {
+			set dir [make-local [file-join $::tmake(topsrcdir) $dir]]
+		}
+		if {$dir ni $::INCPATHS} {
+			define-append INCPATHS $dir
+			CFlags [prefix -I $dir]
+			C++Flags [prefix -I $dir]
+		}
+	}
+}
+
 
 proc load-config-file {filename} {
 	# All lines look like one of:
@@ -529,8 +557,10 @@ proc Generate {target script inputs rules args} {
 	set target [make-local {*}$target]
 	if {$script ne ""} {
 		set localscript [make-local $script]
-		if {[is-target? $localscript] || [file exists $localscript]} {
+		if {[is-target? $localscript]} {
 			set script $localscript
+		} elseif {[file-src-exists $localscript]} {
+			set script [file-src $localscript]
 		} else {
 			# A non-local generator script must be in publish/bin
 			set script [file join $::PUBLISH bin $script]

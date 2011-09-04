@@ -16,7 +16,7 @@ Executable --install=/home/httpd/cgi-bin web auth.c customstorage.c init.c main.
 
 Install /home/httpd/css *.css basic1.css=$THEMES/basic.css
 Install /home/httpd/javascript *.js
-Install /home/httpd/img img/*.{png,gif,ico,jp*} $THEMES/black_icons/*checked.png
+Install /home/httpd/img img/*.png img/*.gif img/*.ico img/*.jp* $THEMES/black_icons/*checked.png
 Install /lib/tcl6 $UWEB/lib/tcl6/*.tcl *.tcl
 
 Phony run install -do {

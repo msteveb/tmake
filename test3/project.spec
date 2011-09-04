@@ -8,7 +8,7 @@
 #
 proc CgiSources {args} {
 	set srcs {}
-	foreach i [glob {*}[make-local {*}$args]] {
+	foreach {i j} [expand-wildcards $args] {
 		set i [file tail $i]
 		switch -glob -- $i {
 			*.page {

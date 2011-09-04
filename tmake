@@ -65,6 +65,9 @@ proc make {argv} {
 	#puts "make $argv"
 	#parray ::env
 
+	set tmake(builddir) [pwd]
+	set tmake(srcdir) [pwd]
+
 	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
 	if {!$tmake(installed)} {
 		set tmake(dir) [file dirname $::argv0]
@@ -155,6 +158,11 @@ proc make {argv} {
 				-C* {
 					# XXX: Should be "-C dir" but that is waiting for getopt
 					cd [string range $a 2 end]
+					set tmake(builddir) [pwd]
+				}
+				-P* {
+					# XXX: Should be "-P dir" but that is waiting for getopt
+					set tmake(srcdir) [file-normalize [string range $a 2 end]]
 				}
 				-- {
 				}
@@ -171,17 +179,16 @@ proc make {argv} {
 		}
 	}
 
-	#parray tmake
-	set tmake(topdir) [find-project-top]
-	cd $tmake(topdir)
-	set ::env(TOPDIR) $tmake(topdir)
+	lassign [find-project-top $tmake(srcdir) $tmake(builddir)] tmake(topsrcdir) tmake(topbuilddir)
+	set ::env(TOPSRCDIR) $tmake(topsrcdir)
+	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
 
 	set tmake(prefix) ""
 
 	use getopt config
 
-	if {[info exists rulebase.spec]} {
-		invoke-spec-file rulebase.spec
+	if {[file-src-exists rulebase.spec]} {
+		invoke-spec-file [file-src rulebase.spec]
 	} else {
 		invoke-spec-file $tmake(dir)/rulebase.default
 	}
@@ -289,10 +296,10 @@ proc make {argv} {
 proc load-build-description {loadcache} {
 	global tmake
 
-	invoke-spec-file project.spec
+	invoke-spec-file [file-src project.spec]
 
 	# Loaded in the global scope 
-	if {![file exists build.spec]} {
+	if {![file-src-exists build.spec]} {
 		user-error "No build.spec in the current directory"
 	}
 
@@ -315,17 +322,18 @@ proc load-build-description {loadcache} {
 # .spec file processing
 # ==================================================================
 
-proc find-project-top {} {
-	set topdir [pwd]
+proc find-project-top {srcdir builddir} {
+	set topdir $srcdir
 	while {![file exists $topdir/project.spec]} {
-		set parent [file dir $topdir]
+		set parent [file dirname $topdir]
 		if {$topdir eq $parent} {
 			user-error "Failed to find project.spec in any parent directory."
 		}
 		set topdir $parent
+		set builddir [file dirname $builddir]
 	}
 	dputs m "Project top found at $topdir"
-	return $topdir
+	return [list $topdir $builddir]
 }
 
 proc local-prefix {} {
@@ -338,6 +346,10 @@ proc local-dir {} {
 
 proc make-local {args} {
 	prefix [local-prefix] $args
+}
+
+proc make-local-src {args} {
+	prefix $::tmake(topsrcdir)/[local-prefix] $args
 }
 
 proc invoke-spec-file {filename} {
@@ -382,6 +394,14 @@ proc restore-subdir-vars {dict} {
 	}
 }
 
+proc file-src {path} {
+	file join $::tmake(topsrcdir) $path
+}
+
+proc file-src-exists {path} {
+	file exists [file-src $path]
+}
+
 # Read in the given spec file in the given directory (relative to topdir)
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir} {
@@ -395,7 +415,9 @@ proc process-build-spec-file {dir} {
 		set tmake(prefix) $dir/
 	}
 
-	set path [file-join $dir build.spec]
+	set srcdir [file-src $dir]
+
+	set path [file-join $srcdir build.spec]
 
 	if {![file exists $path]} {
 		user-error "$path does not exist"
@@ -426,16 +448,16 @@ proc process-build-spec-file {dir} {
 
 	# Normally we search for dirs containing build.spec
 	if {$tmake(autosubdirs)} {
-		foreach d [glob -nocomplain $tmake(prefix)*] {
-			if {[file isdirectory $d] && [file exists $d/build.spec] && $d ni $subdirs} {
-				lappend subdirs $d
+		foreach d [readdir $srcdir] {
+			if {[file exists $srcdir/$d/build.spec] && $d ni $subdirs} {
+				lappend subdirs [file-join $dir $d]
 			}
 		}
 	}
 
 	# Now process subdirs
 	foreach d $subdirs {
-		if {[file exists $d/build.ignore]} {
+		if {[file-src-exists $d/build.ignore]} {
 			dputs m "Ignoring $d because build.ignore exists"
 		} else {
 			process-build-spec-file $d
@@ -840,6 +862,7 @@ proc readfile {filename {default_value ""}} {
 # Does not add an extra newline.
 #
 proc writefile {filename value} {
+	file mkdir [file dirname $filename]
 	set f [open $filename w]
 	puts -nonewline $f $value
 	close $f
@@ -1129,7 +1152,11 @@ proc parse-rule {target arglist} {
 # ==================================================================
 
 proc file-real-mtime {filename} {
-	file mtime $filename
+	if {[is-target? $filename]} {
+		file mtime $filename
+	} else {
+		file mtime [file-src $filename]
+	}
 }
 
 proc file-virtual-mtime {filename} {
@@ -1203,14 +1230,26 @@ proc needbuild? {targets depends depname} {
 	return 0
 }
 
+proc locate-files {files} {
+	set result {}
+	foreach f $files {
+		if {[is-target? $f]} {
+			lappend result $f
+		} else {
+			lappend result [file-src $f]
+		}
+	}
+	return $result
+}
+
 # Sets target-local variables. e.g. $local, $inputs, $depends and $target
 proc set-target-vars {info} {
 	foreach {n v} [dict get $info vars] {
 		set ::$n $v
 	}
-	foreach n {local target depends inputs} {
-		set ::$n [dict get $info $n]
-	}
+	set ::target [dict get $info target]
+	set ::depends [locate-files [dict get $info depends]]
+	set ::inputs [locate-files [dict get $info inputs]]
 }
 proc clear-target-vars {vars} {
 	foreach n [dict keys $vars] {
@@ -1260,6 +1299,7 @@ proc calc-dyndeps {target} {
 
 proc file-exists-all {list missingname} {
 	foreach f $list {
+		# XXX: file exists
 		if {![file exists $f]} {
 			upvar $missingname missing
 			set missing $f
@@ -1284,7 +1324,7 @@ proc build {target} {
 	set current $tmake(current)
 	lappend current $target
 	if {![is-target? $target]} {
-		if {[file exists $target]} {
+		if {[file-src-exists $target]} {
 			dputs n "$target is not a target, but exists"
 			return 0
 		}
@@ -1460,7 +1500,7 @@ proc build {target} {
 				}
 				set rc [catch {uplevel #0 $do} msg opts]
 				# Always restore the current dir afterwards
-				cd $tmake(topdir)
+				cd $tmake(topbuilddir)
 				if {$rc} {
 					# XXX: Check for signal?
 					if {$t(nofail)} {
@@ -1592,14 +1632,14 @@ proc header-scan-regexp {regex filename} {
 proc find-file {filename paths} {
 	foreach p $paths {
 		set f [file-join $p $filename]
-		if {[file exists $f]} {
-			return $f
+		if {[file-src-exists $f]} {
+			return [list $f [file-src $f]]
 		}
 		if {[is-target? $f]} {
 			# XXX: Is it really OK to build targets here?
 			dputs d "$f is a target, so building first"
 			if {[build $f] >= 0} {
-				return $f
+				return [list $f $f]
 			}
 		}
 	}
@@ -1621,11 +1661,11 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 		foreach d $toscan {
 			if {![info exists scanned($d)]} {
 				set scanned($d) 1
-				set df [find-file $d $incpaths]
-				if {$df ne ""} {
-					set deps($df) 1
-					if {[file exists $df]} {
-						lappend newscan {*}[header-scan-regexp $regex $df]
+				lassign [find-file $d $incpaths] path filepath
+				if {$path ne ""} {
+					set deps($path) 1
+					if {[file exists $filepath]} {
+						lappend newscan {*}[header-scan-regexp $regex $filepath]
 					}
 				}
 			}

@@ -111,6 +111,31 @@ Builds occur in a separate tree.
 Source files are located and the full or relative path is used in rules.
 ($target in build dir, $inputs in either source or build dir)
 
+Here is the idea:
+- cwd is the top of the *build* tree (call this $topblddir)
+- stub Makefile includes a reference to the source dir containing project.spec
+  (call this $topsrcdir)
+
+  tmake -P <dir-containing-project.spec> ...
+
+- All targets are relative to $topblddir
+
+
+load-build-description loads $topsrcdir/project.spec and $topblddir/.makecache
+
+Then build.spec files are loaded from $topsrcdir down.
+
+$PUBLISH is $topblddir/publish
+Default install DESTDIR is still _install
+
+In [build], if the arg is not a target, it must exist in the source dir.
+If it is a target, we build it in the build dir.
+This is a general rule which should be true for everything, including
+when scanning for header files.
+
+[find-file] needs to do this. Can we use this for everthing, or
+do we need a separate proc.
+
 Install
 -------
 Explain the install philosophy
