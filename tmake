@@ -333,6 +333,7 @@ proc find-project-top {srcdir builddir} {
 		set builddir [file dirname $builddir]
 	}
 	dputs m "Project top found at $topdir"
+	set topdir [relative-path $topdir $builddir]
 	return [list $topdir $builddir]
 }
 
@@ -1248,6 +1249,7 @@ proc set-target-vars {info} {
 		set ::$n $v
 	}
 	set ::target [dict get $info target]
+	set ::local [dict get $info local]
 	set ::depends [locate-files [dict get $info depends]]
 	set ::inputs [locate-files [dict get $info inputs]]
 }

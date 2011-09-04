@@ -81,7 +81,6 @@ proc BuildSpecProlog {} {
 		CleanTarget uninstall
 	}
 	IncludePaths .
-	SourceIncludePaths .
 }
 
 proc BuildSpecEpilog {} {
@@ -110,16 +109,22 @@ proc expand-wildcards {arglist} {
 			if {[string match {*{*}*} $i]} {
 				dev-error "Braced wildcards not supported: $i"
 			}
-			set globdir [file-src [file dirname $i]]
+			set destdir [file dirname [make-local $i]]
+			set globdir [file-src $destdir]
 			if {![file isdir $globdir]} {
+				puts "Warning: $globdir does not exist"
 				continue
 			}
 			set pattern [file tail $i]
+			set count 0
 			foreach j [readdir $globdir] {
 				if {[string match $pattern $j]} {
-					set p [file-join $globdir $j]
-					lappend pairs [make-local $p] $p
+					incr count
+					lappend pairs [file-join $globdir $j] [file-join $destdir $j]
 				}
+			}
+			if {$count == 0} {
+				puts "Warning: No matches for [make-local $i]"
 			}
 		} elseif {[string match *=* $i]} {
 			lassign [split $i =] target src
@@ -128,6 +133,7 @@ proc expand-wildcards {arglist} {
 			lappend pairs [make-local $i] $i
 		}
 	}
+	#puts "expand-wildcards [make-local $arglist] => $pairs"
 	return $pairs
 }
 
@@ -302,35 +308,16 @@ proc UseLibs {args} {
 proc IncludePaths {args} {
 	show-this-rule
 	foreach dir $args {
-		if {$dir eq "." && [local-dir] ne "."} {
-			set dir [local-dir]
-		} else {
-			set dir [make-local $dir]
-		}
-		if {$dir ni $::INCPATHS} {
-			define-append INCPATHS $dir
-			CFlags [prefix -I $dir]
-			C++Flags [prefix -I $dir]
+		foreach prefix [list [local-dir] $::tmake(topsrcdir)] {
+			set dir [file-join $prefix $dir]
+			if {$dir ni $::INCPATHS} {
+				define-append INCPATHS $dir
+				CFlags [prefix -I $dir]
+				C++Flags [prefix -I $dir]
+			}
 		}
 	}
 }
-
-proc SourceIncludePaths {args} {
-	show-this-rule
-	foreach dir $args {
-		if {$dir eq "." && [local-dir] ne "."} {
-			set dir $::tmake(topsrcdir)
-		} else {
-			set dir [make-local [file-join $::tmake(topsrcdir) $dir]]
-		}
-		if {$dir ni $::INCPATHS} {
-			define-append INCPATHS $dir
-			CFlags [prefix -I $dir]
-			C++Flags [prefix -I $dir]
-		}
-	}
-}
-
 
 proc load-config-file {filename} {
 	# All lines look like one of:
