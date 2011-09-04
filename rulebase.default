@@ -97,6 +97,21 @@ proc BuildSpecEpilog {} {
 # ==================================================================
 # HELPERS
 # ==================================================================
+proc expand-wildcard-braces {arglist} {
+	set result {}
+	foreach pattern $arglist {
+		if {[string match {*{*}*} $pattern]} {
+			regexp {^(.*)\{(.*)\}(.*)$} $pattern -> before alts after
+			foreach i [split $alts ,] {
+				lappend result $before$i$after
+			}
+		} else {
+			lappend result $pattern
+		}
+	}
+	#puts "$arglist => $result"
+	return $result
+}
 
 # Returns a list of pairs: src dest
 # The src is a local path, while the dest is relative.
@@ -106,21 +121,20 @@ proc expand-wildcards {arglist} {
 	set pairs {}
 	foreach i $arglist {
 		if {[string match {*[*?]*} $i]} {
-			if {[string match {*{*}*} $i]} {
-				dev-error "Braced wildcards not supported: $i"
-			}
-			set destdir [file dirname [make-local $i]]
-			set globdir [file-src $destdir]
-			if {![file isdir $globdir]} {
-				puts "Warning: $globdir does not exist"
-				continue
-			}
-			set pattern [file tail $i]
 			set count 0
-			foreach j [readdir $globdir] {
-				if {[string match $pattern $j]} {
-					incr count
-					lappend pairs [file-join $globdir $j] [file-join $destdir $j]
+			foreach ii [expand-wildcard-braces $i] {
+				set destdir [file dirname [make-local $ii]]
+				set globdir [file-src $destdir]
+				if {![file isdir $globdir]} {
+					puts "Warning: $globdir does not exist"
+					continue
+				}
+				set pattern [file tail $ii]
+				foreach j [readdir $globdir] {
+					if {[string match $pattern $j]} {
+						incr count
+						lappend pairs [file-join $globdir $j] [file-join $destdir $j]
+					}
 				}
 			}
 			if {$count == 0} {
