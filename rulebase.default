@@ -87,6 +87,7 @@ proc BuildSpecEpilog {} {
 	if {$::tmake(localmakefile) ni {none -none}} {
 		set makefile [make-local $::tmake(localmakefile)]
 		if {![file exists $makefile]} {
+			# REVISIT: Should add the correct -P and -C options here
 			writefile $makefile "_all:\n\t+@$::tmake(exe) \$(MFLAGS) $::tmake(prefix)all\n\n\
 \$(.TARGETS) \$(MAKECMDGOALS):\n\t+@$::tmake(exe) \$(MFLAGS) $::tmake(prefix)\$@\n"
 		}
@@ -117,27 +118,38 @@ proc expand-wildcard-braces {arglist} {
 # The src is a local path, while the dest is relative.
 # so ssl/*.h might return: {axtls/ssl/file.h ssl/file.h}
 #
-proc expand-wildcards {arglist} {
+proc expand-wildcards {arglist {warn 0}} {
 	set pairs {}
 	foreach i $arglist {
-		if {[string match {*[*?]*} $i]} {
+		if {[string match {*[{}*?]*} $i]} {
 			set count 0
 			foreach ii [expand-wildcard-braces $i] {
-				set destdir [file dirname [make-local $ii]]
-				set globdir [file-src $destdir]
+				# ii=ssl/*.h
+				# destdir=ssl
+				set destdir [file dirname $ii]
+				# srcdir=axtls/ssl
+				if {$destdir eq "."} {
+					set srcdir [local-dir]
+				} else {
+					set srcdir [make-local $destdir]
+				}
+				# globdir=../axtls/ssl
+				set globdir [file-src $srcdir]
 				if {![file isdir $globdir]} {
 					puts "Warning: $globdir does not exist"
 					continue
 				}
+				# pattern=*.h
 				set pattern [file tail $ii]
 				foreach j [readdir $globdir] {
 					if {[string match $pattern $j]} {
 						incr count
-						lappend pairs [file-join $globdir $j] [file-join $destdir $j]
+						# Need to return axtls/ssl/crypto.h ssl/crypto.h
+						lappend pairs [file-join $srcdir $j] [file-join $destdir $j]
 					}
 				}
 			}
-			if {$count == 0} {
+			if {$warn && $count == 0} {
 				puts "Warning: No matches for [make-local $i]"
 			}
 		} elseif {[string match *=* $i]} {
@@ -195,7 +207,7 @@ proc Publish {args} {
 	show-this-rule
 	getopt {--keepdir dir args} args
 
-	foreach {src dst} [expand-wildcards $args] {
+	foreach {src dst} [expand-wildcards $args 1] {
 		if {$keepdir} {
 			PublishOneFile $dir/$dst $src
 		} else {
@@ -387,7 +399,7 @@ proc UseSystemLibs {args} {
 proc PublishIncludes {args} {
 	getopt {--keepdir args} args
 
-	foreach {src dst} [expand-wildcards $args] {
+	foreach {src dst} [expand-wildcards $args 1] {
 		if {$keepdir} {
 			PublishOneFile include/$dst $src
 		} else {
@@ -478,6 +490,8 @@ proc install-file {target source bin} {
 proc InstallFile {dest src {bin 0}} {
 	show-this-rule
 
+	#puts "InstallFile $dest $src"
+
 	set destfile $::DESTDIR$dest
 	target $destfile -nocache -inputs $src -vars dest $dest bin $bin -msg {note "Install $dest"} -do {
 		install-file $target $inputs $bin
@@ -498,7 +512,7 @@ proc Install {args} {
 	getopt {--bin --keepdir destdir args} args
 
 	set srcs {}
-	foreach {src dst} [expand-wildcards $args] {
+	foreach {src dst} [expand-wildcards $args 1] {
 		lappend srcs $src
 		if {$keepdir} {
 			InstallFile [file-join $destdir $dst] $src $bin
@@ -556,23 +570,35 @@ proc Clean {type args} {
 proc Generate {target script inputs rules args} {
 	# XXX: Would be nice if script and inputs were optional
 	set target [make-local {*}$target]
+	set runscript $script
 	if {$script ne ""} {
 		set localscript [make-local $script]
+		#puts "Generate: looking for $script, localscript=$localscript"
 		if {[is-target? $localscript]} {
+			#puts "$localscript is a target"
 			set script $localscript
+			# If running a script in the current dir need ./$script
+			if {[string match */* $localscript]} {
+				set runscript $localscript
+			} else {
+				set runscript [local-dir]/$script
+			}
 		} elseif {[file-src-exists $localscript]} {
+			#puts "$localscript is not a target, but exists as source"
+			# $script is source, 
 			set script [file-src $localscript]
+			set script $localscript
+			set runscript [file-src $localscript]
 		} else {
+			#puts "$localscript is non-local, so assume it is in publish/bin"
 			# A non-local generator script must be in publish/bin
 			set script [file join $::PUBLISH bin $script]
+			set runscript $script
 		}
-	}
-	# If running a script in the current dir need ./$script
-	if {[string match */* $script]} {
-		set runscript $script
 	} else {
-		set runscript [local-dir]/$script
+		#puts "Generate $target has no script"
 	}
+	#puts "script=$script, runscript=$runscript, inputs=$inputs"
 	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $runscript -do $rules -msg {note Generate $target} {*}$args
 	Clean clean $target
 }

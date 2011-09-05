@@ -1288,6 +1288,8 @@ proc run {args} {
 
 proc calc-dyndeps {target} {
 	array set t [get-rule $target]
+	#puts "=============="
+	#parray t
 
 	set dyndeps {}
 	if {$t(dyndep) ne ""} {
@@ -1597,6 +1599,7 @@ proc build {target} {
 # 
 proc header-scan-regexp {regex filename} {
 	global tmake
+	#puts "header-scan-regexp $filename"
 
 	# memoize the result
 	set mtime [file-real-mtime $filename]
@@ -1610,8 +1613,12 @@ proc header-scan-regexp {regex filename} {
 		# Stale
 		dict unset tmake(headerscancache) $filename
 	}
+	if {[is-target? $filename]} {
+		set f [open $filename]
+	} else {
+		set f [open [file-src $filename]]
+	}
 	set headers {}
-	set f [open $filename]
 	set n 0
 	while {[gets $f buf] >= 0} {
 		if {[regexp $regex $buf -> name]} {
@@ -1631,6 +1638,7 @@ proc header-scan-regexp {regex filename} {
 	return $headers
 }
 
+# Returns a pair of local-path, source-path
 proc find-file {filename paths} {
 	foreach p $paths {
 		set f [file-join $p $filename]
@@ -1651,7 +1659,8 @@ proc find-file {filename paths} {
 
 # XXX: This could be done better
 proc header-scan-regexp-recursive {incpaths regex filename} {
-	if {![file exists $filename]} {
+	if {![file exists $filename] && ![file-src-exists $filename]} {
+		#puts "header-scan-regexp-recursive, $filename does not exist"
 		return {}
 	}
 	dputs d "Scanning $filename for headers: incpaths=$incpaths"
@@ -1667,7 +1676,7 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 				if {$path ne ""} {
 					set deps($path) 1
 					if {[file exists $filepath]} {
-						lappend newscan {*}[header-scan-regexp $regex $filepath]
+						lappend newscan {*}[header-scan-regexp $regex $path]
 					}
 				}
 			}
@@ -1697,6 +1706,9 @@ if {[catch {make $argv} msg]} {
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
 	puts "Built $tmake(numtargets) target(s) in [format %.2f $elapsed] seconds"
+}
+if {$tmake(exitcode)} {
+	puts stderr "*** Error: Targets failed to build"
 }
 
 tmake-exit $tmake(exitcode)
