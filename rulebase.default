@@ -456,6 +456,7 @@ proc Test {args} {
 proc CopyFile {dest source} {
 	show-this-rule
 	target [make-local $dest] -inputs [make-local $source] -msg "note Copy $dest" -do {
+		file delete $target
 		file copy $inputs $target
 	}
 	Clean clean [make-local $dest]

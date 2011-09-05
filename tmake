@@ -40,6 +40,7 @@ set tmake(deferred) {}
 set tmake(projfiles) {}
 set tmake(fixedvars) {}
 set tmake(installed) 0
+set tmake(cleaning) 0
 
 # Should these really be here?
 set tmake(headerscancache) {}
@@ -179,6 +180,11 @@ proc make {argv} {
 		}
 	}
 
+	if {[llength $targets] == 0} {
+		set targets all
+	}
+	set tmake(cmdlinetargets) $targets
+
 	lassign [find-project-top $tmake(srcdir) $tmake(builddir)] tmake(topsrcdir) tmake(topbuilddir)
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
@@ -210,10 +216,18 @@ proc make {argv} {
 		show-all-rules
 	}
 
+	# XXX: Is there a better way to determine if we are cleaning?
+	foreach i {clean distclean mrproper} {
+		if {$i in $targets} {
+			set tmake(cleaning) 1
+			break
+		}
+	}
+
 	# Try to build all Load targets
 
 	# But not if cleaning!
-	if {"clean" in $targets} {
+	if {[is-cleaning?]} {
 		set tmake(projfiles) ""
 	}
 
@@ -316,6 +330,10 @@ proc load-build-description {loadcache} {
 	process-build-spec-file .
 
 	resolve-deferred-dependencies
+}
+
+proc is-cleaning? {} {
+	return $::tmake(cleaning)
 }
 
 # ==================================================================
@@ -1529,7 +1547,7 @@ proc build {target} {
 		}
 
 		# Did the rule make the targets?
-		if {$rc == 0 && !$t(phony) && !$tmake(norun)} {
+		if {$rc == 0 && !$t(phony) && !$tmake(norun) && ![is-cleaning?]} {
 			set now [clock seconds]
 			foreach f $ruletarget {
 				if {![file exists $f]} {
@@ -1553,7 +1571,9 @@ proc build {target} {
 		}
 
 		if {$rc == 0} {
-			incr tmake(numtargets)
+			if {!$t(phony)} {
+				incr tmake(numtargets)
+			}
 		} else {
 			# On failure, delete the target(s)
 			file delete {*}$ruletarget
