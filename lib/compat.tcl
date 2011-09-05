@@ -48,7 +48,7 @@ if {$tmakecompat(istcl)} {
 		exec -ignorestderr -- >@stdout {*}$args
 	}
 	proc readdir {dir} {
-		glob -directory $dir -tails *
+		glob -nocomplain -directory $dir -tails *
 	}
 } elseif {$tmakecompat(iswin)} {
 	# On Windows, backslash convert all environment variables
