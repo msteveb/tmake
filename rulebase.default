@@ -64,7 +64,7 @@ set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
 
-lappend tmake(subdirvars) C_FLAGS CXX_FLAGS LD_FLAGS PROJLIBS SYSLIBS INCPATHS
+lappend tmake(subdirvars) C_FLAGS CXX_FLAGS LD_FLAGS LOCAL_LIBS PROJLIBS SYSLIBS INCPATHS
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
