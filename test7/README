@@ -1,0 +1,21 @@
+Tue  6 Sep 2011 20:14:17 EST
+----------------------------
+
+This is a cmake example from http://www.vtk.org/Wiki/CMake:How_To_Process_Lots_Of_Input_Files
+converted to tmake.
+
+Converts all files in the current directory named *.in to the corresponding
+file without the ".in" extension using the generated app, processor.
+
+This Works
+----------
+* Out-of-tree builds using tmake -P
+* Everything can be moved into a subdir seamlessly
+* To use the generator from other directories, add "Executable --publish"
+
+Issues
+------
+* Uses glob-src from project.spec to implement globbing for out-of-tree builds
+  This should go into the standard rulebase
+* If cross compiling, the processor will not work (needs HostExecutable)
+* Currently "Depends" is not local-aware. It should be.

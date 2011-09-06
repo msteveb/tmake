@@ -64,6 +64,7 @@ Generate Tcl.html make-index jim_tcl.txt {
 	run $tclsh $script $inputs | asciidoc -o $target -d manpage -
 }
 Install $prefix/docs Tcl.html
+Install / README
 
 Phony docs Tcl.html
 
