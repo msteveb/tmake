@@ -494,6 +494,11 @@ proc InstallFile {dest src {bin 0}} {
 	#puts "InstallFile $dest $src"
 
 	set destfile $::DESTDIR$dest
+	if {[is-target? $destfile]} {
+		array set orig [get-target-rule $destfile]
+		user-notice [error-location "Warning: Duplicate install rule for $dest at [make-source-location $orig(source)]"]
+		return
+	}
 	target $destfile -nocache -inputs $src -vars dest $dest bin $bin -msg {note "Install $dest"} -do {
 		install-file $target $inputs $bin
 	}
@@ -501,10 +506,6 @@ proc InstallFile {dest src {bin 0}} {
 
 	# This file also needs to be uninstalled
 	Clean uninstall $destfile
-
-	#if {[dict exists $::tmake(install) $dest]} {
-	#	user-notice "Warning: Duplicate install rule for $dest"
-	#}
 }
 
 proc Install {args} {

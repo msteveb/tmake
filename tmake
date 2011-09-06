@@ -189,6 +189,8 @@ proc make {argv} {
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
 
+	cd $tmake(topbuilddir)
+
 	set tmake(prefix) ""
 
 	use getopt config
@@ -569,7 +571,7 @@ proc user-notice {msg} {
 
 # Incorrect usage in the build.spec file. Identify the location.
 proc dev-error {msg} {
-	puts stderr [error-location $msg]
+	puts stderr [error-location "Error: $msg"]
 	tmake-exit 1
 }
 
