@@ -68,4 +68,4 @@ Install / README
 
 Phony docs Tcl.html
 
-Clean distclean jim-config.h jimautoconf.h config.log settings.conf
+DistClean jim-config.h jimautoconf.h config.log settings.conf

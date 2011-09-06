@@ -416,7 +416,7 @@ proc restore-subdir-vars {dict} {
 }
 
 proc file-src {path} {
-	file join $::tmake(topsrcdir) $path
+	file-join $::tmake(topsrcdir) $path
 }
 
 proc file-src-exists {path} {
@@ -1323,7 +1323,6 @@ proc calc-dyndeps {target} {
 
 proc file-exists-all {list missingname} {
 	foreach f $list {
-		# XXX: file exists
 		if {![file exists $f]} {
 			upvar $missingname missing
 			set missing $f

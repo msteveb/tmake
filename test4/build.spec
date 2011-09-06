@@ -2,22 +2,22 @@
 
 # load autosetup settings
 Load settings.conf
-Clean distclean settings.conf autoconfig.h
+DistClean settings.conf autoconfig.h
 Depends settings.conf -do {
 	user-error "settings.conf does not exist"
 }
 
-IncludePaths . include
+IncludePaths include
 
 CFlags -DHAVE_AUTOCONFIG_H
 UseSystemLibs $LIBS
 
 # XXX: Simple host executable for now
 proc HostExecutable {target args} {
-	target $target -inputs {*}$args -do {
+	target [make-local $target] -inputs {*}[make-local {*}$args] -do {
 		run $CC_FOR_BUILD -o $target $inputs
 	}
-	Clean clean $target
+	Clean $target
 }
 
 HostExecutable translate translate.c

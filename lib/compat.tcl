@@ -180,9 +180,9 @@ proc relative-path {path {pwd {}}} {
 # This is designed to be called for incorrect usage, via dev-error
 #
 proc error-location {msg} {
-	#if {$::tmake(debug)} {
-	#	return -code error $msg
-	#}
+	if {$::tmake(debug)} {
+		return [error-stacktrace $msg]
+	}
 	set loc [find-source-location]
 	if {$loc ne "unknown"} {
 		return "$loc: $msg"
