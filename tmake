@@ -924,8 +924,7 @@ proc update-rule {ruledict} {
 		# Haven't seen this rule before so individual target pointers
 		foreach t $ruletarget {
 			if {[dict exists $::tmake(targets) $t]} {
-				array set orig [get-target-rule $t]
-				dev-error "Rule for $t was already specified at [make-source-location $orig(source)]"
+				dev-error "Rule for $t was already specified at [make-source-location $t]"
 			}
 			dict set ::tmake(targets) $t $ruletarget
 		}
@@ -935,15 +934,21 @@ proc update-rule {ruledict} {
 
 proc show-this-rule {} {
 	if {[debug-is-set p]} {
-		puts "\[p\] [make-source-location [find-source-location]] [info level -1]"
+		puts "\[p\] [find-source-location] [info level -1]"
 	}
 }
 
-proc make-source-location {list {prefix {}} {suffix {}}} {
-	if {$list eq "unknown"} {
+proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
+	if {[is-rule? $ruletarget]} {
+		array set info [get-rule $ruletarget]
+	} else {
+		array set info [get-target-rule $ruletarget]
+	}
+
+	if {$info(source) eq "unknown"} {
 		return ""
 	}
-	return $prefix[join $list ", "]$suffix
+	return $prefix[join $info(source) ", "]$suffix
 }
 
 # This is the only way to create a rule
@@ -1090,7 +1095,13 @@ proc parse-rule-args {arglistname optname} {
 # Returns a dictionary (list) representing the parsed target rule
 #
 proc parse-rule {target arglist} {
-	set info(source) [find-source-location]
+	set info(source) [find-source-location *build.spec]
+	if {$info(source) eq "unknown"} {
+		set info(source) [find-source-location *.spec]
+		if {$info(source) eq "unknown"} {
+			set info(source) [find-source-location *.default]
+		}
+	}
 	set info(target) $target
 
 	array set info {
@@ -1357,7 +1368,7 @@ proc build {target} {
 	array set t [get-target-rule $target]
 	set ruletarget $t(target)
 	if {$t(status) eq "checking"} {
-		dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
+		dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
 	}
 	if {$t(status) eq "uptodate"} {
 		return 0
@@ -1411,7 +1422,7 @@ proc build {target} {
 		set rc [build $i]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
-				build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
+				build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $i @]"
 			}
 			set result -1
 			if {$tmake(quickstop)} {
@@ -1442,7 +1453,7 @@ proc build {target} {
 			set rc [build $i]
 			if {$rc < 0} {
 				if {$tmake(exitcode) == 0} {
-					build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $t(source) @]"
+					build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
 				}
 				set result -1
 				if {$tmake(quickstop)} {
@@ -1498,7 +1509,7 @@ proc build {target} {
 
 	if {$result > 0 && [llength $t(do)]} {
 		#puts "Running rules for $ruletarget"
-		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $t(source) "with rule @"]"
+		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $ruletarget "with rule @"]"
 		uplevel #0 $t(msg)
 		if {[dict get $tmake(debugtypes) r]} {
 			show-rule $ruletarget
@@ -1553,7 +1564,7 @@ proc build {target} {
 			foreach f $ruletarget {
 				if {![file exists $f]} {
 					# XXX: Should onerror run here if --quickstop is set?
-					build-error "[make-source-location $t(source) "" ": "]Error: Rule for $target failed to build target(s) $f"
+					build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f"
 					# Use break to indicate that we have already output the message
 					set rc 3
 				} elseif {!$t(nocache)} {
