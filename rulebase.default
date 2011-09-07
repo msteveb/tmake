@@ -441,21 +441,21 @@ proc Test {args} {
 		lappend opts -msg [list note "Test $localcommand"]
 	}
 
-	set runcmd {}
+	set testcommand {}
 	if {[info exists interp]} {
 		lassign [find-project-bin $interp $chdir] dep filename
 		lappend opts -depends $dep
-		set runcmd "$filename "
+		lappend testcommand $filename 
 	}
 	lassign [find-project-bin $command $chdir] dep filename
 	lappend opts -depends $dep
-	append runcmd $filename
+	lappend testcommand $filename
 
-	set testcommand "$runcmd [join $args]"
+	lappend testcommand {*}$args
 
 	target [make-local $testid] -phony -vars testcommand $testcommand {*}$opts -do {
 		incr ::tmake(testruncount)
-		run {*}$testcommand
+		run $testcommand
 		incr ::tmake(testpasscount)
 	}
 	Phony test [make-local $testid]
@@ -596,7 +596,7 @@ proc find-project-bin {bin {chdir 0}} {
 	if {[is-target? $localbin]} {
 		dputs m "[find-source-location]: find-project-bin: $localbin is a local target"
 		if {$chdir} {
-			return [list $localbin ./$bin]
+			return [list $localbin $bin]
 		} else {
 			return [list $localbin [local-dir]/$bin]
 		}

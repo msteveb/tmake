@@ -163,7 +163,9 @@ proc relative-path {path {pwd {}}} {
 	if {$n == 1} {
 		return $path
 	}
-	set relpath [lrepeat [llength $splitpwd] ..]
+	if {[llength $splitpwd]} {
+		set relpath [lrepeat [llength $splitpwd] ..]
+	}
 	lappend relpath {*}$splitpath
 
 	join $relpath /

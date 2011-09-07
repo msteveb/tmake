@@ -1294,13 +1294,17 @@ proc note {args} {
 
 proc run {args} {
 	set cmdline [join $args]
+	set cmd [lindex $cmdline 0]
+	if {![string match */* $cmd] && [file exists $cmd]} {
+		set cmdline ./$cmdline
+	}
 	vputs [string trim $cmdline]
 	set rc [catch {
 		exec-save-stderr {*}$cmdline
 	} msg opts]
 	if {$rc == 1} {
 		# On error, display the command and the error and return break
-		build-error \n\t$cmdline\n$msg\n
+		build-error "\n\t$cmdline\n$msg\n"
 		return -code break
 	}
 	# XXX: What to do on signal?
