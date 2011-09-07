@@ -163,6 +163,16 @@ proc expand-wildcards {arglist {warn 0}} {
 	return $pairs
 }
 
+proc Glob {args} {
+	set result {}
+	foreach pattern $args {
+		foreach {i j} [expand-wildcards $pattern] {
+			lappend result $j
+		}
+	}
+	lsort $result
+}
+
 # ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================

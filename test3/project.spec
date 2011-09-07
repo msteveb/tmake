@@ -19,9 +19,9 @@ proc CgiSources {args} {
 			*.app {
 				Generate $i.c {} $i {
 					# Ensure rebuilt if the list of files changes
-					# [lsort [glob *.page]]
+					# $pagefiles
 					run $UWEB/bin/parse-app $inputs -o $target
-				}
+				} -vars pagefiles [Glob *.page]
 			}
 			*.menus {
 				Generate $i.c {} $i {

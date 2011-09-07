@@ -1,4 +1,9 @@
-** clean-orphans should not remove installed files
+* Depends and Phony should refer to local files for -depends, and possibly -inputs.
+  Could add a -local flag which means that the next -depends or -inputs refers
+  to local files. How will this work in practice? What about the target?
+  What if we want a non-local target?
+* change Clean to add-clean and create Clean and DistClean for external consumption
+* It is hard to chain (e.g.) Objects, Link, Executable if the input is local but the result is global
 ** make clean/distclean should not require configure to be run
 ** make distclean should remove stub Makefiles (or else tmake --clean should do this)
 
@@ -227,6 +232,7 @@ tmake TODO
 
 Done
 ----
+* clean-orphans should not remove installed files
 * Record commands used to build targets in a cache
 * Add a version number and --version
 * Add --help
