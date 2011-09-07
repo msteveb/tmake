@@ -81,6 +81,7 @@ proc BuildSpecProlog {} {
 		CleanTarget uninstall
 	}
 	IncludePaths .
+	define testid 0
 }
 
 proc BuildSpecEpilog {} {
@@ -180,7 +181,7 @@ proc Glob {args} {
 
 proc Executable {args} {
 	show-this-rule
-	getopt {--test --publish --install: target args} args
+	getopt {--test --nobuild --publish --install: target args} args
 	if {$publish} {
 		# Revisit: --publish=newname?
 		Publish bin $target
@@ -192,7 +193,7 @@ proc Executable {args} {
 	}
 	if {$test} {
 		Test --chdir $target
-	} else {
+	} elseif {!$nobuild} {
 		Phony all $localtarget
 	}
 }
@@ -425,7 +426,7 @@ proc Test {args} {
 	show-this-rule
 
 	getopt {--interp: --chdir --quiet command args} args
-	set testid [make-local test#[incr ::testid]]
+	set testid [incr ::testid]
 	set depends {}
 	set command $command
 	set localcommand [make-local $command]
@@ -452,12 +453,12 @@ proc Test {args} {
 
 	set testcommand "$runcmd [join $args]"
 
-	target $testid -phony -vars testcommand $testcommand {*}$opts -do {
+	target [make-local $testid] -phony -vars testcommand $testcommand {*}$opts -do {
 		incr ::tmake(testruncount)
 		run {*}$testcommand
 		incr ::tmake(testpasscount)
 	}
-	Phony test $testid
+	Phony test [make-local $testid]
 
 	return $testid
 }
