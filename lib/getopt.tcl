@@ -23,6 +23,7 @@ proc getopt {optdef argvname} {
 		if {[regexp {^--([^:]*)(:)?$} $i -> name colon]} {
 			if {$colon eq ":"} {
 				set valopts($name) 1
+				#uplevel 1 unset -nocomplain $name
 			} else {
 				set boolopts($name) 0
 			}

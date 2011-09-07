@@ -1422,7 +1422,7 @@ proc build {target} {
 		set rc [build $i]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
-				build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $i @]"
+				build-error "[make-source-location $ruletarget "" ": "]Error: Don't know how to build $i: [join [lreverse $current] { <= }]"
 			}
 			set result -1
 			if {$tmake(quickstop)} {

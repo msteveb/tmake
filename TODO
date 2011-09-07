@@ -6,6 +6,7 @@
 * It is hard to chain (e.g.) Objects, Link, Executable if the input is local but the result is global
 ** make clean/distclean should not require configure to be run
 ** make distclean should remove stub Makefiles (or else tmake --clean should do this)
+* Should have SetDefaultTarget and it should default to 'all'
 
 Which directory as cwd?
 -----------------------

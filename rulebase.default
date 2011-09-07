@@ -164,6 +164,7 @@ proc expand-wildcards {arglist {warn 0}} {
 }
 
 proc Glob {args} {
+	#getopt {--tail args} args
 	set result {}
 	foreach pattern $args {
 		foreach {i j} [expand-wildcards $pattern] {
@@ -238,7 +239,8 @@ proc ArchiveLib {args} {
 		run $AR $ARFLAGS $target $inputs
 		run $RANLIB $target
 	}
-	Phony all $target
+	# Note: Libraries are not built by default
+	#Phony all $target
 	Clean $libname
 	define-append LOCAL_LIBS $target
 
@@ -590,40 +592,40 @@ proc add-clean {type filelist} {
 	target-add-var $type cleanfiles $filelist
 }
 
-proc Generate {target script inputs rules args} {
-	# XXX: Would be nice if script and inputs were optional
-	Clean $target
-
-	set target [make-local {*}$target]
-	set runscript $script
-	if {$script ne ""} {
-		set localscript [make-local $script]
-		#puts "Generate: looking for $script, localscript=$localscript"
-		if {[is-target? $localscript]} {
-			#puts "$localscript is a target"
-			set script $localscript
-			# If running a script in the current dir need ./$script
-			if {[string match */* $localscript]} {
-				set runscript $localscript
-			} else {
-				set runscript [local-dir]/$script
-			}
-		} elseif {[file-src-exists $localscript]} {
-			#puts "$localscript is not a target, but exists as source"
-			# $script is source, 
-			set script [file-src $localscript]
-			set script $localscript
-			set runscript [file-src $localscript]
-		} else {
-			#puts "$localscript is non-local, so assume it is in publish/bin"
-			# A non-local generator script must be in publish/bin
-			set script [file join $::PUBLISH bin $script]
-			set runscript $script
-		}
+# Returns a list of {dependency filename}
+#
+proc find-project-bin {bin} {
+	set localbin [make-local $bin]
+	if {[is-target? $localbin]} {
+		dputs m "[find-source-location]: find-project-bin: $localbin is a local target"
+		return [list $localbin [local-dir]/$bin]
+	} elseif {[file-src-exists $localbin]} {
+		dputs m "[find-source-location]: find-project-bin: $localbin exists as source"
+		return [list $localbin [file-src $localbin]]
 	} else {
-		#puts "Generate $target has no script"
+		dputs m "[find-source-location]: find-project-bin: $bin assumed to be published"
+		set publishbin $::PUBLISH/bin/$bin
+		return [list $publishbin $publishbin]
 	}
-	target $target -inputs {*}[make-local {*}$inputs] -depends $script -vars script $runscript -do $rules -msg {note Generate $target} {*}$args
+}
+
+proc Generate {args} {
+	# XXX: Would be nice if script and inputs were optional
+	getopt {--interp: target script inputs rules args} args
+
+	set localtarget [make-local {*}$target]
+
+	set opts {}
+	if {[info exists interp]} {
+		lassign [find-project-bin $interp] dep filename
+		lappend opts -depends $dep -vars interp $filename
+	}
+	if {$script ne ""} {
+		lassign [find-project-bin $script] dep filename
+		lappend opts -depends $dep -vars script $filename
+	}
+	target $localtarget -inputs {*}[make-local {*}$inputs] {*}$opts -do $rules -msg {note Generate $target} {*}$args
+	Clean $target
 }
 
 proc Depends {target args} {
