@@ -424,39 +424,35 @@ proc PublishIncludes {args} {
 proc Test {args} {
 	show-this-rule
 
-	getopt {--runwith: --chdir --quiet command args} args
-	set testid [make-local test:[incr ::testid]]
+	getopt {--interp: --chdir --quiet command args} args
+	set testid [make-local test#[incr ::testid]]
 	set depends {}
 	set command $command
 	set localcommand [make-local $command]
-	set extra {}
+
+	set opts {}
+
 	if {$chdir} {
-		lappend extra -chdir
-		set runcmd ./$command
-	} else {
-		set runcmd $localcommand
+		# XXX: Will -chdir mess up the path to interp and command?
+		lappend opts -chdir
 	}
 	if {!$quiet} {
-		lappend extra -msg {note "Test $command"}
-	}
-	# XXX: If cross compiling, the existence of $runwith
-	#      and $command as targets is no guarantee that they
-	#      can run.
-	set maybe-depends $localcommand
-	if {[info exists runwith]} {
-		set testcommand "$runwith $runcmd [join $args]"
-		# I think this is all wrong.
-		# How can the command find where $runwith resolves to (if anywhere)
-		# Want it stored in a variable.
-		# Should it be like header scanning and INCPATHS?
-		lappend maybe-depends $runwith $::PUBLISH/bin/$runwith
-	} else {
-		set testcommand "$runcmd [join $args]"
+		lappend opts -msg [list note "Test $localcommand"]
 	}
 
-	# Note: We don't yet know if $runwith and/or $command are targets, so defer until all rules are read.
-	# 
-	target $testid -phony -maybe-depends {*}${maybe-depends} -vars testcommand $testcommand command $localcommand {*}$extra -do {
+	set runcmd {}
+	if {[info exists interp]} {
+		lassign [find-project-bin $interp $chdir] dep filename
+		lappend opts -depends $dep
+		set runcmd "$filename "
+	}
+	lassign [find-project-bin $command $chdir] dep filename
+	lappend opts -depends $dep
+	append runcmd $filename
+
+	set testcommand "$runcmd [join $args]"
+
+	target $testid -phony -vars testcommand $testcommand {*}$opts -do {
 		incr ::tmake(testruncount)
 		run {*}$testcommand
 		incr ::tmake(testpasscount)
@@ -594,18 +590,36 @@ proc add-clean {type filelist} {
 
 # Returns a list of {dependency filename}
 #
-proc find-project-bin {bin} {
+proc find-project-bin {bin {chdir 0}} {
 	set localbin [make-local $bin]
 	if {[is-target? $localbin]} {
 		dputs m "[find-source-location]: find-project-bin: $localbin is a local target"
-		return [list $localbin [local-dir]/$bin]
+		if {$chdir} {
+			return [list $localbin ./$bin]
+		} else {
+			return [list $localbin [local-dir]/$bin]
+		}
 	} elseif {[file-src-exists $localbin]} {
 		dputs m "[find-source-location]: find-project-bin: $localbin exists as source"
-		return [list $localbin [file-src $localbin]]
+		if {$chdir} {
+			# cd to local build dir, but file is relative to the src dir
+			set src [file-src-relative $localbin]
+			puts "source $localbin relative to build dir => $src"
+			return [list $localbin $src]
+		} else {
+			return [list $localbin [file-src $localbin]]
+		}
 	} else {
 		dputs m "[find-source-location]: find-project-bin: $bin assumed to be published"
 		set publishbin $::PUBLISH/bin/$bin
-		return [list $publishbin $publishbin]
+		if {$chdir} {
+			# cd to local build dir, but file is relative to top build dir
+			puts "Trying to find published $publishbin relative to $localbin dir"
+			parray ::tmake
+			exit 1
+		} else {
+			return [list $publishbin $publishbin]
+		}
 	}
 }
 

@@ -330,8 +330,6 @@ proc load-build-description {loadcache} {
 	}
 
 	process-build-spec-file .
-
-	resolve-deferred-dependencies
 }
 
 proc is-cleaning? {} {
@@ -421,6 +419,17 @@ proc file-src {path} {
 
 proc file-src-exists {path} {
 	file exists [file-src $path]
+}
+
+# If buildpath is from the top of the build tree,
+# return a relative path to the same path from the src tree.
+proc file-src-relative {buildpath} {
+	set src [file join $::tmake(srcdir) $buildpath]
+	set build [file join $::tmake(topbuilddir) $buildpath]
+	puts "file-src-relative: $buildpath =>"
+	puts "  relative-path $src $build"
+	puts "  => [relative-path $src $build]"
+	relative-path $src $build
 }
 
 # Read in the given spec file in the given directory (relative to topdir)
@@ -1009,7 +1018,7 @@ proc target {ruletarget args} {
 		unset info(add-do)
 		append-with-space info(dyndep) $orig(dyndep)
 
-		if {$info(source) eq "unknown"} {
+		if {$info(source) eq "unknown" || $info(source) in $orig(source)} {
 			set info(source) $orig(source)
 		} elseif {$orig(source) ne "unknown"} {
 			lappend info(source) {*}$orig(source)
@@ -1045,24 +1054,6 @@ proc target-add-var {ruletarget varname list} {
 	}
 
 	dict-lappend ::tmake(rules) [list $ruletarget vars $varname] {*}$list
-}
-
-proc resolve-deferred-dependencies {} {
-	global tmake
-	foreach ruletarget [dict keys $tmake(rules)] {
-		array unset t
-		array set t [get-rule $ruletarget]
-		foreach dd $t(maybe-depends) {
-			if {[is-target? $dd]} {
-				dputs m "Resolving deferred dependency $dd for $ruletarget"
-				lappend t(depends) $dd
-			} else {
-				dputs m "Discarding deferred dependency $dd for $ruletarget"
-			}
-		}
-		unset t(maybe-depends)
-		update-rule [array get t]
-	}
 }
 
 proc parse-rule-args {arglistname optname} {
@@ -1106,7 +1097,7 @@ proc parse-rule {target arglist} {
 
 	array set info {
 		status unknown
-		inputs {} depends {} maybe-depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
+		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
 		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
 	}
 
@@ -1120,7 +1111,7 @@ proc parse-rule {target arglist} {
 				}
 				set info($opt) 1
 			}
-			inputs - depends - maybe-depends {
+			inputs - depends {
 				lappend info($opt) {*}[join $optargs]
 			}
 			clean {
