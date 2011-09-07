@@ -602,10 +602,9 @@ proc find-project-bin {bin {chdir 0}} {
 	} elseif {[file-src-exists $localbin]} {
 		dputs m "[find-source-location]: find-project-bin: $localbin exists as source"
 		if {$chdir} {
-			# cd to local build dir, but file is relative to the src dir
-			set src [file-src-relative $localbin]
-			puts "source $localbin relative to build dir => $src"
-			return [list $localbin $src]
+			# cd to local build dir, but file is relative to the top of the src dir
+			set src [file-src-relative $localbin [file dirname $localbin]]
+			return [list $localbin ./$src]
 		} else {
 			return [list $localbin [file-src $localbin]]
 		}
@@ -613,10 +612,9 @@ proc find-project-bin {bin {chdir 0}} {
 		dputs m "[find-source-location]: find-project-bin: $bin assumed to be published"
 		set publishbin $::PUBLISH/bin/$bin
 		if {$chdir} {
-			# cd to local build dir, but file is relative to top build dir
-			puts "Trying to find published $publishbin relative to $localbin dir"
-			parray ::tmake
-			exit 1
+			# cd to local build dir, but file is relative to top of the build dir
+			set src [relative-path $publishbin [file dirname $localbin]]
+			return [list $localbin $src]
 		} else {
 			return [list $publishbin $publishbin]
 		}

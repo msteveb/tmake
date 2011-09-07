@@ -133,10 +133,6 @@ proc realpath {path} {
 # to the given directory (or the current dir, if not given).
 #
 proc relative-path {path {pwd {}}} {
-	set diff 0
-	set same 0
-	set newf {}
-	set prefix {}
 	set path [file-normalize $path]
 	if {$pwd eq ""} {
 		set pwd [pwd]
@@ -148,28 +144,29 @@ proc relative-path {path {pwd {}}} {
 		return .
 	}
 
-	# Try to make the filename relative to the current dir
-	foreach p [split $pwd /] f [split $path /] {
-		if {$p ne $f} {
-			incr diff
-		} elseif {!$diff} {
-			incr same
+	set splitpath [split $path /]
+	set splitpwd [split $pwd /]
+
+	# Count the number of identical levels
+	# The first level will always match
+	set n 0
+	foreach i $splitpath j $splitpwd {
+		if {$i ne $j} {
+			#puts "Not equal, so stripping $n levels"
+			set splitpath [lrange $splitpath $n end]
+			set splitpwd [lrange $splitpwd $n end]
+			break
 		}
-		if {$diff} {
-			if {$p ne ""} {
-				# Add .. for sibling or parent dir
-				lappend prefix ..
-			}
-			if {$f ne ""} {
-				lappend newf $f
-			}
-		}
+		incr n
+		continue
 	}
-	if {$same == 1 || [llength $prefix] > 3} {
+	if {$n == 1} {
 		return $path
 	}
+	set relpath [lrepeat [llength $splitpwd] ..]
+	lappend relpath {*}$splitpath
 
-	file join [join $prefix /] [join $newf /]
+	join $relpath /
 }
 
 # If everything is working properly, the only errors which occur
