@@ -377,6 +377,8 @@ make-config-header jim-config.h -auto {HAVE_LONG_LONG* JIM_UTF8} -none *
 make-config-header jimautoconf.h -auto {jim_ext_* TCL_PLATFORM_* TCL_LIBRARY USE_* JIM_*}
 #make-template Makefile.in
 
+define CONFIGURED
+
 set d [all-defines]
 set f [open settings.conf w]
 foreach n [lsort [dict keys $d]] {

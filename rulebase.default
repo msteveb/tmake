@@ -390,20 +390,18 @@ proc Load {args} {
 	show-this-rule
 
 	getopt {--nocare --config filename} args
+	# XXX: Should we allow loading an out-of-tree file?
 	set filename [make-local $filename]
-	if {![file exists $filename]} {
-		if {!$nocare} {
-			user-error "$filename does not exist, do you need run ./configure?"
-		}
-	} else {
+	if {[file exists $filename]} {
 		if {$config} {
 			load-config-file $filename
 		} else {
 			uplevel #0 [list source $filename]
 		}
+		# If we find the file, we now care about it
+		set nocare 0
 	}
-	# Add a build dependency
-	lappend ::tmake(projfiles) $filename
+	lappend ::tmake(projfiles) $filename $nocare
 }
 
 proc UseSystemLibs {args} {

@@ -236,7 +236,11 @@ proc make {argv} {
 	# If any files specified to Load are targets,
 	# build them before anything else
 	set reload 0
-	foreach t $tmake(projfiles) {
+	foreach {t nocare} $tmake(projfiles) {
+		if {$nocare && ![is-target? $t]} {
+			dputs n "Load --nocare $t, not a target"
+			continue
+		}
 		set rc [build $t]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {

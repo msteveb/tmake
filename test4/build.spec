@@ -2,10 +2,15 @@
 
 # load autosetup settings
 Load settings.conf
-DistClean settings.conf autoconfig.h
-Depends settings.conf -do {
-	user-error "settings.conf does not exist"
+define? AUTOREMAKE configure
+
+Depends {settings.conf autoconfig.h} auto.def -do {
+	note "Configure"
+	run $AUTOREMAKE >config.out
 }
+
+# The rest of the build description is only used if configured
+ifconfig CONFIGURED
 
 IncludePaths include
 

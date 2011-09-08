@@ -1,10 +1,15 @@
 # vim:set syntax=tcl:
 
 Load settings.conf
+define? AUTOREMAKE configure
+
 Depends {settings.conf jimautoconf.h jim-config.h} auto.def -do {
 	note "Configure"
 	run $AUTOREMAKE >config.out
 }
+
+# The rest of the build description is only used if configured
+ifconfig CONFIGURED
 
 if {$JIM_SHAREDLIB} {
 	dev-error "Sorry, --shared not yet implemented in tmake"

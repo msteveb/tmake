@@ -171,6 +171,8 @@ if {![cc-check-functions getpassphrase]} {
 #make-template Makefile.in
 make-config-header autoconfig.h -auto {USE_* FOSSIL_*}
 
+define CONFIGURED
+
 set d [all-defines]
 set f [open settings.conf w]
 foreach n [lsort [dict keys $d]] {
