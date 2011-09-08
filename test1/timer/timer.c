@@ -17,6 +17,9 @@ struct timeval timer_get(void)
 	static clock_t last_times;
 	static long adjust_seconds;
 	static int calibrated;
+#ifndef CLOCKS_PER_SEC
+#define CLOCKS_PER_SEC 1000
+#endif
 	static long sc_clk_tck = CLOCKS_PER_SEC;
 
 	clock_t now_times = times(NULL);

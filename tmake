@@ -41,6 +41,7 @@ set tmake(projfiles) {}
 set tmake(fixedvars) {}
 set tmake(installed) 0
 set tmake(cleaning) 0
+set tmake(init) 0
 
 # Should these really be here?
 set tmake(headerscancache) {}
@@ -153,6 +154,9 @@ proc make-parse-options {argv {type tmake}} {
 				}
 				--verbose - -v {
 					set tmake(verbose) 1
+				}
+				--init {
+					set tmake(init) 1
 				}
 				--version {
 					use help
@@ -280,6 +284,9 @@ proc make {argv} {
 
 	dputs T "Parsing phase complete"
 
+	if {$tmake(init)} {
+		tmake-exit 0
+	}
 	if {$tmake(showrules)} {
 		show-all-rules
 		tmake-exit 0

@@ -12,3 +12,8 @@ foreach n [lsort [dict keys [all-defines]]] {
     puts $f "set $n [list $v]"
 }
 close $f
+
+if {![file exists Makefile]} {
+    # Normally this would be autosetup/tmake
+    catch {exec ../tmake --init}
+}
