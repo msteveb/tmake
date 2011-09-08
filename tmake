@@ -263,6 +263,8 @@ proc make {argv} {
 		invoke-spec-file $tmake(dir)/rulebase.default
 	}
 
+	dputs T "Parsed rulebase"
+
 	# Save the global state unless we need to reload
 	# XXX: It would be MUCH nicer of this wasn't held in global vars!
 	#      Maybe 'dict with' ?
@@ -275,6 +277,8 @@ proc make {argv} {
 	}
 
 	load-build-description 1
+
+	dputs T "Parsing phase complete"
 
 	if {$tmake(showrules)} {
 		show-all-rules
@@ -346,6 +350,8 @@ proc make {argv} {
 			}
 		}
 		load-build-description 0
+
+		dputs T "Reparsing phase complete"
 	}
 
 	unset tmake_save
@@ -370,6 +376,8 @@ proc make {argv} {
 		set targets all
 	}
 
+	dputs T "Building targets"
+
 	foreach t $targets {
 		if {[build $t] < 0} {
 			if {$tmake(exitcode) == 0} {
@@ -377,6 +385,7 @@ proc make {argv} {
 			}
 			break
 		}
+		dputs T "Built target $t"
 	}
 }
 
@@ -384,6 +393,8 @@ proc load-build-description {loadcache} {
 	global tmake
 
 	invoke-spec-file [file-src project.spec]
+
+	dputs T "Parsed project.spec"
 
 	# Loaded in the global scope 
 	if {![file-src-exists build.spec]} {
@@ -451,11 +462,8 @@ proc make-local-src {args} {
 proc invoke-spec-file {filename} {
 	global tmake
 	lappend tmake(specfiles) $filename
-	dputs T "Parsing $filename"
 
 	uplevel #0 source $filename
-
-	dputs T "Done parsing $filename"
 }
 
 proc AutoSubDirs {onoff} {
@@ -511,7 +519,7 @@ proc file-src-relative {srcpath builddir} {
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir} {
 	global tmake
-	dputs {m T} "process-build-spec $dir"
+	dputs m "process-build-spec $dir"
 
 	set tmake(localdir) $dir
 	set tmake(prefix) [make-prefix $dir]
@@ -530,6 +538,8 @@ proc process-build-spec-file {dir} {
 	BuildSpecEpilog
 
 	restore-subdir-vars $saved
+
+	dputs T "Parsed [local-prefix]build.spec"
 
 	if {$rc == 20} {
 		dputs m "Skipping $path"
@@ -564,8 +574,6 @@ proc process-build-spec-file {dir} {
 		}
 	}
 	incr tmake(depth) -1
-
-	dputs T "done process-build-spec $dir"
 }
 
 # Returns a list of all files which were once a target but are no longer

@@ -7,7 +7,7 @@ define? CONFIG_DIR $DESTDIR/etc/config
 define THEMES $UWEB/themes
 
 LinkFlags -L$UWEB/lib
-UseSystemLibs -luweb -ltcl6
+UseSystemLibs -luweb -ljim
 
 CFlags -Wall -g -Os -I. -I$UWEB/include
 
@@ -17,12 +17,12 @@ Executable --install=/home/httpd/cgi-bin web auth.c customstorage.c init.c main.
 Install /home/httpd/css *.css basic1.css=$THEMES/basic.css
 Install /home/httpd/javascript *.js
 Install /home/httpd/img img/*.{png,gif,cio,jp*} $THEMES/black_icons/*checked.png
-Install /lib/tcl6 $UWEB/lib/tcl6/*.tcl *.tcl
+Install /lib/jim $UWEB/lib/jim/*.tcl *.tcl
 
 Phony run install -do {
 	file mkdir $CONFIG_DIR
 	set ::env(UWEB_CONFIG_DIR) [file join [pwd] $CONFIG_DIR]
-	set ::env(TCLLIBPATH) [file join [pwd] $DESTDIR/lib/tcl6]
+	set ::env(TCLLIBPATH) [file join [pwd] $DESTDIR/lib/jim]
 
 	puts "Point your browser to http://localhost:8000/"
 	run $DESTDIR/home/httpd/cgi-bin/web server 8000
