@@ -9,6 +9,10 @@
    - These should become orphan targets
 * Should have SetDefaultTarget and it should default to 'all'
 
+* Building in a subdir does not build targets in subdirs of that subdir.
+  e.g. subdir/clean does not invoke subdir/unit/clean
+  maybe this can be done by depending subdir/clean on subdir/unit/clean instead of clean on subdir/unit/clean
+
 Which directory as cwd?
 -----------------------
 My inclination is to:

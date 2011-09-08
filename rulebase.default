@@ -72,16 +72,19 @@ lappend tmake(subdirvars) C_FLAGS CXX_FLAGS LD_FLAGS LOCAL_LIBS PROJLIBS SYSLIBS
 proc BuildSpecProlog {} {
 	# Local phony targets build from the current directory down
 	if {[local-prefix] ne ""} {
+		set parentprefix [make-prefix [file dirname [local-dir]]]
 		foreach t {all clean distclean test uninstall} {
 			Phony $t
-			target $t -phony -depends [make-local $t]
+			target $parentprefix$t -phony -depends [make-local $t]
 		}
 		CleanTarget clean
 		CleanTarget distclean
 		CleanTarget uninstall
+		# XXX: Don't bother with per-directory uninstall, just link to the top level
+		# XXX: avoid making clean twice by both subdir cleans and the dependency on clean here
 		Depends distclean [make-local clean]
-		# We don't bother with per-directory install, so just redirect to the global install
-		Depends install install
+		# We don't bother with per-directory install. Use /install instead
+		#Depends install install
 	}
 	IncludePaths .
 	define testid 0

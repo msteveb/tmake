@@ -232,6 +232,9 @@ proc make {argv} {
 
 	# If topsrcdir is already set, the current dir must be the topbuilddir
 	if {[info exists tmake(topsrcdir)]} {
+		if {[file exists build.spec]} {
+			user-error "-C [pwd] looks like a source directory, not a build directory"
+		}
 		set tmake(topbuilddir) [pwd]
 		set tmake(topsrcdir) [relative-path $tmake(topsrcdir)]
 		dputs m "Top build dir is $tmake(topbuilddir)"
@@ -239,11 +242,16 @@ proc make {argv} {
 	} else {
 		# Need to find the project top
 		set tmake(topbuilddir) [find-project-top]
+		if {[relative-path $tmake(topbuilddir)] ne "."} {
+			puts "tmake: Entering directory `$tmake(topbuilddir)'"
+		}
 		cd $tmake(topbuilddir)
 		set tmake(topsrcdir) .
 	}
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
+
+	flush stdout
 
 	set tmake(prefix) ""
 
@@ -428,6 +436,14 @@ proc make-local {args} {
 	prefix [local-prefix] $args
 }
 
+proc make-prefix {dir} {
+	if {$dir eq "."} {
+		return ""
+	} else {
+		return $dir/
+	}
+}
+
 proc make-local-src {args} {
 	prefix $::tmake(topsrcdir)/[local-prefix] $args
 }
@@ -498,12 +514,7 @@ proc process-build-spec-file {dir} {
 	dputs {m T} "process-build-spec $dir"
 
 	set tmake(localdir) $dir
-	if {$dir eq "."} {
-		set tmake(prefix) ""
-	} else {
-		set tmake(prefix) $dir/
-	}
-
+	set tmake(prefix) [make-prefix $dir]
 	set srcdir [file-src $dir]
 
 	set path [file-join $srcdir build.spec]
