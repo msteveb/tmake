@@ -1671,15 +1671,15 @@ proc header-scan-regexp {regex filename} {
 proc find-file {filename paths} {
 	foreach p $paths {
 		set f [file-join $p $filename]
-		if {[file-src-exists $f]} {
-			return [list $f [file-src $f]]
-		}
 		if {[is-target? $f]} {
 			# XXX: Is it really OK to build targets here?
 			dputs d "$f is a target, so building first"
 			if {[build $f] >= 0} {
 				return [list $f $f]
 			}
+		}
+		if {[file-src-exists $f]} {
+			return [list $f [file-src $f]]
 		}
 	}
 	dputs D "Not a file and not a target, $filename"
