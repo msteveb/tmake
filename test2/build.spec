@@ -7,6 +7,7 @@ Depends {settings.conf jimautoconf.h jim-config.h} auto.def -do {
 	note "Configure"
 	run [set AUTOREMAKE] >config.out
 }
+Clean config.out
 
 # The rest of the build description is only used if configured
 ifconfig CONFIGURED

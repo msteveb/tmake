@@ -80,6 +80,8 @@ proc BuildSpecProlog {} {
 		CleanTarget distclean
 		CleanTarget uninstall
 		Depends distclean [make-local clean]
+		# We don't bother with per-directory install, so just redirect to the global install
+		Depends install install
 	}
 	IncludePaths .
 	define testid 0
@@ -88,16 +90,24 @@ proc BuildSpecProlog {} {
 proc BuildSpecEpilog {} {
 	global tmake
 
+	# Does subdir/all have any dependencies? If not, make it depend on subdir/libs (if that rule exists)
+	array set t [get-target-rule [make-local all]]
+	if {[llength $t(depends)] == 0} {
+		if {[is-rule? [make-local libs]} {
+			Depends all [make-local libs]
+		}
+	}
+
 	if {$tmake(localmakefile) ni {none -none}} {
 		set makefile [make-local $tmake(localmakefile)]
 		if {![file exists $makefile]} {
 			set tmakeargs "\"--mflags=\$(MFLAGS)\" \"--gnumakeflags=\$(MAKEFLAGS)\" \"--bsdmakeflags=\$(.MAKEFLAGS)\""
 			# Set -C before -P
 			if {[local-dir] ne "."} {
-				append tmakeargs " -C[join [lrepeat [llength [split [local-dir] /]] ..] /]"
+				append tmakeargs " -C [join [lrepeat [llength [split [local-dir] /]] ..] /]"
 			}
 			if {$tmake(topsrcdir) ne "."} {
-				append tmakeargs " -P$tmake(topsrcdir)"
+				append tmakeargs " -P $tmake(topsrcdir)"
 			}
 			append tmakeargs " SUBDIR=[local-dir]"
 
@@ -257,8 +267,8 @@ proc ArchiveLib {args} {
 		run $AR $ARFLAGS $target $inputs
 		run $RANLIB $target
 	}
-	# Note: Libraries are not built by default
-	#Phony all $target
+	# Note: Libraries are not built by default, but are added to a local 'libs' rule
+	Phony libs $target
 	Clean $libname
 	define-append LOCAL_LIBS $target
 
@@ -681,6 +691,7 @@ Depends clean clean-orphans
 Depends distclean clean
 
 Phony all
+Phony libs
 Phony install all
 Phony test
 

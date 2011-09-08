@@ -1,7 +1,10 @@
-#LocalMakefile GNUmakefile
-Load --nocare settings.conf
+Load settings.conf
 
-#ifconfig USER_MDNSRESPONDER
+Depends settings.conf -do {
+	user-error "Run ./configure first"
+}
+
+ifconfig CONFIGURED
 
 IncludePaths mDNSCore mDNSShared
 
@@ -10,10 +13,6 @@ CFlags -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\" \
     -DNOT_HAVE_SA_LEN \
     -DMDNS_DEBUGMSGS=0
 	
-#ifconfig USER_MDNSRESPONDER_IPV6 {
-#	CFlags -DHAVE_IPV6=1
-#}
-
 CFlags -Wno-deprecated-declarations
 
 if {[string match  *-linux* $host]} {

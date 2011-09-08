@@ -5,7 +5,6 @@ PublishIncludes include/timer.h include/timerqueue.h
 ObjectCFlags timerqueue.c -DDUMMY_DEFINE
 
 IncludePaths include
-SourceIncludePaths include
 
 # And specify the object file here
 Lib --publish timer timer.c timerqueue.c

@@ -2,12 +2,15 @@
 
 # load autosetup settings
 Load settings.conf
-define? AUTOREMAKE configure
+define? AUTOREMAKE [file-src configure] --conf=[file-src auto.def]
 
+# Arrange to re-run configure if auto.def changes
 Depends {settings.conf autoconfig.h} auto.def -do {
-	note "Configure"
-	run $AUTOREMAKE >config.out
+	note "Configure..."
+	run [set AUTOREMAKE] >config.out
 }
+Clean config.out config.log
+DistClean settings.conf autoconfig.h
 
 # The rest of the build description is only used if configured
 ifconfig CONFIGURED

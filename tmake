@@ -70,6 +70,23 @@ proc make-parse-options {argv {type tmake}} {
 	#puts "make-parse-options [list $argv] type=$type"
 
 	foreach arg $argv {
+		if {[info exists nextopt]} {
+			switch -exact -- $nextopt {
+				-C {
+					# This will fail with a fatal error if not a dir
+					cd $arg
+					puts "tmake: Entering directory `[pwd]'"
+				}
+				-P {
+					set tmake(topsrcdir) [file-normalize $arg]
+				}
+				default {
+					error "Unexpected $nextarg"
+				}
+			}
+			unset nextopt
+			continue
+		}
 		if {[regexp {^(\w+)=(.*)} $arg -> n v]} {
 			# Allow: make O=tmake-options
 			if {$n eq "O" && $type ne "tmake"} {
@@ -153,7 +170,7 @@ proc make-parse-options {argv {type tmake}} {
 				-N {
 					set tmake(norun) 2
 				}
-				--tim* - t {
+				--tim* - -t {
 					incr tmake(showtime)
 				}
 				-q - --quickstop {
@@ -162,14 +179,11 @@ proc make-parse-options {argv {type tmake}} {
 				-p - --print* {
 					incr tmake(showrules)
 				}
-				-C* {
-					# XXX: Should be "-C dir" but that is waiting for getopt
-					cd [string range $option 2 end]
-					set tmake(builddir) [pwd]
+				-C {
+					set nextopt $arg
 				}
-				-P* {
-					# XXX: Should be "-P dir" but that is waiting for getopt
-					set tmake(srcdir) [file-normalize [string range $option 2 end]]
+				-P {
+					set nextopt $arg
 				}
 				-- {
 				}
@@ -180,8 +194,15 @@ proc make-parse-options {argv {type tmake}} {
 			continue
 		}
 
-		# Must be a target
-		lappend tmake(cmdline) $arg
+		# Must be a target. If is of the form subdir//target or /target, this means the global 'target'
+		if {[regexp {//(.*)} $arg -> realtarget] || [regexp {^/(.*)} $arg -> realtarget]} {
+			lappend tmake(cmdline) $realtarget
+		} else {
+			lappend tmake(cmdline) $arg
+		}
+	}
+	if {[info exists nextopt]} {
+		user-error "$nextopt requires an argument"
 	}
 }
 
@@ -189,9 +210,6 @@ proc make {argv} {
 	global tmake
 	#puts "make '$argv'"
 	#parray ::env
-
-	set tmake(builddir) [pwd]
-	set tmake(srcdir) [pwd]
 
 	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
 	if {!$tmake(installed)} {
@@ -212,11 +230,20 @@ proc make {argv} {
 		set targets all
 	}
 
-	lassign [find-project-top $tmake(srcdir) $tmake(builddir)] tmake(topsrcdir) tmake(topbuilddir)
+	# If topsrcdir is already set, the current dir must be the topbuilddir
+	if {[info exists tmake(topsrcdir)]} {
+		set tmake(topbuilddir) [pwd]
+		set tmake(topsrcdir) [relative-path $tmake(topsrcdir)]
+		dputs m "Top build dir is $tmake(topbuilddir)"
+		dputs m "Top source dir is $tmake(topsrcdir)"
+	} else {
+		# Need to find the project top
+		set tmake(topbuilddir) [find-project-top]
+		cd $tmake(topbuilddir)
+		set tmake(topsrcdir) .
+	}
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
-
-	cd $tmake(topbuilddir)
 
 	set tmake(prefix) ""
 
@@ -376,19 +403,17 @@ proc is-cleaning? {} {
 # .spec file processing
 # ==================================================================
 
-proc find-project-top {srcdir builddir} {
-	set topdir $srcdir
+proc find-project-top {} {
+	set topdir [pwd]
 	while {![file exists $topdir/project.spec]} {
 		set parent [file dirname $topdir]
 		if {$topdir eq $parent} {
 			user-error "Failed to find project.spec in any parent directory."
 		}
 		set topdir $parent
-		set builddir [file dirname $builddir]
 	}
 	dputs m "Project top found at $topdir"
-	set topdir [relative-path $topdir $builddir]
-	return [list $topdir $builddir]
+	return $topdir
 }
 
 proc local-prefix {} {
@@ -1041,52 +1066,56 @@ proc target {ruletarget args} {
 			dputs t "Rule for $ruletarget with -replace but not existing target @$info(source)"
 		}
 	}
-	if {[info exists orig]} {
-		# There is already a rule for this target, so attempt
-		# to merge the two rules
-
-		if {[llength $info(do)] && [llength $orig(do)]} {
-			#dev-error "$ruletarget already has '-do' @$orig(source)"
-			puts stderr [error-location "Warning: $ruletarget already has '-do' @$orig(source)"]
-			set orig(do) {}
-		}
-		if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
-			dev-error "$ruletarget already has '-dyndep' @$orig(source)"
-		}
-		lappend info(depends) {*}$orig(depends)
-		lappend info(inputs) {*}$orig(inputs)
-		lappend info(clean) {*}$orig(clean)
-		incr info(phony) $orig(phony)
-		incr info(nofail) $orig(nofail)
-		incr info(chdir) $orig(chdir)
-		incr info(nocache) $orig(nocache)
-		append-with-space info(onerror) $orig(onerror) \n
-		# Only one of these will be non-blank
-		lappend orig(do) {*}$info(add-do)
-		unset info(add-do)
-		append-with-space info(dyndep) $orig(dyndep)
-
-		if {$info(source) eq "unknown" || $info(source) in $orig(source)} {
-			set info(source) $orig(source)
-		} elseif {$orig(source) ne "unknown"} {
-			lappend info(source) {*}$orig(source)
-		}
-
-		# Need to append to any vars which exist
-		set info(vars) [merge-vars $orig(vars) $info(vars)]
-
-		# Whichever rule has '-do' also specifies '-inputs' and '-msg'
-		if {[llength $info(do)] == 0} {
-			set info(do) $orig(do)
-			set info(inputs) $orig(inputs)
-			set info(msg) $orig(msg)
-		}
-	}
 	# Cache the prefix with the rule, also
 	set info(local) [local-dir]
 
-	# Now create/update the rule
-	update-rule [array get info]
+	if {![info exists orig]} {
+		# Now create/update the rule
+		update-rule [array get info]
+		return
+	}
+
+	# There is already a rule for this target, so attempt
+	# to merge the two rules
+	# Note: We generally want the new values to come after the existing values, so
+	# merge the new data into orig
+
+	if {[llength $info(do)] && [llength $orig(do)]} {
+		#dev-error "$ruletarget already has '-do' @$orig(source)"
+		puts stderr [error-location "Warning: $ruletarget already has '-do' @$orig(source)"]
+		set info(do) {}
+	}
+	if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
+		dev-error "$ruletarget already has '-dyndep' @$orig(source)"
+	}
+	lappend orig(depends) {*}$info(depends)
+	lappend orig(inputs) {*}$info(inputs)
+	lappend orig(clean) {*}$info(clean)
+	incr orig(phony) $info(phony)
+	incr orig(nofail) $info(nofail)
+	incr orig(chdir) $info(chdir)
+	incr orig(nocache) $info(nocache)
+	append-with-space orig(onerror) $info(onerror) \n
+	# Only one of these will be non-blank
+	lappend orig(do) {*}$info(add-do)
+	append-with-space orig(dyndep) $info(dyndep) \n
+
+	if {$info(source) eq "unknown" || $info(source) in $orig(source)} {
+		# Nothing to do
+	} elseif {$info(source) ne "unknown"} {
+		lappend orig(source) $info(source)
+	}
+
+	# Need to append to any vars which exist
+	set orig(vars) [merge-vars $orig(vars) $info(vars)]
+
+	# Whichever rule has '-do' also specifies '-inputs' and '-msg'
+	if {[llength $orig(do)] == 0} {
+		set orig(do) $info(do)
+		set orig(inputs) $info(inputs)
+		set orig(msg) $info(msg)
+	}
+	update-rule [array get orig]
 }
 
 # Adds the list elements to the target-specific variable.
