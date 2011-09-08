@@ -73,18 +73,12 @@ proc BuildSpecProlog {} {
 	# Local phony targets build from the current directory down
 	if {[local-prefix] ne ""} {
 		set parentprefix [make-prefix [file dirname [local-dir]]]
-		foreach t {all clean distclean test uninstall} {
+		foreach t {all clean distclean test} {
 			Phony $t
 			target $parentprefix$t -phony -depends [make-local $t]
 		}
-		CleanTarget clean
-		CleanTarget distclean
-		CleanTarget uninstall
-		# XXX: Don't bother with per-directory uninstall, just link to the top level
-		# XXX: avoid making clean twice by both subdir cleans and the dependency on clean here
-		Depends distclean [make-local clean]
-		# We don't bother with per-directory install. Use /install instead
-		#Depends install install
+		clean-target [make-local clean] Clean
+		clean-target [make-local distclean] DistClean
 	}
 	IncludePaths .
 	define testid 0
@@ -583,25 +577,34 @@ proc remove-empty-directories {files} {
 	}
 }
 
+# Helper to clean files (and any empty directories)
+proc clean-files {files {msg {}}} {
+	if {[llength $files]} {
+		vputs "rm $files"
+		if {$msg ne ""} {
+			note "Clean [llength $files] $msg"
+		}
+		file delete {*}$files
+		# Also need to remove any empty directories
+		remove-empty-directories $files
+	}
+}
+
 # This creates the clean target of the given type, e.g. clean, distclean
 #
-proc CleanTarget {type} {
-	Phony $type -nofail -vars cleanfiles {} -do {
-		note "Clean $target"
-		if {$cleanfiles ne ""} {
-			vputs "rm $cleanfiles"
-			file delete {*}$cleanfiles
-			# Also need to remove any empty directories
-			remove-empty-directories $cleanfiles
-		}
+proc clean-target {type msg} {
+	target $type -nofail -vars cleanfiles {} -msg "note $msg [local-dir]" -do {
+		clean-files $cleanfiles
 	}
 }
 
 proc Clean {args} {
-	if {[lindex $args 0] in {clean distclean uninstall}} {
+	if {[lindex $args 0] in {clean distclean}} {
 		dev-error "fix call to Clean"
 	}
 	add-clean [make-local clean] [make-local {*}[join $args]]
+	# DistClean also cleans these files
+	DistClean {*}$args
 }
 
 proc DistClean {args} {
@@ -686,25 +689,22 @@ proc LocalMakefile {name} {
 # Built-in targets
 # ==================================================================
 
-CleanTarget clean
-CleanTarget distclean
-CleanTarget uninstall
-
-Depends clean clean-orphans
-Depends distclean clean
+clean-target clean Clean
+clean-target distclean DistClean
+clean-target uninstall Uninstall
 
 Phony all
 Phony libs
 Phony install all
 Phony test
 
+Depends clean clean-orphans
+Depends distclean clean-orphans
+Depends test clean-orphans
+
 Phony clean-orphans -do {
-	set cleanfiles [get-orphan-targets]
-	if {[llength $cleanfiles]} {
-		note "Clean [llength $cleanfiles] orphan targets"
-		file delete {*}$cleanfiles
-		discard-orphan-targets
-	}
+	clean-files [get-orphan-targets] "orphan targets"
+	discard-orphan-targets
 }
 
 # XXX: Use an official API for this
