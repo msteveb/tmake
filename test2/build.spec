@@ -5,7 +5,7 @@ define? AUTOREMAKE configure
 
 Depends {settings.conf jimautoconf.h jim-config.h} auto.def -do {
 	note "Configure"
-	run $AUTOREMAKE >config.out
+	run [set AUTOREMAKE] >config.out
 }
 
 # The rest of the build description is only used if configured

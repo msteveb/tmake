@@ -24,7 +24,7 @@ set tmake(debug) 0
 #  g = graph dependencies executed
 #  p = show high level rules as they are parsed
 #  m = miscellaneous debug
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 A 0}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(showtime) 0
@@ -57,62 +57,73 @@ set tmake(prefix) ""
 set tmake(localdir) .
 set tmake(localmakefile) Makefile
 
+if {$tmake(debug)} {
+	dict set tmake(debugtypes) A 1
+}
+
 # ==================================================================
 # Argument Processing
 # ==================================================================
 
-proc make {argv} {
+proc make-parse-options {argv {type tmake}} {
 	global tmake
-	#puts "make $argv"
-	#parray ::env
+	#puts "make-parse-options [list $argv] type=$type"
 
-	set tmake(builddir) [pwd]
-	set tmake(srcdir) [pwd]
-
-	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
-	if {!$tmake(installed)} {
-		set tmake(dir) [file dirname $::argv0]
-		use compat
-	}
-
-	set tmake(exe) [file-normalize $::argv0]
-	set tmake(dir) [file dirname $tmake(exe)]
-	set tmake(start) [clock-millis]
-
-	# Parse the user options
-	set targets {}
-	foreach a $argv {
-		if {[regexp {^(\w[^=]*)=(.*)} $a -> n v]} {
-			if {$n eq "V"} {
-				set tmake(verbose) $v
-			} elseif {$n eq "D"} {
-				set tmake(debug) $v
-			} elseif {$n eq "P"} {
-				set tmake(showrules) 1
-			} elseif {$n eq "N"} {
-				incr tmake(norun)
-			} elseif {$n eq "T"} {
-				incr tmake(showtime)
-			} elseif {$n eq "Q"} {
-				incr tmake(quickstop)
-			} else {
-				dputs m "define $n $v"
-				define! $n $v
+	foreach arg $argv {
+		if {[regexp {^(\w+)=(.*)} $arg -> n v]} {
+			# Allow: make O=tmake-options
+			if {$n eq "O" && $type ne "tmake"} {
+				make-parse-options $v
+				continue
 			}
-		} elseif {[string match -* $a]} {
-			if {$a eq "-d*"} {
+			dputs A "define! $n $v"
+			define! $n $v
+			continue
+		}
+		if {$type ne "tmake"} {
+			continue
+		}
+		if {[regexp {^(-+[^=]*)(=)?(.*)?} $arg -> option equals value]} {
+			if {$option eq "--mflags"} {
+				# The only thing we care about from mflags is -n
+				if {[string match *n* $value]} {
+					set tmake(norun) 1
+				}
+				continue
+			}
+			if {$option eq "--bsdmakeflags"} {
+				# Pick up variable definitions
+				make-parse-options $value bsd
+				continue
+			}
+			if {$option eq "--gnumakeflags"} {
+				# Pick up variable definitions
+				make-parse-options $value gnu
+				continue
+			}
+			# Here we are parsing tmake options
+			# XXX: There is no way to pass these through make
+			if {$option eq "-d*"} {
 				foreach i [dict keys $tmake(debugtypes)] {
 					dict set tmake(debugtypes) $i 1
 				}
 				continue
 			}
-			switch -glob -- $a {
-				--find=* {
-					regexp {^--find=(.*)} $a -> tmake(findtarget)
+			switch -glob -- $option {
+				--find {
+					set tmake(findtarget) $value
+				}
+				--targets {
+					set tmake(listtargets) $value
+				}
+				--debug {
+					# Equivalent to -dg
+					set tmake(debug) 1
+					dict set tmake(debugtypes) g 1
 				}
 				-d* {
-					foreach i [split [string range $a 2 end] {}] {
-						dict-incr tmake(debugtypes) $i 1
+					foreach i [split [string range $option 2 end] {}] {
+						dict set tmake(debugtypes) $i 1
 					}
 					set tmake(debug) 1
 				}
@@ -122,11 +133,6 @@ proc make {argv} {
 						tmake_install autosetup
 					}
 					user-error "No autosetup directory"
-				}
-				--debug {
-					# Equivalent to -dg
-					set tmake(debug) 1
-					dict-incr tmake(debugtypes) g 1
 				}
 				--verbose - -v {
 					set tmake(verbose) 1
@@ -147,7 +153,7 @@ proc make {argv} {
 				-N {
 					set tmake(norun) 2
 				}
-				--tim* - -t {
+				--tim* - t {
 					incr tmake(showtime)
 				}
 				-q - --quickstop {
@@ -158,32 +164,53 @@ proc make {argv} {
 				}
 				-C* {
 					# XXX: Should be "-C dir" but that is waiting for getopt
-					cd [string range $a 2 end]
+					cd [string range $option 2 end]
 					set tmake(builddir) [pwd]
 				}
 				-P* {
 					# XXX: Should be "-P dir" but that is waiting for getopt
-					set tmake(srcdir) [file-normalize [string range $a 2 end]]
+					set tmake(srcdir) [file-normalize [string range $option 2 end]]
 				}
 				-- {
 				}
-				--* {
-					user-error "Unknown option $a"
-				}
 				default {
-					# Ignore unknown options
-					#error "Unknown option $a"
+					user-error "Unknown option $arg"
 				}
 			}
-		} else {
-			lappend targets $a
+			continue
 		}
+
+		# Must be a target
+		lappend tmake(cmdline) $arg
+	}
+}
+
+proc make {argv} {
+	global tmake
+	#puts "make '$argv'"
+	#parray ::env
+
+	set tmake(builddir) [pwd]
+	set tmake(srcdir) [pwd]
+
+	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
+	if {!$tmake(installed)} {
+		set tmake(dir) [file dirname $::argv0]
+		use compat
 	}
 
-	if {[llength $targets] == 0} {
+	set tmake(exe) [file-normalize $::argv0]
+	set tmake(dir) [file dirname $tmake(exe)]
+	set tmake(start) [clock-millis]
+	set tmake(cmdline) {}
+
+	make-parse-options $argv
+
+	if {[llength $tmake(cmdline)]} {
+		set targets $tmake(cmdline)
+	} else {
 		set targets all
 	}
-	set tmake(cmdlinetargets) $targets
 
 	lassign [find-project-top $tmake(srcdir) $tmake(builddir)] tmake(topsrcdir) tmake(topbuilddir)
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
@@ -216,6 +243,11 @@ proc make {argv} {
 
 	if {$tmake(showrules)} {
 		show-all-rules
+		tmake-exit 0
+	}
+	if {[info exists tmake(listtargets)]} {
+		show-all-targets $tmake(listtargets)
+		tmake-exit 0
 	}
 
 	# XXX: Is there a better way to determine if we are cleaning?
@@ -725,6 +757,20 @@ proc show-all-rules {} {
 		puts "-------------------------------------------"
 		show-rule $i
 		puts ""
+	}
+}
+
+proc show-all-targets {detailed} {
+	foreach i [lsort [dict keys $::tmake(targets)]] {
+		array unset t
+		array set t [get-target-rule $i]
+		if {$detailed eq ""} {
+			if {!$t(phony)} {
+				puts $i
+			}
+		} else {
+			puts "$i @[make-source-location $i]"
+		}
 	}
 }
 
@@ -1721,11 +1767,6 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 # ==================================================================
 # ENTRY POINT
 # ==================================================================
-
-if {[info exists env(MAKEFLAGS)]} {
-	# Running under make
-	set argv [list {*}-$env(MAKEFLAGS) {*}$argv]
-}
 
 if {[catch {make $argv} msg]} {
 	puts stderr [error-stacktrace $msg]
