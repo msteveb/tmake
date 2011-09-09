@@ -238,10 +238,6 @@ proc make {argv} {
 		set targets all
 	}
 
-	if {$tmake(dag)} {
-		puts "digraph tmake \{"
-	}
-
 	# If topsrcdir is already set, the current dir must be the topbuilddir
 	if {[info exists tmake(topsrcdir)]} {
 		if {[file exists build.spec]} {
@@ -331,7 +327,6 @@ proc make {argv} {
 			dputs n "Load --nocare $t, not a target"
 			continue
 		}
-		dag-node-print [dag-id $t] $t
 		set rc [build $t]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
@@ -407,11 +402,6 @@ proc make {argv} {
 		}
 		dputs T "Built target $t"
 	}
-
-	if {$tmake(dag)} {
-		puts "\}"
-	}
-
 }
 
 proc load-build-description {loadcache} {
@@ -713,9 +703,7 @@ proc vputs {msg} {
 }
 
 proc pputs {msg} {
-	if {!$::tmake(dag)} {
-		puts $msg
-	}
+	puts $msg
 }
 
 # Returns 1 if any of the debug types is set
@@ -1543,9 +1531,8 @@ proc build {target} {
 	lappend current $target
 	if {![is-target? $target]} {
 		if {[file-src-exists $target]} {
-			dag-node-print [dag-id $target] $target
 			dputs n "$target is not a target, but exists"
-			return 2
+			return 0
 		}
 		dputs b "$target is not a target and does not exist"
 		return -1
@@ -1559,12 +1546,10 @@ proc build {target} {
 		return 0
 	}
 	if {$t(status) eq "failed"} {
-		dag-node-print [dag-id $target] $target color=red
 		dputs b "$target has previously failed to build"
 		return -1
 	}
 	if {$t(status) eq "built"} {
-		dag-node-print [dag-id $target] $target color=green
 		dputs b "$target has previously been built"
 		return 1
 	}
@@ -1574,16 +1559,10 @@ proc build {target} {
 
 	set reason {}
 	if {$t(phony)} {
-		if {$tmake(dag)} {
-			dag-node-print [dag-id $target] $target color=blue style=dotted
-		}
 		dputs b "$target is phony, so rebuilding"
 		lappend reason phony
 		set result 1
 	} elseif {![file-exists-all $ruletarget missing]} {
-		if {$tmake(dag)} {
-			dag-node-print [dag-id $target] $target color=purple style=dashed
-		}
 		dputs b "$missing doesn't exist, so rebuilding"
 		lappend reason noexist
 		set result 1
@@ -1614,9 +1593,6 @@ proc build {target} {
 	foreach i $depends {
 		set rc [build $i]
 		if {$rc < 0} {
-			if {$tmake(dag)} {
-				puts "\t[dag-id $target] -> [dag-id $i] \[color=red\];"
-			}
 			if {$tmake(exitcode) == 0} {
 				build-error "[make-source-location $ruletarget "" ": "]Error: Don't know how to build $i: [join [lreverse $current] { <= }]"
 			}
@@ -1625,15 +1601,10 @@ proc build {target} {
 				break
 			}
 		} elseif {$rc > 0} {
-			if {$tmake(dag)} {
-				puts "\t[dag-id $target] -> [dag-id $i] \[color=blue\];"
-			}
-			if {$rc == 1} {
-				lappend reason depend $i
-				if {$result == 0} {
-					dputs b "Rebuilding $target because $i was built"
-					set result 1
-				}
+			lappend reason depend $i
+			if {$result == 0} {
+				dputs b "Rebuilding $target because $i was built"
+				set result 1
 			}
 		}
 	}
@@ -1646,8 +1617,6 @@ proc build {target} {
 		foreach i [calc-dyndeps $ruletarget] {
 			lappend depends $i
 
-			dag-node-print [dag-id $i] $i
-
 			if {[check-signal]} {
 				set result -1
 				break
@@ -1655,9 +1624,6 @@ proc build {target} {
 
 			set rc [build $i]
 			if {$rc < 0} {
-				if {$tmake(dag)} {
-					puts "\t[dag-id $target] -> [dag-id $i] \[color=red,style=dotted\];"
-				}
 				if {$tmake(exitcode) == 0} {
 					build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
 				}
@@ -1666,15 +1632,10 @@ proc build {target} {
 					break
 				}
 			} elseif {$rc > 0} {
-				if {$tmake(dag)} {
-					puts "\t[dag-id $target] -> [dag-id $i] \[color=blue,style=dotted\];"
-				}
-				if {$rc == 1} {
-					lappend reason depend $i
-					if {$result == 0} {
-						dputs b "Rebuilding $ruletarget because $i was built"
-						set result 1
-					}
+				lappend reason depend $i
+				if {$result == 0} {
+					dputs b "Rebuilding $ruletarget because $i was built"
+					set result 1
 				}
 			}
 		}
@@ -1688,9 +1649,6 @@ proc build {target} {
 		# 3.  Target exists but no dependencies were built so check time dependencies
 		if {[needbuild? $ruletarget $depends depfile]} {
 			lappend reason older $depfile
-			if {$tmake(dag)} {
-				puts "\t[dag-id $target] -> [dag-id $depfile] \[color=green,style=dotted\];"
-			}
 			set result 1
 		}
 	}
@@ -1729,11 +1687,9 @@ proc build {target} {
 			show-rule $ruletarget
 		}
 		if {$tmake(norun)} {
-			if {!$tmake(dag)} {
-				foreach do $t(do) {
-					if {$tmake(norun) == 1} {
-						show-rule-commands [subst-do $do]
-					}
+			foreach do $t(do) {
+				if {$tmake(norun) == 1} {
+					show-rule-commands [subst-do $do]
 				}
 			}
 			set rc 0
@@ -1922,9 +1878,6 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 				set scanned($d) 1
 				lassign [find-file $d $incpaths] path filepath
 				if {$path ne ""} {
-					if {$::tmake(dag)} {
-						puts "\t[dag-id $filename] -> [dag-id $path] \[color=green,style=dotted\];"
-					}
 					set deps($path) 1
 					if {[file exists $filepath]} {
 						lappend newscan {*}[header-scan-regexp $regex $path]

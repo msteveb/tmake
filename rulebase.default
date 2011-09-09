@@ -90,7 +90,7 @@ proc BuildSpecEpilog {} {
 	# Does subdir/all have any dependencies? If not, make it depend on subdir/libs (if that rule exists)
 	array set t [get-target-rule [make-local all]]
 	if {[llength $t(depends)] == 0} {
-		if {[is-rule? [make-local libs]} {
+		if {[is-rule? [make-local libs]]} {
 			Depends all [make-local libs]
 		}
 	}
