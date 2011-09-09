@@ -7,7 +7,11 @@ define? CONFIG_DIR $DESTDIR/etc/config
 define THEMES $UWEB/themes
 
 LinkFlags -L$UWEB/lib
-UseSystemLibs -luweb -ljim -lcrypt -ldl
+UseSystemLibs -luweb -ljim
+
+if {[regexp -line {^LDFLAGS := (.*)$} [readfile $UWEB/lib/build-default.mak] -> libs]} {
+	UseSystemLibs $libs
+}
 
 CFlags -Wall -g -Os -I. -I$UWEB/include
 

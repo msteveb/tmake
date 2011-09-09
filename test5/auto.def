@@ -2,16 +2,11 @@
 #
 
 use cc cc-shared
+use tmake
 
 options {
 }
 
-define CONFIGURED
-
 cc-check-tools ar ranlib
 
-set f [open settings.conf w]
-foreach {n v} [all-defines] {
-    puts $f "set $n [list $v]"
-}
-close $f
+make-tmake-settings settings.conf *

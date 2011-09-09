@@ -1,6 +1,7 @@
 # System autoconfiguration. Try: ./configure --help
 
 use cc cc-lib
+use tmake
 
 options {
     with-openssl:path|auto|none
@@ -171,13 +172,4 @@ if {![cc-check-functions getpassphrase]} {
 #make-template Makefile.in
 make-config-header autoconfig.h -auto {USE_* FOSSIL_*}
 
-define CONFIGURED
-
-set d [all-defines]
-set f [open settings.conf w]
-foreach n [lsort [dict keys $d]] {
-    set v [dict get $d $n]
-    set v [string map [list \${prefix} [get-define prefix] \${exec_prefix} [get-define prefix]] $v]
-    puts $f "set $n [list $v]"
-}
-close $f
+make-tmake-settings settings.conf *
