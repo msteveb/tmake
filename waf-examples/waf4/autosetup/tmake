@@ -1,0 +1,2406 @@
+#!/bin/sh
+# Copyright (c) 2011 WorkWare Systems http://www.workware.net.au/
+# All rights reserved
+# vim:se syntax=tcl:
+# \
+dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
+
+# ==================================================================
+# Initialiation
+# ==================================================================
+
+set tmake(version) 0.1
+set tmake(debug) 0
+#  d = dynamic dependency
+#  D = ignored dynamic dependency 
+#  b = reasons for building
+#  B = reasons for building, commands
+#  n = reasons for not building
+#  r = show rule for target being considered (combines with -db, -dn)
+#  t = target rule creation/update
+#  T = timing
+#  c = configuration checking
+#  C = cache
+#  g = graph dependencies executed
+#  p = show high level rules as they are parsed
+#  m = miscellaneous debug
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 A 0}
+set tmake(verbose) 0
+set tmake(norun) 0
+set tmake(showtime) 0
+set tmake(quickstop) 0
+set tmake(showrules) 0
+set tmake(exitcode) 0
+set tmake(modules) {}
+set tmake(autosubdirs) 1
+set tmake(cache) {}
+set tmake(cmdcache) {}
+set tmake(writecache) 0
+set tmake(deferred) {}
+set tmake(projfiles) {}
+set tmake(fixedvars) {}
+set tmake(installed) 0
+set tmake(cleaning) 0
+set tmake(init) 0
+set tmake(dag) 0
+
+# Should these really be here?
+set tmake(headerscancache) {}
+set tmake(testruncount) 0
+set tmake(testpasscount) 0
+
+set tmake(current) {}
+set tmake(rules) {}
+set tmake(targets) {}
+set tmake(numtargets) 0
+set tmake(subdirvars) {}
+set tmake(subdirs) {}
+set tmake(prefix) ""
+set tmake(localdir) .
+set tmake(localmakefile) Makefile
+
+if {$tmake(debug)} {
+	dict set tmake(debugtypes) A 1
+}
+
+# ==================================================================
+# Argument Processing
+# ==================================================================
+
+proc make-parse-options {argv {type tmake}} {
+	global tmake
+	#puts "make-parse-options [list $argv] type=$type"
+
+	foreach arg $argv {
+		if {[info exists nextopt]} {
+			switch -exact -- $nextopt {
+				-C {
+					# This will fail with a fatal error if not a dir
+					cd $arg
+					pputs "tmake: Entering directory `[pwd]'"
+				}
+				-P {
+					set tmake(topsrcdir) [file-normalize $arg]
+				}
+				default {
+					error "Unexpected $nextarg"
+				}
+			}
+			unset nextopt
+			continue
+		}
+		if {[regexp {^(\w+)=(.*)} $arg -> n v]} {
+			# Allow: make O=tmake-options
+			if {$n eq "O" && $type ne "tmake"} {
+				make-parse-options $v
+				continue
+			}
+			dputs A "define! $n $v"
+			define! $n $v
+			continue
+		}
+		if {$type ne "tmake"} {
+			continue
+		}
+		if {[regexp {^(-+[^=]*)(=)?(.*)?} $arg -> option equals value]} {
+			if {$option eq "--mflags"} {
+				# The only thing we care about from mflags is -n
+				if {[string match *n* $value]} {
+					set tmake(norun) 1
+				}
+				continue
+			}
+			if {$option eq "--bsdmakeflags"} {
+				# Pick up variable definitions
+				make-parse-options $value bsd
+				continue
+			}
+			if {$option eq "--gnumakeflags"} {
+				# Pick up variable definitions
+				make-parse-options $value gnu
+				continue
+			}
+			# Here we are parsing tmake options
+			# XXX: There is no way to pass these through make
+			if {$option eq "-d*"} {
+				foreach i [dict keys $tmake(debugtypes)] {
+					dict set tmake(debugtypes) $i 1
+				}
+				continue
+			}
+			switch -glob -- $option {
+				--find {
+					set tmake(findtarget) $value
+				}
+				--targets {
+					set tmake(listtargets) $value
+				}
+				--debug {
+					# Equivalent to -dg
+					set tmake(debug) 1
+					dict set tmake(debugtypes) g 1
+				}
+				-d* {
+					foreach i [split [string range $option 2 end] {}] {
+						dict set tmake(debugtypes) $i 1
+					}
+					set tmake(debug) 1
+				}
+				--install {
+					if {[file exists autosetup/find-tclsh]} {
+						use install
+						tmake_install autosetup
+					}
+					user-error "No autosetup directory"
+				}
+				--verbose - -v {
+					set tmake(verbose) 1
+				}
+				--init {
+					set tmake(init) 1
+				}
+				--version {
+					use help
+					pputs [show-version]
+					exit 0
+				}
+				--help - -h {
+					use help
+					show-help $argv
+					exit 0
+				}
+				--dry-run - --just-print - -n {
+					set tmake(norun) 1
+				}
+				-N {
+					set tmake(norun) 2
+				}
+				--tim* - -t {
+					incr tmake(showtime)
+				}
+				--dag {
+					incr tmake(dag)
+				}
+				-q - --quickstop {
+					incr tmake(quickstop)
+				}
+				-p - --print* {
+					incr tmake(showrules)
+				}
+				-C {
+					set nextopt $arg
+				}
+				-P {
+					set nextopt $arg
+				}
+				-- {
+				}
+				default {
+					user-error "Unknown option $arg"
+				}
+			}
+			continue
+		}
+
+		# Must be a target. If is of the form subdir//target or /target, this means the global 'target'
+		if {[regexp {//(.*)} $arg -> realtarget] || [regexp {^/(.*)} $arg -> realtarget]} {
+			lappend tmake(cmdline) $realtarget
+		} else {
+			lappend tmake(cmdline) $arg
+		}
+	}
+	if {[info exists nextopt]} {
+		user-error "$nextopt requires an argument"
+	}
+}
+
+proc make {argv} {
+	global tmake
+	#puts "make '$argv'"
+	#parray ::env
+
+	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
+	if {!$tmake(installed)} {
+		set tmake(dir) [file dirname $::argv0]
+		use compat
+	}
+
+	set tmake(exe) [file-normalize $::argv0]
+	set tmake(dir) [file dirname $tmake(exe)]
+	set tmake(start) [clock-millis]
+	set tmake(cmdline) {}
+
+	make-parse-options $argv
+
+	if {[llength $tmake(cmdline)]} {
+		set targets $tmake(cmdline)
+	} else {
+		set targets all
+	}
+
+	# If topsrcdir is already set, the current dir must be the topbuilddir
+	if {[info exists tmake(topsrcdir)]} {
+		if {[file exists build.spec]} {
+			user-error "-C [pwd] looks like a source directory, not a build directory"
+		}
+		set tmake(topbuilddir) [pwd]
+		set tmake(topsrcdir) [relative-path $tmake(topsrcdir)]
+		dputs m "Top build dir is $tmake(topbuilddir)"
+		dputs m "Top source dir is $tmake(topsrcdir)"
+	} else {
+		# Need to find the project top
+		set tmake(topbuilddir) [find-project-top]
+		if {[relative-path $tmake(topbuilddir)] ne "."} {
+			pputs "tmake: Entering directory `$tmake(topbuilddir)'"
+		}
+		cd $tmake(topbuilddir)
+		set tmake(topsrcdir) .
+	}
+	set ::env(TOPSRCDIR) $tmake(topsrcdir)
+	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
+
+	flush stdout
+
+	set tmake(prefix) ""
+
+	use getopt config
+
+	if {[file-src-exists rulebase.spec]} {
+		invoke-spec-file [file-src rulebase.spec]
+	} else {
+		invoke-spec-file $tmake(dir)/rulebase.default
+	}
+
+	dputs T "Parsed rulebase"
+
+	# Save the global state unless we need to reload
+	# XXX: It would be MUCH nicer of this wasn't held in global vars!
+	#      Maybe 'dict with' ?
+
+	set tmake_save [array get tmake]
+	set gobalvars {}
+	# And save all the global vars too
+	foreach i [info globals {[A-Z]*}] {
+		dict set globalvars $i [set ::$i]
+	}
+
+	load-build-description 1
+
+	dputs T "Parsing phase complete"
+
+	if {$tmake(init)} {
+		tmake-exit 0
+	}
+	if {$tmake(showrules)} {
+		if {$tmake(dag)} {
+			show-all-rules-as-dag
+		} else {
+			show-all-rules
+		}
+		tmake-exit 0
+	}
+	if {[info exists tmake(listtargets)]} {
+		show-all-targets $tmake(listtargets)
+		tmake-exit 0
+	}
+
+	# XXX: Is there a better way to determine if we are cleaning?
+	foreach i {clean distclean mrproper} {
+		if {$i in $targets} {
+			set tmake(cleaning) 1
+			break
+		}
+	}
+
+	# Try to build all Load targets
+
+	# But not if cleaning!
+	if {[is-cleaning?]} {
+		set tmake(projfiles) ""
+	}
+
+	# If any files specified to Load are targets,
+	# build them before anything else
+	set reload 0
+	foreach {t nocare} $tmake(projfiles) {
+		if {$nocare && ![is-target? $t]} {
+			dputs n "Load --nocare $t, not a target"
+			continue
+		}
+		set rc [build $t]
+		if {$rc < 0} {
+			if {$tmake(exitcode) == 0} {
+				build-error "Error: Don't know how to build $t"
+				tmake-exit 1
+			}
+			break
+		}
+		if {$rc > 0} {
+			dputs m "$t has changed, reloading..."
+			set reload 1
+		}
+	}
+
+	if {$reload} {
+		if {$tmake(writecache)} {
+			# Cache has been updated, so save it
+			dict set tmake_save cache $tmake(cache)
+			dict set tmake_save cmdcache $tmake(cmdcache)
+			dict set tmake_save writecache 1
+		}
+
+		# Restore the state
+		unset tmake
+		array set tmake $tmake_save
+
+		# Including global vars
+		foreach i [dict keys $globalvars] {
+			set ::$i [dict get $globalvars $i]
+		}
+		# XXX: This is *really*, *really* ugly
+		# Discard any global vars we didn't know about before
+		foreach i [info globals {[A-Z]*}] {
+			if {![dict exists $globalvars $i]} {
+				unset ::$i
+			}
+		}
+		load-build-description 0
+
+		dputs T "Reparsing phase complete"
+	}
+
+	unset tmake_save
+	unset globalvars
+
+	# Now build the targets
+	if {[info exists tmake(findtarget)]} {
+		if {[is-target? $tmake(findtarget)]} {
+			show-rule $tmake(findtarget)
+			tmake-exit 0
+		}
+		foreach target [dict keys $tmake(targets)] {
+			if {[string match *$tmake(findtarget)* $target]} {
+				show-rule $target
+				pputs ""
+			}
+		}
+		tmake-exit 0
+	}
+
+	if {[llength $targets] == 0} {
+		set targets all
+	}
+
+	dputs T "Building targets"
+
+	foreach t $targets {
+		if {[build $t] < 0} {
+			if {$tmake(exitcode) == 0} {
+				build-error "Error: Don't know how to build $t"
+			}
+			break
+		}
+		dputs T "Built target $t"
+	}
+}
+
+proc load-build-description {loadcache} {
+	global tmake
+
+	invoke-spec-file [file-src project.spec]
+
+	dputs T "Parsed project.spec"
+
+	# Loaded in the global scope 
+	if {![file-src-exists build.spec]} {
+		user-error "No build.spec in the current directory"
+	}
+
+	foreach i $tmake(deferred) {
+		uplevel #0 $i
+	}
+
+	# Now load the cache if it exists and it isn't the second time through
+	if {$loadcache && [file exists .makecache]} {
+		lassign [time {source .makecache}] us
+		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
+	}
+
+	process-build-spec-file .
+}
+
+proc is-cleaning? {} {
+	return $::tmake(cleaning)
+}
+
+# ==================================================================
+# .spec file processing
+# ==================================================================
+
+proc find-project-top {} {
+	set topdir [pwd]
+	while {![file exists $topdir/project.spec]} {
+		set parent [file dirname $topdir]
+		if {$topdir eq $parent} {
+			user-error "Failed to find project.spec in any parent directory."
+		}
+		set topdir $parent
+	}
+	dputs m "Project top found at $topdir"
+	return $topdir
+}
+
+proc local-prefix {} {
+	return $::tmake(prefix)
+}
+
+proc local-dir {} {
+	return $::tmake(localdir)
+}
+
+proc make-local {args} {
+	prefix [local-prefix] $args
+}
+
+proc make-prefix {dir} {
+	if {$dir eq "."} {
+		return ""
+	} else {
+		return $dir/
+	}
+}
+
+proc make-local-src {args} {
+	prefix $::tmake(topsrcdir)/[local-prefix] $args
+}
+
+proc invoke-spec-file {filename} {
+	global tmake
+	lappend tmake(specfiles) $filename
+
+	uplevel #0 source $filename
+}
+
+proc AutoSubDirs {onoff} {
+	switch -- $onoff {
+		on {
+			set ::tmake(autosubdirs) 1
+		}
+		off {
+			set ::tmake(autosubdirs) 0
+		}
+		default {
+			dev-error "on or off expected"
+		}
+	}
+}
+
+proc SubDirs {args} {
+	lappend ::tmake(subdirs) {*}$args
+}
+
+proc save-subdir-vars {} {
+	set saved {}
+	foreach n $::tmake(subdirvars) {
+		dict set saved $n [set ::$n]
+	}
+	return $saved
+}
+
+proc restore-subdir-vars {dict} {
+	foreach {n v} $dict {
+		set ::$n $v
+	}
+}
+
+proc file-src {path} {
+	file-join $::tmake(topsrcdir) $path
+}
+
+proc file-src-exists {path} {
+	file exists [file-src $path]
+}
+
+# If $builddir is a dir from the top of the build tree,
+# return a relative path to $srcpath from the src tree.
+# XXX: srcdir might not be appropriate here. should this be topsrcdir?
+proc file-src-relative {srcpath builddir} {
+	set src [file join $::tmake(topsrcdir) $srcpath]
+	set build [file join $::tmake(topbuilddir) $builddir]
+	relative-path $src $build
+}
+
+# Read in the given spec file in the given directory (relative to topdir)
+# Returns 1 if OK, or 0 if subdirs should be skipped
+proc process-build-spec-file {dir} {
+	global tmake
+	dputs m "process-build-spec $dir"
+
+	set tmake(localdir) $dir
+	set tmake(prefix) [make-prefix $dir]
+	set srcdir [file-src $dir]
+
+	set path [file-join $srcdir build.spec]
+
+	if {![file exists $path]} {
+		user-error "$path does not exist"
+	}
+
+	set saved [save-subdir-vars]
+
+	BuildSpecProlog
+	set rc [catch {invoke-spec-file $path} msg opts]
+	BuildSpecEpilog
+
+	restore-subdir-vars $saved
+
+	dputs T "Parsed [local-prefix]build.spec"
+
+	if {$rc == 20} {
+		dputs m "Skipping $path"
+		return
+	}
+	if {$rc != 0 && $rc != 2} {
+		return -code $rc {*}$opts $msg 
+	}
+
+	# Now subdirectories
+	incr tmake(depth)
+
+	# Find the explicitly set subdirs
+	set subdirs $tmake(subdirs)
+	set tmake(subdirs) {}
+
+	# Normally we search for dirs containing build.spec
+	if {$tmake(autosubdirs)} {
+		foreach d [readdir $srcdir] {
+			if {[file exists $srcdir/$d/build.spec] && $d ni $subdirs} {
+				lappend subdirs [file-join $dir $d]
+			}
+		}
+	}
+
+	# Now process subdirs
+	foreach d $subdirs {
+		if {[file-src-exists $d/build.ignore]} {
+			dputs m "Ignoring $d because build.ignore exists"
+		} else {
+			process-build-spec-file $d
+		}
+	}
+	incr tmake(depth) -1
+}
+
+# Returns a list of all files which were once a target but are no longer
+proc get-orphan-targets {} {
+	set result {}
+	foreach i [dict keys $::tmake(cache)] {
+		if {![is-target? $i]} {
+			lappend result $i
+		}
+	}
+	return $result
+}
+
+proc discard-orphan-targets {} {
+	foreach i [dict keys $::tmake(cache)] {
+		if {![is-target? $i]} {
+			dict unset ::tmake(cache) $i
+			catch {
+				dict unset ::tmake(cmdcache) [get-rule-target $i]
+			}
+			if {$::tmake(writecache) == 0} {
+				dputs C "discarding orphans, updated cache"
+				set ::tmake(writecache) 1
+			}
+		}
+	}
+}
+
+# ==================================================================
+# Module Loading
+# ==================================================================
+
+proc use {args} {
+	if {$::tmake(installed)} {
+		return
+	}
+	foreach m $args {
+		if {[dict exists $::tmake(modules) $m]} {
+			continue
+		}
+		dict set ::tmake(modules) $m 1
+
+		set source $::tmake(dir)/lib/${m}.tcl
+		if {![file exists $source]} {
+			dev-error "use: No such module: $m"
+		}
+		uplevel #0 [list source $source]
+		#lappend ::automf(makefiledeps) $source
+	}
+}
+
+# ==================================================================
+# Debug, Errors and Messages
+# ==================================================================
+
+# @user-error msg
+#
+# Indicate incorrect usage to the user
+# exits with a non-zero return code.
+#
+proc user-error {msg} {
+	puts stderr "Error: $msg"
+	puts stderr "Try: 'tmake --help' for options"
+	tmake-exit 1
+}
+
+# @build-error msg
+#
+# Indicate that something failed to build and set exitcode=1
+proc build-error {msg} {
+	dputs b "BUILD ERROR: $msg"
+	puts stderr $msg
+	set ::tmake(exitcode) 1
+}
+# @user-notice msg
+#
+# Output the given message to stderr.
+#
+proc user-notice {msg} {
+	puts stderr $msg
+}
+
+# Incorrect usage in the build.spec file. Identify the location.
+proc dev-error {msg} {
+	puts stderr [error-location "Error: $msg"]
+	tmake-exit 1
+}
+
+proc tmake-exit {code} {
+	global tmake
+
+	# Write the cache before exiting
+	if {$tmake(writecache)} {
+		lassign [time {
+			set f [open .makecache w]
+			puts $f [list set tmake(cache) $tmake(cache)]
+			puts $f [list set tmake(cmdcache) $tmake(cmdcache)]
+			puts $f [list set tmake(headerscancache) $tmake(headerscancache)]
+			close $f
+		}] us
+		dputs C "Wrote cache, .makecache in [expr {($us + 500) / 1000}]ms"
+	}
+	exit $code
+}
+
+# Output a message to stdout if --verbose is set.
+#
+proc vputs {msg} {
+	if {$::tmake(verbose)} {
+		pputs $msg
+	}
+}
+
+proc pputs {msg} {
+	puts $msg
+}
+
+# Returns 1 if any of the debug types is set
+proc debug-is-set {types} {
+	foreach t $types {
+		if {[dict get $::tmake(debugtypes) $t]} {
+			return 1
+		}
+	}
+	return 0
+}
+
+# Output a message to stdout if --debug is set.
+#
+proc dputs {types msg} {
+	if {[debug-is-set $types]} {
+		pputs "[dbg-msg-indent] \[$types\] $msg"
+	}
+}
+
+proc dbg-msg-indent {} {
+	set now [clock-millis]
+	set elapsed [expr {$now - $::tmake(start)}]
+	return [format %5dms $elapsed][string repeat "  " [llength $::tmake(current)]]
+}
+
+# Pretty-print the commands for a rule
+#
+proc show-rule-commands {do} {
+	set lines [split $do \n]
+	set first [lindex $lines 0]
+	if {$first eq ""} {
+		set lines [lrange $lines 1 end]
+		set first [lindex $lines 0]
+	}
+	regexp {^(\s*)} $first -> space
+	set trim [string length $space]
+	set prefix \t
+	foreach j $lines {
+		set r [string trimright [string range $j $trim end]]
+		if {$r ne ""} {
+			puts $prefix$r
+		}
+	}
+}
+
+# Output a rule in a user-friendly format
+#
+proc show-rule {target} {
+	if {[is-target? $target]} {
+		set ruletarget [get-rule-target $target]
+	} else {
+		set ruletarget $target
+	}
+	if {[is-rule? $ruletarget]} {
+		array set t [get-rule $ruletarget]
+		set flags {}
+		set lines {}
+		foreach n [lsort [array names t]] {
+			set v $t($n)
+			switch -- $n {
+				do - depends - inputs - building - msg - target {}
+				source {
+					if {$v ne "unknown"} {
+						puts @[join $v {, }]
+					}
+				}
+				phony - nofail - chdir - nocache {
+					if {$v} {
+						lappend flags $n
+					}
+				}
+				result {
+					if {$v < 0} {
+						lappend flags failed
+					} elseif {$v > 0} {
+						lappend flags built
+					}
+				}
+				vars {
+					foreach {vn vv} $v {
+						lappend lines "  var $vn=$vv"
+					}
+				}
+				onerror {
+					if {$v ne ""} {
+						lappend lines "$n={[join [split [string trim $v] \n] {;}]}"
+					}
+				}
+				default {
+					if {$v ne ""} {
+						lappend lines "$n=[string trim $v]"
+					}
+				}
+			}
+		}
+		if {[llength $flags]} {
+			append target " \[$flags\]"
+		}
+		puts "$t(target): $t(depends)"
+		if {[llength $lines]} {
+			puts [join $lines \n]
+		}
+		foreach do $t(do) {
+			show-rule-commands $do
+		}
+	} else {
+		puts "No rule for $ruletarget"
+	}
+}
+
+proc show-all-rules {} {
+	foreach i [lsort [dict keys $::tmake(rules)]] {
+		puts "-------------------------------------------"
+		show-rule $i
+		puts ""
+	}
+}
+
+proc dag-id {path} {
+	string map {/ _ - _ . _ # _} $path
+}
+
+proc dag-node-print {id label args} {
+	if {[string match */* $label]} {
+		set label "[file tail $label]\\n([file dirname $label])"
+	}
+	lappend args "label=\"$label\""
+	puts "\t$id \[[join $args ,]\];"
+}
+
+proc dag-node {path} {
+	set id [dag-id $path]
+	set ret $id
+	if {![info exists ::dagnode($id)]} {
+		if {[is-target? $path]} {
+			array set t [get-target-rule $path]
+			if {$t(phony)} {
+				# Omit phony targets with no dependencies and no -do
+				if {[llength $t(depends)] || [string length $t(do)]} {
+					dag-node-print $id $path style=dotted color=blue
+				} else {
+					set ret ""
+				}
+			} else {
+				dag-node-print $id $path style=dashed color=purple
+			}
+		} else {
+				dag-node-print $id $path
+		}
+		set ::dagnode($id) 1
+	}
+	return $ret
+}
+
+proc show-all-rules-as-dag {} {
+	puts "digraph tmake \{"
+	set label {}
+	foreach i [lsort [dict keys $::tmake(rules)]] {
+		array unset t
+		array set t [get-rule $i]
+		#if {!$t(phony)} {
+		#	continue
+		#}
+		foreach target $t(target) {
+			set targetid [dag-node $target]
+			foreach dep $t(depends) {
+				set depid [dag-node $dep]
+				if {$depid ne ""} {
+					if {$dep in $t(inputs)} {
+						puts "\t$targetid -> $depid;"
+					} else {
+						puts "\t$targetid -> $depid \[style=dotted\];"
+					}
+				}
+			}
+		}
+	}
+	puts "\}"
+}
+
+proc show-all-targets {detailed} {
+	foreach i [lsort [dict keys $::tmake(targets)]] {
+		array unset t
+		array set t [get-target-rule $i]
+		if {$detailed eq ""} {
+			if {!$t(phony)} {
+				puts $i
+			}
+		} else {
+			puts "$i @[make-source-location $i]"
+		}
+	}
+}
+
+# ==================================================================
+# Variable Handling
+# ==================================================================
+
+# Set a variable to the given value
+# 
+# e.g. define CC arm-linux-gcc -mbig-endian
+#
+proc define {name args} {
+	#puts "define $name $args"
+	if {![dict exists $::tmake(fixedvars) $name]} {
+		global $name
+		set $name [join $args]
+	}
+}
+
+proc define! {name args} {
+	#puts "define! $name $args"
+	dict set ::tmake(fixedvars) $name 1
+	global $name
+	set $name [join $args]
+}
+
+# Set a variable to the given value
+# unless it is already set to a non-empty value.
+#
+proc define? {name args} {
+	global $name
+	#puts "define? $name $args"
+	if {![info exists $name] || [set $name] eq ""} {
+		define $name {*}$args
+	}
+}
+
+# If the variable is not set, set it.
+# Otherwise append the new value to the old value
+# separated by a space.
+#
+proc define-append {name args} {
+	global $name
+	append-with-space $name [join $args]
+}
+
+proc get-define {name {default ""}} {
+	global $name
+	if {![info exists $name]} {
+		return $default
+	}
+	set $name
+}
+
+# If the given var is not set or is "", sets it to $value
+# Otherise appends $value with a space separator (or $space)
+#
+proc append-with-space {varname value {space " "}} {
+	upvar $varname n
+	if {[info exists n] && $n ne ""} {
+		append n $space $value
+	} else {
+		set n $value
+	}
+}
+
+# Takes a list and returns a new list with $suf appended
+# to each element
+# 
+# suffix .c a b c => a.c b.c c.c
+#
+proc suffix {suf args} {
+	set result {}
+	foreach p [join $args] {
+		lappend result $p$suf
+	}
+	return $result
+}
+
+# Takes a list and returns a new list with $pre prepended
+# to each element
+# 
+# suffix jim- a.c b.c => jim-a.c jim-b.c
+#
+proc prefix {pre args} {
+	set result {}
+	foreach p [join $args] {
+		lappend result $pre$p
+	}
+	return $result
+}
+
+# Takes a list of filenames and returns a new list with
+# the extension of each filename changed to $ext
+# 
+# change-ext .c a.o b.o c => a.c b.c c.c
+#
+proc change-ext {ext args} {
+	set result {}
+	foreach p [join $args] {
+		lappend result [file rootname $p]$ext
+	}
+	return $result
+}
+
+# Merges target variables.
+# These are stored in dictionaries, where $dict1 is the current vars
+# and the new vars $dict2 need to be merged.
+# Where there is no overlap, the dictionaries are simply merged.
+# Where a var exists in both, the values are combined with a space separator.
+proc merge-vars {dict1 dict2} {
+	if {[dict size $dict2]} {
+		if {[dict size $dict1] == 0} {
+			return $dict2
+		}
+		array set d1 $dict1
+		foreach {n v} $dict2 {
+			append-with-space d1($n) $v
+		}
+		return [array get d1]
+	}
+	return $dict1
+}
+
+# Appends the given arguments to the given keylist in the dictionary
+proc dict-lappend {dictname keys args} {
+	upvar $dictname d
+	if {[dict exists $d {*}$keys]} {
+		set list [dict get $d {*}$keys]
+		lappend list {*}$args
+	} else {
+		set list $args
+	}
+	dict set d {*}$keys $list
+}
+
+# Increments a value in the dictionary
+proc dict-incr {dictname key {incr 1}} {
+	upvar $dictname d
+	set value [dict get $d $key]
+	incr value $incr
+	dict set d $key $value
+}
+
+# ==================================================================
+# File Utilities
+# ==================================================================
+
+# @readfile filename ?default=""?
+#
+# Return the contents of the file, without the trailing newline.
+# If the doesn't exist or can't be read, returns $default.
+#
+proc readfile {filename {default_value ""}} {
+	set result $default_value
+	catch {
+		set f [open $filename]
+		set result [read -nonewline $f]
+		close $f
+	}
+	return $result
+}
+
+# @writefile filename value
+#
+# Creates the given file containing $value.
+# Does not add an extra newline.
+#
+proc writefile {filename value} {
+	file mkdir [file dirname $filename]
+	set f [open $filename w]
+	puts -nonewline $f $value
+	close $f
+}
+
+# ==================================================================
+# Rule Handling
+# ==================================================================
+
+# Returns 1 if the target is an individual target
+proc is-target? {target} {
+	dict exists $::tmake(targets) $target
+}
+
+# Returns 1 if the target is a rule target
+proc is-rule? {target} {
+	dict exists $::tmake(rules) $target
+}
+
+# Converts a target to the rule target
+proc get-rule-target {target} {
+	dict get $::tmake(targets) $target
+}
+
+# Returns the rule for an individual target
+proc get-target-rule {target} {
+	get-rule [get-rule-target $target]
+}
+
+# Returns the rule for a rule target
+proc get-rule {target} {
+	dict get $::tmake(rules) $target
+}
+
+proc update-rule {ruledict} {
+	set ruletarget [dict get $ruledict target]
+	if {![is-rule? $ruletarget]} {
+		# Haven't seen this rule before so individual target pointers
+		foreach t $ruletarget {
+			if {[dict exists $::tmake(targets) $t]} {
+				dev-error "Rule for $t was already specified at [make-source-location $t]"
+			}
+			dict set ::tmake(targets) $t $ruletarget
+		}
+	}
+	dict set ::tmake(rules) $ruletarget $ruledict
+}
+
+proc show-this-rule {} {
+	if {[debug-is-set p]} {
+		puts "\[p\] [find-source-location] [info level -1]"
+	}
+}
+
+proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
+	if {[is-rule? $ruletarget]} {
+		array set info [get-rule $ruletarget]
+	} else {
+		array set info [get-target-rule $ruletarget]
+	}
+
+	if {$info(source) eq "unknown"} {
+		return ""
+	}
+	return $prefix[join $info(source) ", "]$suffix
+}
+
+# This is the only way to create a rule
+#
+# Parses the arguments and adds them to the rule base
+#
+proc target {ruletarget args} {
+	# If the rule aready exists, we are updating
+	if {[is-rule? $ruletarget]} {
+		array set orig [get-rule $ruletarget]
+	} elseif {[is-target? $ruletarget]} {
+		# Can't update a rule via the invidual target
+		array set orig [get-target-rule $ruletarget]
+		dev-error "Multiple-target rule for $ruletarget was already specified at [make-source-location $orig(source) @]"
+	}
+	# XXX: Where to we check that we don't have rules {a b} and {b a}? In update-rule?
+
+	array set info [parse-rule $ruletarget $args]
+
+	#show-this-rule
+
+	set replace $info(replace)
+	unset info(replace)
+
+	# And -inputs are also -depends
+	set info(depends) [concat $info(depends) $info(inputs)]
+
+	if {$replace} {
+		if {[info exists orig]} {
+			dputs t "Replacing existing rule for $ruletarget @$orig(source)"
+			unset orig
+		} else {
+			dputs t "Rule for $ruletarget with -replace but not existing target @$info(source)"
+		}
+	}
+	# Cache the prefix with the rule, also
+	set info(local) [local-dir]
+
+	if {![info exists orig]} {
+		# Now create/update the rule
+		update-rule [array get info]
+		return
+	}
+
+	# There is already a rule for this target, so attempt
+	# to merge the two rules
+	# Note: We generally want the new values to come after the existing values, so
+	# merge the new data into orig
+
+	if {[llength $info(do)] && [llength $orig(do)]} {
+		#dev-error "$ruletarget already has '-do' @$orig(source)"
+		puts stderr [error-location "Warning: $ruletarget already has '-do' @$orig(source)"]
+		set info(do) {}
+	}
+	if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
+		dev-error "$ruletarget already has '-dyndep' @$orig(source)"
+	}
+	lappend orig(depends) {*}$info(depends)
+	lappend orig(inputs) {*}$info(inputs)
+	lappend orig(clean) {*}$info(clean)
+	incr orig(phony) $info(phony)
+	incr orig(nofail) $info(nofail)
+	incr orig(chdir) $info(chdir)
+	incr orig(nocache) $info(nocache)
+	append-with-space orig(onerror) $info(onerror) \n
+	# Only one of these will be non-blank
+	lappend orig(do) {*}$info(add-do)
+	append-with-space orig(dyndep) $info(dyndep) \n
+
+	if {$info(source) eq "unknown" || $info(source) in $orig(source)} {
+		# Nothing to do
+	} elseif {$info(source) ne "unknown"} {
+		lappend orig(source) $info(source)
+	}
+
+	# Need to append to any vars which exist
+	set orig(vars) [merge-vars $orig(vars) $info(vars)]
+
+	# Whichever rule has '-do' also specifies '-inputs' and '-msg'
+	if {[llength $orig(do)] == 0} {
+		set orig(do) $info(do)
+		set orig(inputs) $info(inputs)
+		set orig(msg) $info(msg)
+	}
+	update-rule [array get orig]
+}
+
+# Adds the list elements to the target-specific variable.
+#
+# This a much faster equivalent of:
+#
+#     target $ruletarget -vars $varname {*}$list
+#
+proc target-add-var {ruletarget varname list} {
+	# The rule must already exist
+	if {![is-rule? $ruletarget]} {
+		dev-error "$ruletarget is not a rule target"
+	}
+
+	dict-lappend ::tmake(rules) [list $ruletarget vars $varname] {*}$list
+}
+
+proc parse-rule-args {arglistname optname} {
+	upvar $arglistname arglist
+	upvar $optname opt
+	set arglist [lassign $arglist opt]
+
+	if {![string match -* $opt]} {
+		dev-error "Unexpected parameter for rule: $opt"
+	}
+	set opt [string range $opt 1 end]
+	if {$opt eq "vars"} {
+		set incr 2
+	} else {
+		set incr 1
+	}
+
+	for {set i 0} {$i < [llength $arglist]} {incr i $incr} {
+		if {[string match -* [lindex $arglist $i]]} {
+			incr i -1
+			break
+		}
+	}
+	set optlist [lrange $arglist 0 $i]
+	incr i
+	set arglist [lrange $arglist $i end]
+	return $optlist
+}
+
+# Returns a dictionary (list) representing the parsed target rule
+#
+proc parse-rule {target arglist} {
+	set info(source) [find-source-location *build.spec]
+	if {$info(source) eq "unknown"} {
+		set info(source) [find-source-location *.spec]
+		if {$info(source) eq "unknown"} {
+			set info(source) [find-source-location *.default]
+		}
+	}
+	set info(target) $target
+
+	array set info {
+		status unknown
+		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
+		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
+	}
+
+	# Parse an option followed by multiple non-options
+	while {[llength $arglist]} {
+		set optargs [parse-rule-args arglist opt]
+		switch -exact -- $opt {
+			phony - nofail - replace - add - chdir - nocache {
+				if {[llength $optargs]} {
+					dev-error "Rule for $target has non-option parameters after -$opt: $optargs"
+				}
+				set info($opt) 1
+			}
+			inputs - depends {
+				lappend info($opt) {*}[join $optargs]
+			}
+			clean {
+				set info($opt) $optargs
+			}
+			do - msg - dyndep - onerror {
+				if {[llength $optargs] > 1} {
+					dev-error "Rule for $target has more than one '-$opt' parameter"
+				}
+				if {$opt eq "do"} {
+					set info($opt) $optargs
+				} else {
+					set info($opt) [lindex $optargs 0]
+				}
+			}
+			vars {
+				if {[llength $optargs] % 2} {
+					dev-error "Rule for $target has an odd number of parameters to '-vars'"
+				}
+				lappend info($opt) {*}$optargs
+			}
+			getvars {
+				foreach v $optargs {
+					if {![info exists ::$v]} {
+						dev-error "Rule for $target has -getvars for non-existent variable: $v"
+					}
+					lappend info(vars) $v [set ::$v]
+				}
+			}
+			default {
+				dev-error "Rule for $target has unknown option: -$opt"
+			}
+		}
+	}
+
+	if {$info(add) && $info(replace)} {
+		dev-error "Rule for $target has both '-add' and '-replace'"
+	}
+	if {$info(add)} {
+		if {![llength $info(do)]} {
+			dev-error "Rule for $target has '-add' but no '-do'"
+		}
+		# Transfer -do to add-do
+		set info(add-do) $info(do)
+		set info(do) {}
+	}
+	unset info(add)
+
+	if {[llength $info(do)] == 0 && [llength $info(inputs)]} {
+		dev-error "Rule for $target has '-inputs' but no '-do'"
+	}
+	if {[llength $info(do)] == 0 && $info(msg) ne ""} {
+		dev-error "Rule for $target has '-msg' but no '-do'"
+	}
+
+	array get info
+}
+
+# ==================================================================
+# Dependency Engine
+# ==================================================================
+
+proc file-real-mtime {filename} {
+	if {[is-target? $filename]} {
+		file mtime $filename
+	} else {
+		file mtime [file-src $filename]
+	}
+}
+
+proc file-virtual-mtime {filename} {
+	set mtime [file-real-mtime $filename]
+	if {[dict exists $::tmake(cache) $filename]} {
+		lassign [dict get $::tmake(cache) $filename] vmtime omtime
+		# If the actual mtime is different from the saved mtime, we
+		# ignore the cached (virtual) mtime.
+		if {$omtime == $mtime} {
+			# The cache is up to date, so use the virtual mtime
+			set mtime $vmtime
+		}
+	}
+	return $mtime
+}
+
+proc find-oldest-time {list name} {
+	upvar $name oldestname
+	lassign $list oldestname
+	set oldesttime [file-virtual-mtime $oldestname]
+
+	if {[llength $list] > 1} {
+		foreach file $list {
+			set t [file-virtual-mtime $file]
+			if {$t < $oldesttime} {
+				set oldesttime $t
+				set oldestname $file
+			}
+		}
+	}
+	#puts "find-oldest-time: $oldestname $oldesttime ($list)"
+	return $oldesttime
+}
+
+proc find-newest-time {list name} {
+	upvar $name newestname
+	lassign $list newestname
+	set newesttime [file-real-mtime $newestname]
+
+	if {[llength $list] > 1} {
+		foreach file $list {
+			set t [file-real-mtime $file]
+			if {$t > $newesttime} {
+				set newesttime $t
+				set newestname $file
+			}
+		}
+	}
+	#puts "find-newest-time: $newestname $newesttime ($list)"
+	return $newesttime
+}
+
+# Both $targets and $depends are lists of files which must exist
+# If any file is $targets is older than any file in $depends, the
+# targets are out of date and 1 is returned. In this case the 
+# variable named $depname is set to the name of the newest
+# file in $depends
+# Otherwise 0 is returned.
+#
+proc needbuild? {targets depends depname} {
+	upvar $depname newest_depends
+	set depends_time [find-newest-time $depends newest_depends]
+	#puts "newest depends: [clock format $depends_time] $newest_depends"
+	set targets_time [find-oldest-time $targets oldest_target]
+	#puts "oldest targets: [clock format $targets_time] $oldest_target"
+	if {$targets_time < $depends_time} {
+		dputs b "$oldest_target is older than $newest_depends, so forcing rebuild"
+		return 1
+	}
+	dputs n "$targets is newer than $depends, so not forcing rebuild"
+	return 0
+}
+
+proc locate-files {files} {
+	set result {}
+	foreach f $files {
+		if {[is-target? $f]} {
+			lappend result $f
+		} else {
+			lappend result [file-src $f]
+		}
+	}
+	return $result
+}
+
+# Sets target-local variables. e.g. $local, $inputs, $depends and $target
+proc set-target-vars {info} {
+	foreach {n v} [dict get $info vars] {
+		set ::$n $v
+	}
+	set ::target [dict get $info target]
+	set ::local [dict get $info local]
+	set ::depends [locate-files [dict get $info depends]]
+	set ::inputs [locate-files [dict get $info inputs]]
+}
+proc clear-target-vars {vars} {
+	foreach n [dict keys $vars] {
+		set ::$n ""
+	}
+}
+
+proc set-target-result {target result} {
+	set ruletarget [get-real-target $target]
+	if {[dict get $::tmake(rules) $ruletarget result] == 0} {
+		dict set ::tmake(rules) $ruletarget result $result
+	}
+}
+
+proc note {args} {
+	if {$::tmake(verbose) == 0} {
+		pputs [join $args]
+	}
+}
+
+proc run {args} {
+	set cmdline [join $args]
+	set cmd [lindex $cmdline 0]
+	if {![string match */* $cmd] && [file exists $cmd]} {
+		set cmdline ./$cmdline
+	}
+	vputs [string trim $cmdline]
+	set rc [catch {
+		exec-save-stderr {*}$cmdline
+	} msg opts]
+	if {$rc == 1} {
+		# On error, display the command and the error and return break
+		build-error "\n\t$cmdline\n$msg\n"
+		return -code break
+	}
+	# XXX: What to do on signal?
+}
+
+proc calc-dyndeps {target} {
+	array set t [get-rule $target]
+	#puts "=============="
+	#parray t
+
+	set dyndeps {}
+	if {$t(dyndep) ne ""} {
+		foreach i $t(depends) {
+			lappend dyndeps {*}[uplevel #0 $t(dyndep) $i]
+		}
+		dputs d "Dynamic dependencies for $target: $dyndeps"
+	}
+	return $dyndeps
+}
+
+proc file-exists-all {list missingname} {
+	foreach f $list {
+		if {![file exists $f]} {
+			upvar $missingname missing
+			set missing $f
+			return 0
+		}
+	}
+	return 1
+}
+
+# Unfortunately subst doesn't respect braces, so it is possible
+# for subst to fail on something which isn't supposed to be interepreted
+# by Tcl. So subst, and if that fails, return the script unchanged.
+proc subst-do {script} {
+	if {[catch {uplevel #0 [list subst -noc $script]} expanded]} {
+		return $script
+	}
+	return $expanded
+}
+
+proc build {target} {
+	global tmake
+	set current $tmake(current)
+	lappend current $target
+	if {![is-target? $target]} {
+		if {[file-src-exists $target]} {
+			dputs n "$target is not a target, but exists"
+			return 0
+		}
+		dputs b "$target is not a target and does not exist"
+		return -1
+	}
+	array set t [get-target-rule $target]
+	set ruletarget $t(target)
+	if {$t(status) eq "checking"} {
+		dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
+	}
+	if {$t(status) eq "uptodate"} {
+		return 0
+	}
+	if {$t(status) eq "failed"} {
+		dputs b "$target has previously failed to build"
+		return -1
+	}
+	if {$t(status) eq "built"} {
+		dputs b "$target has previously been built"
+		return 1
+	}
+
+	set t(status) checking
+	update-rule [array get t]
+
+	set reason {}
+	if {$t(phony)} {
+		dputs b "$target is phony, so rebuilding"
+		lappend reason phony
+		set result 1
+	} elseif {![file-exists-all $ruletarget missing]} {
+		dputs b "$missing doesn't exist, so rebuilding"
+		lappend reason noexist
+		set result 1
+	} else {
+		#dputs b "$ruletarget exists, so checking dependencies"
+		set result 0
+	}
+
+	set oldcurrent $tmake(current)
+	set tmake(current) $current
+
+	# Here is the plan to build $target
+	# 1. Run 'build' for each static dependency
+	#    - If 'build' returns -1 (fails) and --quickstop is specified, we are done
+	#    - If 'build' returns 1, the target needs to be built
+	# 2. Calculate any dynamic dependencies for $target and run 'build' for each one
+	#    - If 'build' returns -1 (fails) and --quickstop is specified, we are done
+	#    - If 'build' returns 1, the target needs to be built
+	# 3. If nothing was built ($result is 0), check each static+dynamic dependency for time
+	#    - If needbuild? returns 1, the target needs to be built
+	# 4. If build not forced, check substituted '-do' against any cached value
+	#    - If cached commands exists and they are different, the target needs to be built
+
+	# First check dynamic dependencies
+	set depends $t(depends)
+
+	# 1. Static dependencies
+	foreach i $depends {
+		set rc [build $i]
+		if {$rc < 0} {
+			if {$tmake(exitcode) == 0} {
+				build-error "[make-source-location $ruletarget "" ": "]Error: Don't know how to build $i: [join [lreverse $current] { <= }]"
+			}
+			set result -1
+			if {$tmake(quickstop)} {
+				break
+			}
+		} elseif {$rc > 0} {
+			lappend reason depend $i
+			if {$result == 0} {
+				dputs b "Rebuilding $target because $i was built"
+				set result 1
+			}
+		}
+	}
+
+	if {$result >= 0} {
+		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
+		# Need to set target vars before doing this
+		set-target-vars [array get t]
+
+		foreach i [calc-dyndeps $ruletarget] {
+			lappend depends $i
+
+			if {[check-signal]} {
+				set result -1
+				break
+			}
+
+			set rc [build $i]
+			if {$rc < 0} {
+				if {$tmake(exitcode) == 0} {
+					build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
+				}
+				set result -1
+				if {$tmake(quickstop)} {
+					break
+				}
+			} elseif {$rc > 0} {
+				lappend reason depend $i
+				if {$result == 0} {
+					dputs b "Rebuilding $ruletarget because $i was built"
+					set result 1
+				}
+			}
+		}
+	}
+
+	if {$tmake(quickstop) && $tmake(exitcode)} {
+		tmake-exit $tmake(exitcode)
+	}
+
+	if {$result == 0 && [llength $depends]} {
+		# 3.  Target exists but no dependencies were built so check time dependencies
+		if {[needbuild? $ruletarget $depends depfile]} {
+			lappend reason older $depfile
+			set result 1
+		}
+	}
+
+	set-target-vars [array get t]
+
+	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(cmdcache) $ruletarget]} {
+		# 4. Compare previous '-do' commands with current commands
+		set do [subst-do $t(do)]
+		set prevdo [dict get $tmake(cmdcache) $ruletarget]
+		if {$do ne $prevdo} {
+			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
+			dputs B "=== old ==="
+			dputs B $prevdo
+			dputs B "=== new ==="
+			dputs B $do
+			dputs B "-----------"
+			lappend reason commands
+			set result 1
+		} else {
+			dputs n "Commands for $ruletarget are unchanged"
+		}
+	}
+
+	if {$result > 0} {
+		if {[debug-is-set g]} {
+			pputs "\[g\] [join $current { --> }] ($reason)"
+		}
+	}
+
+	if {$result > 0 && [llength $t(do)]} {
+		#puts "Running rules for $ruletarget"
+		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $ruletarget "with rule @"]"
+		uplevel #0 $t(msg)
+		if {[dict get $tmake(debugtypes) r]} {
+			show-rule $ruletarget
+		}
+		if {$tmake(norun)} {
+			foreach do $t(do) {
+				if {$tmake(norun) == 1} {
+					show-rule-commands [subst-do $do]
+				}
+			}
+			set rc 0
+		} else {
+			# Create all the target directories as required
+			# XXX: Probably should make this more efficient
+			foreach i $ruletarget {
+				dputs m "mkdir [file dirname $i]"
+				file mkdir [file dirname $i]
+			}
+			foreach do $t(do) {
+				if {$t(chdir)} {
+					cd [file dirname [lindex $ruletarget 0]]
+				}
+				set rc [catch {uplevel #0 $do} msg opts]
+				# Always restore the current dir afterwards
+				cd $tmake(topbuilddir)
+				if {$rc} {
+					# XXX: Check for signal?
+					if {$t(nofail)} {
+						user-notice "\[ignored\] $msg"
+						set rc 0
+					} else {
+						break
+					}
+				}
+			}
+		}
+
+		if {[check-signal 1]} {
+			pputs ""
+			set tmake(exitcode) 2
+			set rc 5
+		}
+
+		# Always delete $t(clean) files after the rule has run
+		if {[llength $t(clean)]} {
+			file delete {*}$t(clean)
+		}
+
+		# Did the rule make the targets?
+		if {$rc == 0 && !$t(phony) && !$tmake(norun) && ![is-cleaning?]} {
+			set now [clock seconds]
+			foreach f $ruletarget {
+				if {![file exists $f]} {
+					# XXX: Should onerror run here if --quickstop is set?
+					build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f"
+					# Use break to indicate that we have already output the message
+					set rc 3
+				} elseif {!$t(nocache)} {
+					# Record the time that this target was created, along with the real mtime
+					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
+					if {$tmake(writecache) == 0} {
+						dputs C "Targets built, updating cache"
+						set tmake(writecache) 1
+					}
+					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
+
+					# And save the commands in the command cache, but only if subst succeeds
+					dict set tmake(cmdcache) $ruletarget [subst-do $t(do)]
+				}
+			}
+		}
+
+		if {$rc == 0} {
+			if {!$t(phony)} {
+				incr tmake(numtargets)
+			}
+		} else {
+			# On failure, delete the target(s)
+			file delete {*}$ruletarget
+
+			# Try to run onerror
+			if {[catch {
+				dputs b $t(onerror)
+				uplevel #0 $t(onerror)
+				if {$rc == 1} {
+					build-error [error-stacktrace $msg]
+				}
+			} fmsg fopts]} {
+				build-error [error-stacktrace $fmsg]
+			}
+			set result -1
+		}
+
+		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
+			tmake-exit $tmake(exitcode)
+		}
+
+		clear-target-vars $t(vars)
+	}
+
+	if {$result < 0} {
+		set t(status) failed
+	} elseif {$result > 1} {
+		set t(status) built
+	} else {
+		set t(status) uptodate
+	}
+	update-rule [array get t]
+
+	set tmake(current) $oldcurrent
+	return $result
+}
+
+# ==================================================================
+# Dynamic dependencies
+# ==================================================================
+
+# XXX: Stops scanning after 200 lines with no #include - should be at least configurable
+# 
+proc header-scan-regexp {regex filename} {
+	global tmake
+	#puts "header-scan-regexp $filename"
+
+	# memoize the result
+	set mtime [file-real-mtime $filename]
+	if {[dict exists $tmake(headerscancache) $filename]} {
+		lassign [dict get $tmake(headerscancache) $filename] cache_mtime cache_regex headers
+		if {$cache_mtime == $mtime && $cache_regex eq $regex} {
+			# Can reuse the cache
+			dputs d "header-scan-regexp $filename (cached) => $headers"
+			return $headers
+		}
+		# Stale
+		dict unset tmake(headerscancache) $filename
+	}
+	if {[is-target? $filename]} {
+		set f [open $filename]
+	} else {
+		set f [open [file-src $filename]]
+	}
+	set headers {}
+	set n 0
+	while {[gets $f buf] >= 0} {
+		if {[regexp $regex $buf -> name]} {
+			lappend headers $name
+			set n 0
+		} elseif {[incr n] > 200} {
+			break
+		}
+	}
+	close $f
+	dict set tmake(headerscancache) $filename [list $mtime $regex $headers]
+	if {$tmake(writecache) == 0} {
+		dputs C "New header scan, updating cache"
+		set tmake(writecache) 1
+	}
+	dputs d "header-scan-regexp $filename => $headers"
+	return $headers
+}
+
+# Returns a pair of local-path, source-path
+proc find-file {filename paths} {
+	foreach p $paths {
+		set f [file-join $p $filename]
+		if {[is-target? $f]} {
+			# XXX: Is it really OK to build targets here?
+			dputs d "$f is a target, so building first"
+			if {[build $f] >= 0} {
+				return [list $f $f]
+			}
+		}
+		if {[file-src-exists $f]} {
+			return [list $f [file-src $f]]
+		}
+	}
+	dputs D "Not a file and not a target, $filename"
+	return ""
+}
+
+# XXX: This could be done better
+proc header-scan-regexp-recursive {incpaths regex filename} {
+	if {![file exists $filename] && ![file-src-exists $filename]} {
+		#puts "header-scan-regexp-recursive, $filename does not exist"
+		return {}
+	}
+	dputs d "Scanning $filename for headers: incpaths=$incpaths"
+	array set deps {}
+	set scanned($filename) 1
+	set toscan [header-scan-regexp $regex $filename]
+	while {[llength $toscan]} {
+		set newscan {}
+		foreach d $toscan {
+			if {![info exists scanned($d)]} {
+				set scanned($d) 1
+				lassign [find-file $d $incpaths] path filepath
+				if {$path ne ""} {
+					set deps($path) 1
+					if {[file exists $filepath]} {
+						lappend newscan {*}[header-scan-regexp $regex $path]
+					}
+				}
+			}
+		}
+		set toscan $newscan
+	}
+	array names deps
+}
+
+# Embedded modules are inserted below here
+set tmake(installed) 1
+# ----- module compat.tcl -----
+# Copyright (c) 2007-2010 WorkWare Systems http://www.workware.net.au/
+# All rights reserved
+
+# Module containing misc procs useful to modules
+# Largely for platform compatibility
+
+set tmakecompat(istcl) [info exists ::tcl_library]
+set tmakecompat(iswin) [string equal windows $tcl_platform(platform)]
+
+if {$tmakecompat(iswin)} {
+	# mingw/windows separates $PATH with semicolons
+	# and doesn't have an executable bit
+	proc split-path {} {
+		split [getenv PATH .] {;}
+	}
+	proc file-isexec {exec} {
+		# Basic test for windows. We ignore .bat
+		if {[file isfile $exec] || [file isfile $exec.exe]} {
+			return 1
+		}
+		return 0
+	}
+} else {
+	# unix separates $PATH with colons and has and executable bit
+	proc split-path {} {
+		split [getenv PATH .] :
+	}
+	proc file-isexec {exec} {
+		file executable $exec
+	}
+}
+
+if {$tmakecompat(istcl)} {
+	# Tcl doesn't have the env command
+	proc getenv {name args} {
+		if {[info exists ::env($name)]} {
+			return $::env($name)
+		}
+		if {[llength $args]} {
+			return [lindex $args 0]
+		}
+		return -code error "environment variable \"$name\" does not exist"
+	}
+	proc alias {new orig} {
+		interp alias {} $new {} $orig
+	}
+	proc exec-save-stderr {args} {
+		exec -ignorestderr -- >@stdout {*}$args
+	}
+	proc readdir {dir} {
+		glob -nocomplain -directory $dir -tails *
+	}
+} elseif {$tmakecompat(iswin)} {
+	# On Windows, backslash convert all environment variables
+	# (Assume that Tcl does this for us)
+	proc getenv {name args} {
+		string map {\\ /} [env $name {*}$args]
+	}
+	# Jim uses system() for exec under mingw, so
+	# we need to fetch the stderr output ourselves
+	proc exec-save-stderr {args} {
+			set tmpfile /tmp/tcl.[format %05x [rand 10000]].tmp
+			set rc [catch [list exec {*}$args 2>$tmpfile] result]
+			set result [readfile $tmpfile]
+			file delete $tmpfile
+			return -code $rc $result
+	}
+} else {
+	# Jim on unix is simple
+	alias getenv env
+	proc exec-save-stderr {args} {
+		exec >@stdout {*}$args
+	}
+}
+
+# In case 'file normalize' doesn't exist
+#
+proc file-normalize {path} {
+	if {[catch {file normalize $path} result]} {
+		if {$path eq ""} {
+			return ""
+		}
+		set oldpwd [pwd]
+		if {[file isdir $path]} {
+			cd $path
+			set result [pwd]
+		} else {
+			cd [file dirname $path]
+			set result [file join [pwd] [file tail $path]]
+		}
+		cd $oldpwd
+	}
+	return $result
+}
+
+proc file-join {dir path} {
+	if {$dir eq "."} {
+		return $path
+	}
+	if {$path eq "."} {
+		return $dir
+	}
+	file join $dir $path
+}
+
+##################################################################
+#
+# Directory/path handling
+#
+
+proc realdir {dir} {
+	set oldpwd [pwd]
+	cd $dir
+	set pwd [pwd]
+	cd $oldpwd
+	return $pwd
+}
+
+# Follow symlinks until we get to something which is not a symlink
+proc realpath {path} {
+	while {1} {
+		if {[catch {
+			set path [file link $path]
+		}]} {
+			# Not a link
+			break
+		}
+	}
+	return $path
+}
+
+# Convert absolute path, $path into a path relative
+# to the given directory (or the current dir, if not given).
+#
+proc relative-path {path {pwd {}}} {
+	set path [file-normalize $path]
+	if {$pwd eq ""} {
+		set pwd [pwd]
+	} else {
+		set pwd [file-normalize $pwd]
+	}
+
+	if {$path eq $pwd} {
+		return .
+	}
+
+	set splitpath [split $path /]
+	set splitpwd [split $pwd /]
+
+	# Count the number of identical levels
+	# The first level will always match
+	set n 0
+	foreach i $splitpath j $splitpwd {
+		if {$i ne $j} {
+			#puts "Not equal, so stripping $n levels"
+			set splitpath [lrange $splitpath $n end]
+			set splitpwd [lrange $splitpwd $n end]
+			break
+		}
+		incr n
+		continue
+	}
+	if {$n == 1} {
+		return $path
+	}
+	if {[llength $splitpwd]} {
+		set relpath [lrepeat [llength $splitpwd] ..]
+	}
+	lappend relpath {*}$splitpath
+
+	join $relpath /
+}
+
+# If everything is working properly, the only errors which occur
+# should be generated in user code (e.g. auto.def).
+# By default, we only want to show the error location in user code.
+# We use [info frame] to achieve this, but it works differently on Tcl and Jim.
+#
+# This is designed to be called for incorrect usage, via dev-error
+#
+proc error-location {msg} {
+	if {$::tmake(debug)} {
+		return [error-stacktrace $msg]
+	}
+	set loc [find-source-location]
+	if {$loc ne "unknown"} {
+		return "$loc: $msg"
+	}
+	return $msg
+}
+
+# Look down the stack frame for the first location
+# which is in a file matching the pattern and return it as file:line
+# Returns "unknown" if not known.
+#
+proc find-source-location {{pattern *.spec}} {
+	# Search back through the stack for the first loca in a .spec file
+	for {set i 1} {$i < [info level]} {incr i} {
+		if {$::tmakecompat(istcl)} {
+			array set info [info frame -$i]
+		} else {
+			lassign [info frame -$i] info(caller) info(file) info(line)
+		}
+		if {[string match $pattern $info(file)]} {
+			return [relative-path $info(file)]:$info(line)
+		}
+	}
+	return unknown
+}
+
+# Similar to error-location, but called when user code generates an error
+# In this case we want to show the stack trace in user code, but not in system code
+# (unless --debug is enabled)
+#
+proc error-stacktrace {msg} {
+	if {$::tmakecompat(istcl)} {
+		if {[regexp {file "([^ ]*)" line ([0-9]*)} $::errorInfo dummy file line]} {
+			return "[relative-path $file]:$line $msg\n$::errorInfo"
+		}
+		return $::errorInfo
+	} else {
+		# Prepend a live stacktrace to the error stacktrace, omitting the current level
+		set stacktrace [concat [info stacktrace] [lrange [stacktrace] 3 end]]
+
+		if {!$::tmake(debug)} {
+			# Only keep levels from *.spec files or with no file
+			set newstacktrace {}
+			foreach {p f l} $stacktrace {
+				if {![string match "*.spec" $f] || $f eq ""} {
+					#puts "Skipping $p $f:$l"
+					continue
+				}
+				lappend newstacktrace $p $f $l
+			}
+			set stacktrace $newstacktrace
+		}
+
+		# Convert filenames to relative paths
+		set newstacktrace {}
+		foreach {p f l} $stacktrace {
+			lappend newstacktrace $p [relative-path $f] $l
+		}
+		lassign $newstacktrace p f l
+		if {$f ne ""} {
+			set prefix "$f:$l: "
+		} else {
+			set prefix ""
+		}
+
+		return "${prefix}Error: $msg\n[stackdump $newstacktrace]"
+	}
+}
+
+proc clock-millis {} {
+	if {[catch {clock millis} result]} {
+		set result [expr {[clock seconds] * 1000.0}]
+	}
+	return $result
+}
+
+if {[info commands signal] ne ""} {
+	signal ignore SIGINT SIGTERM
+	proc check-signal {{clear 0}} {
+		if {$clear} {
+			set clear -clear
+		} else {
+			set clear ""
+		}
+		if {[signal check {*}$clear] ne ""} {
+			return 1
+		}
+		return 0
+	}
+} else {
+	proc check-signal {{clear 0}} {
+		return 0
+	}
+}
+# ----- module config.tcl -----
+# Copyright (c) 2011 WorkWare Systems http://www.workware.net.au/
+# All rights reserved
+
+# Module to provide simpler conditional statements
+
+# If 'code' is not specified, the entire file is skipped unless
+# the expression is true.
+#
+proc do_ifconfig {name expr exprargs} {
+	if {[llength $exprargs] == 0} {
+		# bare 'ifconfig expr'
+		do_if_else 3 $expr "" "return -code 20 skip"
+		return
+	}
+
+	case [llength $exprargs] {
+		1 {
+			# ifconfig expr {code}
+			do_if_else 3 $expr [lindex $exprargs 0] ""
+			return
+		}
+		3 {
+			# ifconfig expr {code} else {code}
+			if {[lindex $exprargs 1] == "else"} {
+				do_if_else 3 $expr [lindex $exprargs 0] [lindex $exprargs 2] 
+				return
+			}
+		}
+	}
+	dev-error "should be $name {expr} ?{code}? ?else {code}?"
+}
+
+proc is-defined? {name} {
+	if {[info exists ::$name]} {
+		if {[set ::$name] ni {"" 0}} {
+			return 1
+		}
+	}
+	return 0
+}
+
+proc ifconfig {expr args} {
+	# convert the simple expression into something we can evaluate
+	regsub -all {([A-Z0-9_]+)} $expr {[is-defined? \1]} tclexpr
+
+	dputs c "ifconfig: expr='$expr' tclexpr='$tclexpr'"
+
+	do_ifconfig ifconfig $tclexpr $args
+}
+
+proc do_if_else {level expr true false} {
+	if $expr {
+		dputs c "Expression is true, so executing $true"
+		if {$true != ""} {
+			uplevel $level $true
+		}
+	} else {
+		dputs c "Expression is false"
+		if {$false != ""} {
+			uplevel $level $false
+		}
+	}
+}
+# ----- module getopt.tcl -----
+# Copyright (c) 2006 WorkWare Systems http://www.workware.net.au/
+# All rights reserved
+
+# Simple getopt module
+
+# optdef looks something like:
+# --test --install: dest source args
+#
+# Sets variables in the caller's scope with the names given in optdef, except
+# any remaining args are left in the original argv
+#
+# If --test is set, then test=1, otherwise test=0
+# If --install is specified, $install is set, otherwise it left unset
+
+proc getopt {optdef argvname} {
+	upvar $argvname argv
+	set nargv {}
+
+	# Parse the options
+	set haveargs 0
+	set named {}
+	foreach i $optdef {
+		if {[regexp {^--([^:]*)(:)?$} $i -> name colon]} {
+			if {$colon eq ":"} {
+				set valopts($name) 1
+				#uplevel 1 unset -nocomplain $name
+			} else {
+				set boolopts($name) 0
+			}
+			continue
+		}
+		if {$i eq "args"} {
+			incr haveargs
+		} else {
+			lappend named $i
+		}
+	}
+	#parray valopts
+	#parray boolopts
+	#puts named=$named
+	#puts haveargs=$haveargs
+	#puts args=$argv
+
+	for {set i 0} {$i < [llength $argv]} {incr i} {
+		set arg [lindex $argv $i]
+
+		#dputs arg=$arg
+
+		if {$arg eq "--"} {
+			# End of options
+			incr i
+			break
+		}
+
+		if {[regexp {^--([^=]+)=(.*)} $arg -> name value]} {
+			# --abc=def
+			if {![info exists valopts($name)]} {
+				if {[info exists boolopts($name)]} {
+					dev-error "Option --$name does not accept a parameter"
+				}
+				dev-error "Unknown option: --$name"
+			}
+			uplevel 1 set $name $value
+		} elseif {[regexp {^--(.*)} $arg -> name]} {
+			# --abc
+			if {![info exists boolopts($name)]} {
+				if {[info exists valopts($name)} {
+					dev-error "Option --$name requires a parameter"
+				}
+				dev-error "Unknown option: --$name"
+			}
+			set boolopts($name) 1
+		} else {
+			lappend nargv $arg
+		}
+	}
+	foreach i [array names boolopts] {
+		uplevel 1 set $i $boolopts($i)
+	}
+	if {!$haveargs && [llength $nargv] > [llength $named]} {
+		dev-error "Too many parameters"
+	}
+	if {[llength $named]} {
+		set argv [uplevel 1 [list lassign $nargv {*}$named]]
+	} else {
+		set argv $nargv
+	}
+}
+# ----- module help.tcl -----
+# Copyright (c) 2011 WorkWare Systems http://www.workware.net.au/
+# All rights reserved
+
+# Module which provides version, usage, help
+
+proc show-version {} {
+	return "tmake v$::tmake(version)"
+}
+
+proc show-help {argv} {
+	puts \
+{Usage: tmake [options] [targets]
+
+   tmake builds projects based on simple, flexible build descriptions.
+   
+   -h|--help             This help, or help for the specified rule
+   -C|--directory=<dir>  Run as if from directory <dir>
+   -v|--verbose          Force V=1 mode when building to show commands executed
+   -d|--debug            Enable debugging output
+   -n|--dry-run          Show commands which would have been run
+}
+	puts [show-version]
+	exit 0
+}
+# ----- module install.tcl -----
+# Copyright (c) 2011 WorkWare Systems http://www.workware.net.au/
+# All rights reserved
+
+# Module which can install tmake
+
+proc tmake_install {dir} {
+	if {[catch {
+		cd $dir
+
+		set f [open tmake w]
+
+		# First the main script, but only up until "CUT HERE"
+		set in [open $::tmake(dir)/tmake]
+		while {[gets $in buf] >= 0} {
+			if {$buf ne "##-- CUT HERE --##"} {
+				puts $f $buf
+				continue
+			}
+
+			# Insert the static modules here
+			puts $f "set tmake(installed) 1"
+			foreach file [lsort [glob -nocomplain $::tmake(dir)/lib/*.tcl]] {
+				puts $f "# ----- module [file tail $file] -----"
+				puts $f [readfile $file]
+			}
+		}
+		close $in
+		close $f
+		exec chmod 755 tmake
+		writefile rulebase.default [readfile $::tmake(dir)/rulebase.default]
+	} error]} {
+		user-error "Failed to install tmake: $error"
+	}
+	exit 0
+}
+
+# ==================================================================
+# ENTRY POINT
+# ==================================================================
+
+if {[catch {make $argv} msg]} {
+	puts stderr [error-stacktrace $msg]
+	set tmake(exitcode) 1
+}
+
+if {$tmake(numtargets) || $tmake(showtime)} {
+	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
+	pputs "Built $tmake(numtargets) target(s) in [format %.2f $elapsed] seconds"
+}
+if {$tmake(exitcode)} {
+	puts stderr "*** Error: Targets failed to build"
+}
+
+tmake-exit $tmake(exitcode)

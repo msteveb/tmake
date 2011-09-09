@@ -6,3 +6,7 @@ options {
 }
 
 make-tmake-settings settings.conf *
+
+if {![file exists Makefile]} {
+	exec autosetup/tmake --init
+}
