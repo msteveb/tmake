@@ -1,0 +1,8 @@
+# vim:se syn=tcl:
+#
+use tmake
+
+options {
+}
+
+make-tmake-settings settings.conf *
