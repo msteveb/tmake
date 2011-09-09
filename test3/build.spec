@@ -7,7 +7,7 @@ define? CONFIG_DIR $DESTDIR/etc/config
 define THEMES $UWEB/themes
 
 LinkFlags -L$UWEB/lib
-UseSystemLibs -luweb -ljim
+UseSystemLibs -luweb -ljim -lcrypt -ldl
 
 CFlags -Wall -g -Os -I. -I$UWEB/include
 

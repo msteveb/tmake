@@ -1,3 +1,3 @@
 #!/bin/sh
-dir="/Users/steveb/src/autosetup.git"
+dir="../autosetup"
 WRAPPER="$0" exec `"$dir/find-tclsh" || echo false` "$dir/autosetup" "$@"
