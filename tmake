@@ -42,6 +42,7 @@ set tmake(fixedvars) {}
 set tmake(installed) 0
 set tmake(cleaning) 0
 set tmake(init) 0
+set tmake(dag) 0
 
 # Should these really be here?
 set tmake(headerscancache) {}
@@ -177,6 +178,9 @@ proc make-parse-options {argv {type tmake}} {
 				--tim* - -t {
 					incr tmake(showtime)
 				}
+				--dag {
+					incr tmake(dag)
+				}
 				-q - --quickstop {
 					incr tmake(quickstop)
 				}
@@ -288,7 +292,11 @@ proc make {argv} {
 		tmake-exit 0
 	}
 	if {$tmake(showrules)} {
-		show-all-rules
+		if {$tmake(dag)} {
+			show-all-rules-as-dag
+		} else {
+			show-all-rules
+		}
 		tmake-exit 0
 	}
 	if {[info exists tmake(listtargets)]} {
@@ -809,6 +817,21 @@ proc show-all-rules {} {
 		show-rule $i
 		puts ""
 	}
+}
+
+
+proc show-all-rules-as-dag {} {
+	puts "digraph tmake \{"
+	foreach i [lsort [dict keys $::tmake(rules)]] {
+		array unset t
+		array set t [get-rule $i]
+		foreach target $t(target) {
+			foreach dep $t(depends) {
+				puts "\t$target -> $dep;"
+			}
+		}
+	}
+	puts "\}"
 }
 
 proc show-all-targets {detailed} {
