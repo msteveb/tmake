@@ -132,6 +132,9 @@ proc make-parse-options {argv {type tmake}} {
 				--find {
 					set tmake(findtarget) $value
 				}
+				--build {
+					set tmake(build) $value
+				}
 				--targets {
 					set tmake(listtargets) $value
 				}
@@ -240,6 +243,9 @@ proc make {argv} {
 
 	# If topsrcdir is already set, the current dir must be the topbuilddir
 	if {[info exists tmake(topsrcdir)]} {
+		if {[info exists tmake(build)]} {
+			user-error "Use -C or --build, not both"
+		}
 		if {[file exists build.spec]} {
 			user-error "-C [pwd] looks like a source directory, not a build directory"
 		}
@@ -250,11 +256,23 @@ proc make {argv} {
 	} else {
 		# Need to find the project top
 		set tmake(topbuilddir) [find-project-top]
-		if {[relative-path $tmake(topbuilddir)] ne "."} {
-			pputs "tmake: Entering directory `$tmake(topbuilddir)'"
+		if {[info exists tmake(build)]} {
+			cd $tmake(topbuilddir)
+			if {[file exists $tmake(build)/build.spec]} {
+				user-error "--build=$tmake(build) looks like a source directory, not a build directory"
+			}
+			set top [pwd]
+			file mkdir $tmake(build)
+			cd $tmake(build)
+			set tmake(topbuilddir) [pwd]
+			set tmake(topsrcdir) [relative-path $top]
+		} else {
+			if {[relative-path $tmake(topbuilddir)] ne "."} {
+				pputs "tmake: Entering directory `$tmake(topbuilddir)'"
+			}
+			cd $tmake(topbuilddir)
+			set tmake(topsrcdir) .
 		}
-		cd $tmake(topbuilddir)
-		set tmake(topsrcdir) .
 	}
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
