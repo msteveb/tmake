@@ -64,7 +64,7 @@ proc getopt {optdef argvname} {
 		} elseif {[regexp {^--(.*)} $arg -> name]} {
 			# --abc
 			if {![info exists boolopts($name)]} {
-				if {[info exists valopts($name)} {
+				if {[info exists valopts($name)]} {
 					dev-error "Option --$name requires a parameter"
 				}
 				dev-error "Unknown option: --$name"

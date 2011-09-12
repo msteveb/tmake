@@ -216,6 +216,9 @@ proc find-source-location {{pattern *.spec}} {
 #
 proc error-stacktrace {msg} {
 	if {$::tmakecompat(istcl)} {
+		if {![info exists ::errorInfo]} {
+			return $msg
+		}
 		if {[regexp {file "([^ ]*)" line ([0-9]*)} $::errorInfo dummy file line]} {
 			return "[relative-path $file]:$line $msg\n$::errorInfo"
 		}
