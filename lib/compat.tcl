@@ -56,14 +56,8 @@ if {$tmakecompat(istcl)} {
 	proc getenv {name args} {
 		string map {\\ /} [env $name {*}$args]
 	}
-	# Jim uses system() for exec under mingw, so
-	# we need to fetch the stderr output ourselves
 	proc exec-save-stderr {args} {
-			set tmpfile /tmp/tcl.[format %05x [rand 10000]].tmp
-			set rc [catch [list exec {*}$args 2>$tmpfile] result]
-			set result [readfile $tmpfile]
-			file delete $tmpfile
-			return -code $rc $result
+		exec >@stdout {*}$args
 	}
 } else {
 	# Jim on unix is simple
