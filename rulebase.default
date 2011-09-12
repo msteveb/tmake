@@ -153,7 +153,7 @@ proc expand-wildcard-braces {arglist} {
 # The src is a local path, while the dest is relative.
 # so ssl/*.h might return: {axtls/ssl/file.h ssl/file.h}
 #
-proc expand-wildcards {arglist {warn 0}} {
+proc expand-wildcards {arglist {warn 0} {keepdir 1}} {
 	set pairs {}
 	foreach i $arglist {
 		if {[string match {*[{}*?]*} $i]} {
@@ -180,7 +180,11 @@ proc expand-wildcards {arglist {warn 0}} {
 					if {[string match $pattern $j]} {
 						incr count
 						# Need to return axtls/ssl/crypto.h ssl/crypto.h
-						lappend pairs [file-join $srcdir $j] [file-join $destdir $j]
+						if {$keepdir} {
+							lappend pairs [file-join $srcdir $j] [file-join $destdir $j]
+						} else {
+							lappend pairs [file-join $srcdir $j] [file tail $j]
+						}
 					}
 				}
 			}
@@ -191,7 +195,11 @@ proc expand-wildcards {arglist {warn 0}} {
 			lassign [split $i =] target src
 			lappend pairs [make-local $src] $target
 		} elseif {$i ne ""} {
-			lappend pairs [make-local $i] $i
+			if {$keepdir} {
+				lappend pairs [make-local $i] $i
+			} else {
+				lappend pairs [make-local $i] [file tail $i]
+			}
 		}
 	}
 	#puts "expand-wildcards [make-local $arglist] => $pairs"
@@ -253,12 +261,8 @@ proc Publish {args} {
 	show-this-rule
 	getopt {--keepdir dir args} args
 
-	foreach {src dst} [expand-wildcards $args 1] {
-		if {$keepdir} {
-			publish-one-file $dir/$dst $src
-		} else {
-			publish-one-file $dir/[file tail $dst] $src
-		}
+	foreach {src dst} [expand-wildcards $args 1 $keepdir] {
+		publish-one-file $dir/$dst $src
 	}
 }
 
@@ -445,12 +449,8 @@ proc UseSystemLibs {args} {
 proc PublishIncludes {args} {
 	getopt {--keepdir args} args
 
-	foreach {src dst} [expand-wildcards $args 1] {
-		if {$keepdir} {
-			publish-one-file include/$dst $src
-		} else {
-			publish-one-file include/[file tail $dst] $src
-		}
+	foreach {src dst} [expand-wildcards $args 1 $keepdir] {
+		publish-one-file include/$dst $src
 	}
 }
 
@@ -556,13 +556,9 @@ proc Install {args} {
 	getopt {--bin --keepdir destdir args} args
 
 	set srcs {}
-	foreach {src dst} [expand-wildcards $args 1] {
+	foreach {src dst} [expand-wildcards $args 1 $keepdir] {
 		lappend srcs $src
-		if {$keepdir} {
-			InstallFile [file-join $destdir $dst] $src $bin
-		} else {
-			InstallFile [file-join $destdir [file tail $dst]] $src $bin
-		}
+		InstallFile [file-join $destdir $dst] $src $bin
 	}
 	return $srcs
 }
