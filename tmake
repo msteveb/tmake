@@ -1499,6 +1499,9 @@ proc run {args} {
 	set rc [catch {
 		exec-save-stderr {*}$cmdline
 	} msg opts]
+	if {$rc == 0 && $msg ne ""} {
+		puts $msg
+	}
 	if {$rc == 1} {
 		# On error, display the command and the error and return break
 		build-error "\n\t$cmdline\n$msg\n"

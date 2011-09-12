@@ -45,7 +45,15 @@ if {$tmakecompat(istcl)} {
 		interp alias {} $new {} $orig
 	}
 	proc exec-save-stderr {args} {
-		exec -ignorestderr -- >@stdout {*}$args
+		set rc [catch {exec >@stdout {*}$args} msg opts]
+		if {$rc == 0} {
+			return $msg
+		}
+		if {$rc == 1 && [dict get $opts -errorcode] eq "NONE"} {
+			# Just stderr
+			return $msg
+		}
+		return -code $rc $msg
 	}
 	proc readdir {dir} {
 		glob -nocomplain -directory $dir -tails *
