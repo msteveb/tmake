@@ -14,6 +14,7 @@ define? CC_FOR_BUILD cc
 define? CXX c++
 define? AR ar
 define? RANLIB ranlib
+define? STRIP strip
 define? ARFLAGS cr
 define? SH_LINKFLAGS ""
 define? CFLAGS ""
@@ -223,7 +224,7 @@ proc Glob {args} {
 
 proc Executable {args} {
 	show-this-rule
-	getopt {--test --nobuild --publish --install: target args} args
+	getopt {--test --nobuild --publish --strip --install: target args} args
 	if {$publish} {
 		# Revisit: --publish=newname?
 		Publish bin $target
@@ -231,7 +232,11 @@ proc Executable {args} {
 	set localtarget [make-local $target]
 	Link $target {*}[Objects {*}[join $args]] {*}$::LOCAL_LIBS {*}$::PROJLIBS
 	if {[info exists install]} {
-		InstallFile [file-join $install $target] $localtarget 1
+		set flags bin
+		if {$strip} {
+			lappend flags strip
+		}
+		InstallFile [file-join $install $target] $localtarget $flags
 	}
 	if {$test} {
 		Test --chdir $target
@@ -525,13 +530,20 @@ proc hard-link {args} {
 proc install-file {target source bin} {
 	vputs "Copy $source $target"
 	file copy -force $source $target
-	if {$bin} {
-		vputs "chmod +x $target"
-		exec chmod +x $target
-	}
 }
 
-proc InstallFile {dest src {bin 0}} {
+proc chmodx-file {target} {
+	vputs "Chmod $target"
+	exec chmod +x $target
+}
+
+proc strip-file {target} {
+	vputs "Strip $target"
+	exec $::STRIP $target
+}
+
+
+proc InstallFile {dest src {flags {}}} {
 	show-this-rule
 
 	#puts "InstallFile $dest $src"
@@ -541,8 +553,10 @@ proc InstallFile {dest src {bin 0}} {
 		user-notice [error-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
 		return
 	}
-	target $destfile -nocache -inputs $src -vars dest $dest bin $bin -msg {note "Install $dest"} -do {
-		install-file $target $inputs $bin
+	target $destfile -nocache -inputs $src -vars dest $dest flags $flags -msg {note "Install $dest"} -do {
+		install-file $target $inputs $flags
+		if {"bin" in $flags} { chmodx-file $target }
+		if {"strip" in $flags} { strip-file $target }
 	}
 	target install -depends $destfile
 
@@ -553,12 +567,19 @@ proc InstallFile {dest src {bin 0}} {
 proc Install {args} {
 	show-this-rule
 
-	getopt {--bin --keepdir destdir args} args
+	getopt {--bin --strip --keepdir destdir args} args
+	set flags {}
+	if {$bin} {
+		lappend flags bin
+	}
+	if {$strip} {
+		lappend flags strip
+	}
 
 	set srcs {}
 	foreach {src dst} [expand-wildcards $args 1 $keepdir] {
 		lappend srcs $src
-		InstallFile [file-join $destdir $dst] $src $bin
+		InstallFile [file-join $destdir $dst] $src $flags
 	}
 	return $srcs
 }
