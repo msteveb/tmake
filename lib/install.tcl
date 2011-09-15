@@ -28,9 +28,9 @@ proc tmake_install {dir} {
 		}
 		close $in
 		close $f
-		writefile rulebase.default [readfile $::tmake(dir)/rulebase.default]
-		writefile find-tclsh [readfile $::tmake(dir)/find-tclsh]
-		writefile test-tclsh [readfile $::tmake(dir)/test-tclsh]
+		writefile rulebase.default [readfile $::tmake(dir)/rulebase.default]\n
+		writefile find-tclsh [readfile $::tmake(dir)/find-tclsh]\n
+		writefile test-tclsh [readfile $::tmake(dir)/test-tclsh]\n
 		exec chmod 755 tmake find-tclsh test-tclsh
 	} error]} {
 		user-error "Failed to install tmake: $error"
