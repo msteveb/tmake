@@ -1,0 +1,23 @@
+# vim:set syntax=tcl:
+
+Load settings.conf
+
+define? AUTOREMAKE [file-src configure] --conf=[file-src auto.def]
+
+# Arrange to re-run configure if auto.def changes
+Depends settings.conf auto.def -do {
+	note "Configure"
+	run [set AUTOREMAKE] >config.out
+}
+Clean config.out config.log
+DistClean settings.conf
+
+Generate {blah1.c blah1.h} {} {} {
+	writefile blah1.c {
+	#define X 3
+	int main() {return 0;}
+	}
+	writefile blah1.h "#define Y 3"
+}
+
+Executable blah1 blah1.c

@@ -35,6 +35,7 @@ set tmake(modules) {}
 set tmake(autosubdirs) 1
 set tmake(cache) {}
 set tmake(cmdcache) {}
+set tmake(targetcache) {}
 set tmake(writecache) 0
 set tmake(deferred) {}
 set tmake(projfiles) {}
@@ -150,11 +151,8 @@ proc make-parse-options {argv {type tmake}} {
 					set tmake(debug) 1
 				}
 				--install {
-					if {[file exists autosetup/find-tclsh]} {
-						use install
-						tmake_install autosetup
-					}
-					user-error "No autosetup directory"
+					use install
+					tmake_install autosetup
 				}
 				--verbose - -v {
 					set tmake(verbose) 1
@@ -364,6 +362,7 @@ proc make {argv} {
 			# Cache has been updated, so save it
 			dict set tmake_save cache $tmake(cache)
 			dict set tmake_save cmdcache $tmake(cmdcache)
+			dict set tmake_save targetcache $tmake(targetcache)
 			dict set tmake_save writecache 1
 		}
 
@@ -704,6 +703,7 @@ proc tmake-exit {code} {
 			set f [open .makecache w]
 			puts $f [list set tmake(cache) $tmake(cache)]
 			puts $f [list set tmake(cmdcache) $tmake(cmdcache)]
+			puts $f [list set tmake(targetcache) $tmake(targetcache)]
 			puts $f [list set tmake(headerscancache) $tmake(headerscancache)]
 			close $f
 		}] us
@@ -1676,6 +1676,16 @@ proc build {target} {
 
 	set-target-vars [array get t]
 
+	# If this target belongs to a different rule than previously...
+	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(targetcache) $target]} {
+		if {$ruletarget ne [dict get $tmake(targetcache) $target]} {
+			dputs b "Target $target is built by a different rule"
+			dputs B "Was [dict get $tmake(targetcache) $target] but is now $ruletarget"
+			lappend reason newrule
+			set result 1
+		}
+	}
+
 	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(cmdcache) $ruletarget]} {
 		# 4. Compare previous '-do' commands with current commands
 		set do [subst-do $t(do)]
@@ -1768,11 +1778,13 @@ proc build {target} {
 						set tmake(writecache) 1
 					}
 					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
-
-					# And save the commands in the command cache, but only if subst succeeds
-					dict set tmake(cmdcache) $ruletarget [subst-do $t(do)]
+					# And remember the rule which build this target
+					dict set tmake(targetcache) $f $ruletarget
 				}
 			}
+			# Save the commands in the command cache
+			dict set tmake(cmdcache) $ruletarget [subst-do $t(do)]
+			set tmake(writecache) 1
 		}
 
 		if {$rc == 0} {
