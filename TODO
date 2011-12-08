@@ -1,3 +1,10 @@
+Consider caching the size, location and timestamp of
+any commands which are run via exec.
+
+If any of these change, dependent commands need to be re-run.
+This can be done in 'proc run', but means that we need to be able to interpret
+that PATH and determine if something is really executable.
+
 * Depends and Phony should refer to local files for -depends, and possibly -inputs.
   Could add a -local flag which means that the next -depends or -inputs refers
   to local files. How will this work in practice? What about the target?
