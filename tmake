@@ -33,10 +33,6 @@ set tmake(showrules) 0
 set tmake(exitcode) 0
 set tmake(modules) {}
 set tmake(autosubdirs) 1
-set tmake(cache) {}
-set tmake(cmdcache) {}
-set tmake(targetcache) {}
-set tmake(writecache) 0
 set tmake(deferred) {}
 set tmake(projfiles) {}
 set tmake(fixedvars) {}
@@ -45,8 +41,13 @@ set tmake(cleaning) 0
 set tmake(init) 0
 set tmake(dag) 0
 
+set tmakecache(file) {}
+set tmakecache(cmd) {}
+set tmakecache(target) {}
+set tmakecache(write) 0
+
 # Should these really be here?
-set tmake(headerscancache) {}
+set tmakecache(headerscan) {}
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
 
@@ -358,14 +359,6 @@ proc make {argv} {
 	}
 
 	if {$reload} {
-		if {$tmake(writecache)} {
-			# Cache has been updated, so save it
-			dict set tmake_save cache $tmake(cache)
-			dict set tmake_save cmdcache $tmake(cmdcache)
-			dict set tmake_save targetcache $tmake(targetcache)
-			dict set tmake_save writecache 1
-		}
-
 		# Restore the state
 		unset tmake
 		array set tmake $tmake_save
@@ -422,7 +415,7 @@ proc make {argv} {
 }
 
 proc load-build-description {loadcache} {
-	global tmake
+	global tmake tmakecache
 
 	invoke-spec-file [file-src project.spec]
 
@@ -610,8 +603,10 @@ proc process-build-spec-file {dir} {
 
 # Returns a list of all files which were once a target but are no longer
 proc get-orphan-targets {} {
+	global tmakecache
+
 	set result {}
-	foreach i [dict keys $::tmake(cache)] {
+	foreach i [dict keys $tmakecache(file)] {
 		if {![is-target? $i]} {
 			lappend result $i
 		}
@@ -620,15 +615,17 @@ proc get-orphan-targets {} {
 }
 
 proc discard-orphan-targets {} {
-	foreach i [dict keys $::tmake(cache)] {
+	global tmakecache
+
+	foreach i [dict keys $tmakecache(file)] {
 		if {![is-target? $i]} {
-			dict unset ::tmake(cache) $i
+			dict unset tmakecache(file) $i
 			catch {
-				dict unset ::tmake(cmdcache) [get-rule-target $i]
+				dict unset tmakecache(cmd) [get-rule-target $i]
 			}
-			if {$::tmake(writecache) == 0} {
+			if {$tmakecache(write) == 0} {
 				dputs C "discarding orphans, updated cache"
-				set ::tmake(writecache) 1
+				set tmakecache(write) 1
 			}
 		}
 	}
@@ -695,16 +692,15 @@ proc dev-error {msg} {
 }
 
 proc tmake-exit {code} {
-	global tmake
+	global tmake tmakecache
 
 	# Write the cache before exiting
-	if {$tmake(writecache)} {
+	if {$tmakecache(write)} {
 		lassign [time {
 			set f [open .makecache w]
-			puts $f [list set tmake(cache) $tmake(cache)]
-			puts $f [list set tmake(cmdcache) $tmake(cmdcache)]
-			puts $f [list set tmake(targetcache) $tmake(targetcache)]
-			puts $f [list set tmake(headerscancache) $tmake(headerscancache)]
+			foreach i [array names tmakecache] {
+				puts $f [list set tmakecache($i) $tmakecache($i)]
+			}
 			close $f
 		}] us
 		dputs C "Wrote cache, .makecache in [expr {($us + 500) / 1000}]ms"
@@ -1378,9 +1374,11 @@ proc file-real-mtime {filename} {
 }
 
 proc file-virtual-mtime {filename} {
+	global tmakecache
+
 	set mtime [file-real-mtime $filename]
-	if {[dict exists $::tmake(cache) $filename]} {
-		lassign [dict get $::tmake(cache) $filename] vmtime omtime
+	if {[dict exists $tmakecache(file) $filename]} {
+		lassign [dict get $tmakecache(file) $filename] vmtime omtime
 		# If the actual mtime is different from the saved mtime, we
 		# ignore the cached (virtual) mtime.
 		if {$omtime == $mtime} {
@@ -1547,7 +1545,7 @@ proc subst-do {script} {
 }
 
 proc build {target} {
-	global tmake
+	global tmake tmakecache
 	set current $tmake(current)
 	lappend current $target
 	if {![is-target? $target]} {
@@ -1677,19 +1675,19 @@ proc build {target} {
 	set-target-vars [array get t]
 
 	# If this target belongs to a different rule than previously...
-	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(targetcache) $target]} {
-		if {$ruletarget ne [dict get $tmake(targetcache) $target]} {
+	if {$result == 0 && [llength $t(do)] && [dict exists $tmakecache(target) $target]} {
+		if {$ruletarget ne [dict get $tmakecache(target) $target]} {
 			dputs b "Target $target is built by a different rule"
-			dputs B "Was [dict get $tmake(targetcache) $target] but is now $ruletarget"
+			dputs B "Was [dict get $tmakecache(target) $target] but is now $ruletarget"
 			lappend reason newrule
 			set result 1
 		}
 	}
 
-	if {$result == 0 && [llength $t(do)] && [dict exists $tmake(cmdcache) $ruletarget]} {
+	if {$result == 0 && [llength $t(do)] && [dict exists $tmakecache(cmd) $ruletarget]} {
 		# 4. Compare previous '-do' commands with current commands
 		set do [subst-do $t(do)]
-		set prevdo [dict get $tmake(cmdcache) $ruletarget]
+		set prevdo [dict get $tmakecache(cmd) $ruletarget]
 		if {$do ne $prevdo} {
 			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
 			dputs B "=== old ==="
@@ -1772,19 +1770,19 @@ proc build {target} {
 					set rc 3
 				} elseif {!$t(nocache)} {
 					# Record the time that this target was created, along with the real mtime
-					dict set tmake(cache) $f [list $now [file-real-mtime $f]]
-					if {$tmake(writecache) == 0} {
+					dict set tmakecache(file) $f [list $now [file-real-mtime $f]]
+					if {$tmakecache(write) == 0} {
 						dputs C "Targets built, updating cache"
-						set tmake(writecache) 1
+						set tmakecache(write) 1
 					}
 					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
-					# And remember the rule which build this target
-					dict set tmake(targetcache) $f $ruletarget
+					# Remember the rule which built this target
+					dict set tmakecache(target) $f $ruletarget
 				}
 			}
 			# Save the commands in the command cache
-			dict set tmake(cmdcache) $ruletarget [subst-do $t(do)]
-			set tmake(writecache) 1
+			dict set tmakecache(cmd) $ruletarget [subst-do $t(do)]
+			set tmakecache(write) 1
 		}
 
 		if {$rc == 0} {
@@ -1835,20 +1833,20 @@ proc build {target} {
 # XXX: Stops scanning after 200 lines with no #include - should be at least configurable
 # 
 proc header-scan-regexp {regex filename} {
-	global tmake
+	global tmake tmakecache
 	#puts "header-scan-regexp $filename"
 
 	# memoize the result
 	set mtime [file-real-mtime $filename]
-	if {[dict exists $tmake(headerscancache) $filename]} {
-		lassign [dict get $tmake(headerscancache) $filename] cache_mtime cache_regex headers
+	if {[dict exists $tmakecache(headerscan) $filename]} {
+		lassign [dict get $tmakecache(headerscan) $filename] cache_mtime cache_regex headers
 		if {$cache_mtime == $mtime && $cache_regex eq $regex} {
 			# Can reuse the cache
 			dputs d "header-scan-regexp $filename (cached) => $headers"
 			return $headers
 		}
 		# Stale
-		dict unset tmake(headerscancache) $filename
+		dict unset tmakecache(headerscan) $filename
 	}
 	if {[is-target? $filename]} {
 		set f [open $filename]
@@ -1866,10 +1864,10 @@ proc header-scan-regexp {regex filename} {
 		}
 	}
 	close $f
-	dict set tmake(headerscancache) $filename [list $mtime $regex $headers]
-	if {$tmake(writecache) == 0} {
+	dict set tmakecache(headerscan) $filename [list $mtime $regex $headers]
+	if {$tmakecache(write) == 0} {
 		dputs C "New header scan, updating cache"
-		set tmake(writecache) 1
+		set tmakecache(write) 1
 	}
 	dputs d "header-scan-regexp $filename => $headers"
 	return $headers
