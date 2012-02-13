@@ -11,20 +11,25 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 
 set tmake(version) 0.1
 set tmake(debug) 0
-#  d = dynamic dependency
-#  D = ignored dynamic dependency 
-#  b = reasons for building
-#  B = reasons for building, commands
-#  n = reasons for not building
-#  r = show rule for target being considered (combines with -db, -dn)
-#  t = target rule creation/update
-#  T = timing
-#  c = configuration checking
-#  C = cache
-#  g = graph dependencies executed
-#  p = show high level rules as they are parsed
-#  m = miscellaneous debug
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 A 0}
+set tmake(debughelp) {
+	* "Enable all debug"
+	? "Display help for debug types"
+	d "Dynamic dependencies"
+	D "Dynamic dependencies (ignored)"
+	n "Reasons for targets NOT built"
+	b "Reasons for targets BUILT"
+	B "Reasons for targets BUILT - changed commands or targets"
+	r "Display rules when triggered"
+	t "Rules being replaced with 'target -replace'"
+	g "Depencency graph for each target"
+	p "Print rules while parsing"
+	m "Locating and parsing of files"
+	c "Configuration expressions via ifconfig"
+	C "Cache handling"
+	T "Timing"
+	A "Variable definition via the command line"
+}
 set tmake(verbose) 0
 set tmake(norun) 0
 set tmake(showtime) 0
@@ -124,6 +129,15 @@ proc make-parse-options {argv {type tmake}} {
 			}
 			# Here we are parsing tmake options
 			# XXX: There is no way to pass these through make
+			if {$option eq "-d?"} {
+				puts "Different debugging can be enabled with -d..."
+				puts "The different debuggin categories are as follows:\n"
+
+				foreach {n desc} $tmake(debughelp) {
+					puts "\t$n\t$desc"
+				}
+				exit 0
+			}
 			if {$option eq "-d*"} {
 				foreach i [dict keys $tmake(debugtypes)] {
 					dict set tmake(debugtypes) $i 1
@@ -744,6 +758,13 @@ proc dbg-msg-indent {} {
 	return [format %5dms $elapsed][string repeat "  " [llength $::tmake(current)]]
 }
 
+proc pad {text width {char { }}} {
+	if {[string length $text] >= $width} {
+		return $text
+	}
+	return $text[string repeat $char [expr {$width - [string length $text]}]]
+}
+
 # Pretty-print the commands for a rule
 #
 proc show-rule-commands {do} {
@@ -776,6 +797,7 @@ proc show-rule {target} {
 		array set t [get-rule $ruletarget]
 		set flags {}
 		set lines {}
+		puts [pad "-- $ruletarget " 60 -]
 		foreach n [lsort [array names t]] {
 			set v $t($n)
 			switch -- $n {
@@ -831,7 +853,6 @@ proc show-rule {target} {
 
 proc show-all-rules {} {
 	foreach i [lsort [dict keys $::tmake(rules)]] {
-		puts "-------------------------------------------"
 		show-rule $i
 		puts ""
 	}
@@ -1543,6 +1564,16 @@ proc subst-do {script} {
 	}
 	return $expanded
 }
+
+# ==================================================================
+# build
+#
+# This is the workhorse of tmake.
+# If possible, it builds $target, including and required dependencies
+# Returns  0 if nothing to do,
+#         -1 if unabled to be built
+#          1 if built
+# ==================================================================
 
 proc build {target} {
 	global tmake tmakecache
