@@ -358,6 +358,7 @@ proc make {argv} {
 			dputs n "Load --nocare $t, not a target"
 			continue
 		}
+		# XXX: Recursive call to build here
 		set rc [build $t]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
@@ -418,6 +419,7 @@ proc make {argv} {
 	dputs T "Building targets"
 
 	foreach t $targets {
+		# XXX: Recursive call to build here
 		if {[build $t] < 0} {
 			if {$tmake(exitcode) == 0} {
 				build-error "Error: Don't know how to build $t"
@@ -1217,7 +1219,7 @@ proc target {ruletarget args} {
 
 	if {[llength $info(do)] && [llength $orig(do)]} {
 		#dev-error "$ruletarget already has '-do' @$orig(source)"
-		puts stderr [error-location "Warning: $ruletarget already has '-do' @$orig(source)"]
+		puts stderr [warning-location "Warning: $ruletarget already has '-do' @$orig(source)"]
 		set info(do) {}
 	}
 	if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
@@ -1641,6 +1643,7 @@ proc build {target} {
 
 	# 1. Static dependencies
 	foreach i $depends {
+		# XXX: Recursive call to build here
 		set rc [build $i]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
@@ -1672,6 +1675,7 @@ proc build {target} {
 				break
 			}
 
+			# XXX: Recursive call to build here
 			set rc [build $i]
 			if {$rc < 0} {
 				if {$tmake(exitcode) == 0} {
@@ -1911,6 +1915,7 @@ proc find-file {filename paths} {
 		if {[is-target? $f]} {
 			# XXX: Is it really OK to build targets here?
 			dputs d "$f is a target, so building first"
+			# XXX: Recursive call to build here
 			if {[build $f] >= 0} {
 				return [list $f $f]
 			}

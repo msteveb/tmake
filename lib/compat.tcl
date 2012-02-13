@@ -184,6 +184,13 @@ proc error-location {msg} {
 	if {$::tmake(debug)} {
 		return [error-stacktrace $msg]
 	}
+	warning-location $msg
+}
+
+# warning-location is like error-location except
+# it does not show a stack trace, even when debugging is enabled
+#
+proc warning-location {msg} {
 	set loc [find-source-location]
 	if {$loc ne "unknown"} {
 		return "$loc: $msg"
