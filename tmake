@@ -442,7 +442,13 @@ proc make {argv} {
 proc load-build-description {loadcache} {
 	global tmake tmakecache
 
-	invoke-spec-file [file-src project.spec]
+	set rc [catch {invoke-spec-file [file-src project.spec]} msg opts]
+	if {$rc == 20} {
+		return
+	}
+	if {$rc != 0 && $rc != 2} {
+		return -code $rc {*}$opts $msg 
+	}
 
 	dputs T "Parsed project.spec"
 
