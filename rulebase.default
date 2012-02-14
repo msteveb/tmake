@@ -48,7 +48,7 @@ proc ObjectRule.c {obj src} {
 	target $obj -inputs $src -msg {note Cc $target} -getvars C_FLAGS INCPATHS -do {
 		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 	} -dyndep {
-		header-scan-regexp-recursive $INCPATHS $HDRPATTERN
+		header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
 	}
 }
 
@@ -57,7 +57,7 @@ proc ObjectRule.cpp {obj src} {
 	target $obj -inputs $src -msg {note C++ $target} -getvars CXX_FLAGS INCPATHS -do {
 		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
 	} -dyndep {
-		header-scan-regexp-recursive $INCPATHS $HDRPATTERN
+		header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
 	}
 }
 

@@ -44,7 +44,6 @@ set tmake(fixedvars) {}
 set tmake(installed) 0
 set tmake(cleaning) 0
 set tmake(init) 0
-set tmake(dag) 0
 set tmake(showcache) 0
 
 set tmakecache(file) {}
@@ -199,9 +198,6 @@ proc make-parse-options {argv {type tmake}} {
 				--tim* - -t {
 					incr tmake(showtime)
 				}
-				--dag {
-					incr tmake(dag)
-				}
 				-q - --quickstop {
 					incr tmake(quickstop)
 				}
@@ -333,11 +329,7 @@ proc make {argv} {
 		tmake-exit 0
 	}
 	if {$tmake(showrules)} {
-		if {$tmake(dag)} {
-			show-all-rules-as-dag
-		} else {
-			show-all-rules
-		}
+		show-all-rules
 		tmake-exit 0
 	}
 	if {[info exists tmake(listtargets)]} {
@@ -910,68 +902,6 @@ proc show-cache {} {
 			puts ""
 		}
 	}
-}
-
-proc dag-id {path} {
-	string map {/ _ - _ . _ # _} $path
-}
-
-proc dag-node-print {id label args} {
-	if {[string match */* $label]} {
-		set label "[file tail $label]\\n([file dirname $label])"
-	}
-	lappend args "label=\"$label\""
-	puts "\t$id \[[join $args ,]\];"
-}
-
-proc dag-node {path} {
-	set id [dag-id $path]
-	set ret $id
-	if {![info exists ::dagnode($id)]} {
-		if {[is-target? $path]} {
-			array set t [get-target-rule $path]
-			if {$t(phony)} {
-				# Omit phony targets with no dependencies and no -do
-				if {[llength $t(depends)] || [string length $t(do)]} {
-					dag-node-print $id $path style=dotted color=blue
-				} else {
-					set ret ""
-				}
-			} else {
-				dag-node-print $id $path style=dashed color=purple
-			}
-		} else {
-				dag-node-print $id $path
-		}
-		set ::dagnode($id) 1
-	}
-	return $ret
-}
-
-proc show-all-rules-as-dag {} {
-	puts "digraph tmake \{"
-	set label {}
-	foreach i [lsort [dict keys $::tmake(rules)]] {
-		array unset t
-		array set t [get-rule $i]
-		#if {!$t(phony)} {
-		#	continue
-		#}
-		foreach target $t(target) {
-			set targetid [dag-node $target]
-			foreach dep $t(depends) {
-				set depid [dag-node $dep]
-				if {$depid ne ""} {
-					if {$dep in $t(inputs)} {
-						puts "\t$targetid -> $depid;"
-					} else {
-						puts "\t$targetid -> $depid \[style=dotted\];"
-					}
-				}
-			}
-		}
-	}
-	puts "\}"
 }
 
 proc show-all-targets {detailed} {
@@ -1919,7 +1849,7 @@ proc build {target} {
 
 # XXX: Stops scanning after 200 lines with no #include - should be at least configurable
 # 
-proc header-scan-regexp {regex filename} {
+proc header-scan-regexp {suffix regex filename} {
 	global tmake tmakecache
 	#puts "header-scan-regexp $filename"
 
@@ -1928,6 +1858,7 @@ proc header-scan-regexp {regex filename} {
 	if {[dict exists $tmakecache(headerscan) $filename]} {
 		lassign [dict get $tmakecache(headerscan) $filename] cache_mtime cache_regex headers
 		if {$cache_mtime == $mtime && $cache_regex eq $regex} {
+			# XXX: Do we also need to consider $suffix?
 			# Can reuse the cache
 			dputs d "header-scan-regexp $filename (cached) => $headers"
 			return $headers
@@ -1946,6 +1877,7 @@ proc header-scan-regexp {regex filename} {
 	while {[gets $f buf] >= 0} {
 		incr n
 		if {[regexp $regex $buf -> name]} {
+			append name $suffix
 			if {$d > $tmake(maxhdrscan)} {
 				user-notice "Warning:$filename:$n: $d non-include lines before: $buf"
 			}
@@ -1986,7 +1918,7 @@ proc find-file {filename paths} {
 }
 
 # XXX: This could be done better
-proc header-scan-regexp-recursive {incpaths regex filename} {
+proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	if {![file exists $filename] && ![file-src-exists $filename]} {
 		#puts "header-scan-regexp-recursive, $filename does not exist"
 		return {}
@@ -1994,7 +1926,7 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 	dputs d "Scanning $filename for headers: incpaths=$incpaths"
 	array set deps {}
 	set scanned($filename) 1
-	set toscan [header-scan-regexp $regex $filename]
+	set toscan [header-scan-regexp $suffix $regex $filename]
 	while {[llength $toscan]} {
 		set newscan {}
 		foreach d $toscan {
@@ -2004,7 +1936,7 @@ proc header-scan-regexp-recursive {incpaths regex filename} {
 				if {$path ne ""} {
 					set deps($path) 1
 					if {[file exists $filepath]} {
-						lappend newscan {*}[header-scan-regexp $regex $path]
+						lappend newscan {*}[header-scan-regexp $suffix $regex $path]
 					}
 				}
 			}
