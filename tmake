@@ -11,6 +11,7 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 
 set tmake(version) 0.2
 set tmake(debug) 0
+
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 A 0}
 set tmake(debughelp) {
 	* "Enable all debug"
@@ -24,7 +25,7 @@ set tmake(debughelp) {
 	t "Rules being replaced with 'target -replace'"
 	g "Depencency graph for each target"
 	p "Print rules while parsing"
-	m "Locating and parsing of files"
+	m "Miscellaneous (locating and parsing of files)"
 	c "Configuration expressions via ifconfig"
 	C "Cache handling"
 	T "Timing"
@@ -458,6 +459,7 @@ proc load-build-description {loadcache} {
 	if {$loadcache && [file exists .makecache]} {
 		lassign [time {source .makecache}] us
 		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
+		set tmakecache(write) 0
 	}
 
 	process-build-spec-file .
@@ -1847,25 +1849,12 @@ proc build {target} {
 # Dynamic dependencies
 # ==================================================================
 
-# XXX: Stops scanning after 200 lines with no #include - should be at least configurable
+# XXX: Stops scanning after tmake(maxhdrscan) lines with no match
 # 
 proc header-scan-regexp {suffix regex filename} {
-	global tmake tmakecache
+	global tmake
 	#puts "header-scan-regexp $filename"
 
-	# memoize the result
-	set mtime [file-real-mtime $filename]
-	if {[dict exists $tmakecache(headerscan) $filename]} {
-		lassign [dict get $tmakecache(headerscan) $filename] cache_mtime cache_regex headers
-		if {$cache_mtime == $mtime && $cache_regex eq $regex} {
-			# XXX: Do we also need to consider $suffix?
-			# Can reuse the cache
-			dputs d "header-scan-regexp $filename (cached) => $headers"
-			return $headers
-		}
-		# Stale
-		dict unset tmakecache(headerscan) $filename
-	}
 	if {[is-target? $filename]} {
 		set f [open $filename]
 	} else {
@@ -1888,11 +1877,6 @@ proc header-scan-regexp {suffix regex filename} {
 		}
 	}
 	close $f
-	dict set tmakecache(headerscan) $filename [list $mtime $regex $headers]
-	if {$tmakecache(write) == 0} {
-		dputs C "New header scan, updating cache"
-		set tmakecache(write) 1
-	}
 	dputs d "header-scan-regexp $filename => $headers"
 	return $headers
 }
@@ -1919,11 +1903,27 @@ proc find-file {filename paths} {
 
 # XXX: This could be done better
 proc header-scan-regexp-recursive {incpaths suffix regex filename} {
+	global tmake tmakecache
+
 	if {![file exists $filename] && ![file-src-exists $filename]} {
 		#puts "header-scan-regexp-recursive, $filename does not exist"
 		return {}
 	}
 	dputs d "Scanning $filename for headers: incpaths=$incpaths"
+	# Can we get the result from the cache?
+	set stamp [list [file-real-mtime $filename] $incpaths $suffix $regex]
+	if {[dict exists $tmakecache(headerscan) $filename]} {
+		lassign [dict get $tmakecache(headerscan) $filename] cache_stamp headers
+		if {$cache_stamp eq $stamp} {
+			# Can reuse the cache
+			dputs d "header-scan-regexp $filename (cached) => $headers"
+			return $headers
+		}
+		# Stale
+		dict unset tmakecache(headerscan) $filename
+	}
+
+	# Recursively scan files
 	array set deps {}
 	set scanned($filename) 1
 	set toscan [header-scan-regexp $suffix $regex $filename]
@@ -1943,7 +1943,15 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 		}
 		set toscan $newscan
 	}
-	array names deps
+
+	# memoize the result
+	set headers [array names deps]
+	dict set tmakecache(headerscan) $filename [list $stamp $headers]
+	if {$tmakecache(write) == 0} {
+		dputs C "New header scan, updating cache"
+		set tmakecache(write) 1
+	}
+	return $headers
 }
 
 # Embedded modules are inserted below here
