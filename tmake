@@ -45,6 +45,7 @@ set tmake(installed) 0
 set tmake(cleaning) 0
 set tmake(init) 0
 set tmake(dag) 0
+set tmake(showcache) 0
 
 set tmakecache(file) {}
 set tmakecache(cmd) {}
@@ -145,6 +146,9 @@ proc make-parse-options {argv {type tmake}} {
 				continue
 			}
 			switch -glob -- $option {
+				--showcache {
+					incr tmake(showcache)
+				}
 				--find {
 					set tmake(findtarget) $value
 				}
@@ -289,6 +293,11 @@ proc make {argv} {
 	}
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
+
+	if {$tmake(showcache)} {
+		show-cache
+		exit 0
+	}
 
 	flush stdout
 
@@ -857,6 +866,42 @@ proc show-all-rules {} {
 	foreach i [lsort [dict keys $::tmake(rules)]] {
 		show-rule $i
 		puts ""
+	}
+}
+
+proc show-cache {} {
+	global tmake
+
+	if {![file exists $tmake(topbuilddir)/.makecache]} {
+		user-notice "No .makecache"
+		return
+	}
+	source $tmake(topbuilddir)/.makecache
+
+	# Files
+	puts "File times (V=virtual mtime, M=mtime)"
+	puts "-------------------------------------"
+
+	foreach i [lsort [dict keys $tmakecache(file)]] {
+		lassign [dict get $tmakecache(file) $i] vmtime mtime
+		if {$mtime == $vmtime} {
+			set mtimestr "(same)"
+		} else {
+			set mtimestr [clock format $mtime -format "%H:%M:%S %d-%b-%Y"]
+		}
+		puts [format "%25s  V=%s  M=%s" $i [clock format $vmtime -format "%H:%M:%S %d-%b-%Y"] $mtimestr]
+	}
+	puts ""
+
+	puts "Commands used to build targets"
+	puts "------------------------------"
+	# Commands
+	foreach i [lsort [dict keys $tmakecache(cmd)]] {
+		puts $i
+		foreach do [dict get $tmakecache(cmd) $i] {
+			show-rule-commands $do
+			puts ""
+		}
 	}
 }
 
