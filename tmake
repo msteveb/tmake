@@ -54,6 +54,7 @@ set tmakecache(write) 0
 
 # Should these really be here?
 set tmakecache(headerscan) {}
+set tmake(maxhdrscan) 200
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
 
@@ -1941,11 +1942,16 @@ proc header-scan-regexp {regex filename} {
 	}
 	set headers {}
 	set n 0
+	set d 0
 	while {[gets $f buf] >= 0} {
+		incr n
 		if {[regexp $regex $buf -> name]} {
+			if {$d > $tmake(maxhdrscan)} {
+				user-notice "Warning:$filename:$n: $d non-include lines before: $buf"
+			}
 			lappend headers $name
-			set n 0
-		} elseif {[incr n] > 200} {
+			set d 0
+		} elseif {[incr d] > $tmake(maxhdrscan) && !$tmake(debug)} {
 			break
 		}
 	}
