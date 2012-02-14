@@ -9,7 +9,7 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 # Initialiation
 # ==================================================================
 
-set tmake(version) 0.1
+set tmake(version) 0.2
 set tmake(debug) 0
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 A 0}
 set tmake(debughelp) {
@@ -815,7 +815,7 @@ proc show-rule {target} {
 		array set t [get-rule $ruletarget]
 		set flags {}
 		set lines {}
-		puts [pad "-- $ruletarget " 60 -]
+		puts [pad "-- $ruletarget " 60 -]--
 		foreach n [lsort [array names t]] {
 			set v $t($n)
 			switch -- $n {
