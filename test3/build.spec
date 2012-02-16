@@ -4,10 +4,11 @@ define? UWEB /usr/local/uweb
 define? DESTDIR _install
 define? CONFIG_DIR $DESTDIR/etc/config
 
+Load $UWEB/lib/build.conf
 define THEMES $UWEB/themes
 
 LinkFlags -L$UWEB/lib
-UseSystemLibs -luweb -ljim
+UseSystemLibs -luweb -ljim $UWEB_LDLIBS
 
 if {[regexp -line {^LDFLAGS := (.*)$} [readfile $UWEB/lib/build-default.mak] -> libs]} {
 	UseSystemLibs $libs
