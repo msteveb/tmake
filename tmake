@@ -337,11 +337,9 @@ proc make {argv} {
 	}
 
 	# XXX: Is there a better way to determine if we are cleaning?
-	foreach i {clean distclean clean-orphans mrproper} {
-		if {$i in $targets} {
-			set tmake(cleaning) 1
-			break
-		}
+	# target must be a single cleaning target
+	if {$targets in {clean distclean clean-orphans mrproper}} {
+		set tmake(cleaning) 1
 	}
 
 	# Try to build all Load targets
