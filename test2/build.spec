@@ -12,7 +12,7 @@ Clean config.out
 # The rest of the build description is only used if configured
 ifconfig CONFIGURED
 
-if {$JIM_SHAREDLIB} {
+ifconfig JIM_SHAREDLIB {
 	dev-error "Sorry, --shared not yet implemented in tmake"
 }
 

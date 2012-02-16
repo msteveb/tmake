@@ -12,7 +12,7 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 set tmake(version) 0.2
 set tmake(debug) 0
 
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 A 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
 set tmake(debughelp) {
 	* "Enable all debug"
 	? "Display help for debug types"
@@ -29,7 +29,7 @@ set tmake(debughelp) {
 	c "Configuration expressions via ifconfig"
 	C "Cache handling"
 	T "Timing"
-	A "Variable definition via the command line"
+	v "Variable definition"
 }
 set tmake(verbose) 0
 set tmake(norun) 0
@@ -41,6 +41,7 @@ set tmake(modules) {}
 set tmake(autosubdirs) 1
 set tmake(deferred) {}
 set tmake(projfiles) {}
+set tmake(defines) {}
 set tmake(fixedvars) {}
 set tmake(installed) 0
 set tmake(cleaning) 0
@@ -54,7 +55,6 @@ set tmakecache(write) 0
 
 # Should these really be here?
 set tmakecache(headerscan) {}
-set tmake(maxhdrscan) 200
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
 
@@ -104,7 +104,6 @@ proc make-parse-options {argv {type tmake}} {
 				make-parse-options $v
 				continue
 			}
-			dputs A "define! $n $v"
 			define! $n $v
 			continue
 		}
@@ -303,10 +302,13 @@ proc make {argv} {
 
 	use getopt config
 
-	if {[file-src-exists rulebase.spec]} {
-		invoke-spec-file [file-src rulebase.spec]
-	} else {
-		invoke-spec-file $tmake(dir)/rulebase.default
+	set rulebase [file-src rulebase.spec]
+	if {![file exists $rulebase]} {
+		set rulebase $tmake(dir)/rulebase.default
+	}
+	lassign [invoke-spec-file $rulebase] rc msg opts
+	if {$rc != 0 && $rc != 2} {
+		return -code $rc {*}$opts $msg 
 	}
 
 	dputs T "Parsed rulebase"
@@ -315,12 +317,8 @@ proc make {argv} {
 	# XXX: It would be MUCH nicer of this wasn't held in global vars!
 	#      Maybe 'dict with' ?
 
+	# XXX: Could we save a subset of tmake here?
 	set tmake_save [array get tmake]
-	set gobalvars {}
-	# And save all the global vars too
-	foreach i [info globals {[A-Z]*}] {
-		dict set globalvars $i [set ::$i]
-	}
 
 	load-build-description 1
 
@@ -339,7 +337,7 @@ proc make {argv} {
 	}
 
 	# XXX: Is there a better way to determine if we are cleaning?
-	foreach i {clean distclean mrproper} {
+	foreach i {clean distclean clean-orphans mrproper} {
 		if {$i in $targets} {
 			set tmake(cleaning) 1
 			break
@@ -381,24 +379,12 @@ proc make {argv} {
 		unset tmake
 		array set tmake $tmake_save
 
-		# Including global vars
-		foreach i [dict keys $globalvars] {
-			set ::$i [dict get $globalvars $i]
-		}
-		# XXX: This is *really*, *really* ugly
-		# Discard any global vars we didn't know about before
-		foreach i [info globals {[A-Z]*}] {
-			if {![dict exists $globalvars $i]} {
-				unset ::$i
-			}
-		}
 		load-build-description 0
 
 		dputs T "Reparsing phase complete"
 	}
 
 	unset tmake_save
-	unset globalvars
 
 	# Now build the targets
 	if {[info exists tmake(findtarget)]} {
@@ -436,7 +422,7 @@ proc make {argv} {
 proc load-build-description {loadcache} {
 	global tmake tmakecache
 
-	set rc [catch {invoke-spec-file [file-src project.spec]} msg opts]
+	lassign [invoke-spec-file [file-src project.spec]] rc msg opts
 	if {$rc == 20} {
 		return
 	}
@@ -494,6 +480,10 @@ proc local-dir {} {
 	return $::tmake(localdir)
 }
 
+proc top-src-dir {} {
+	return $::tmake(topsrcdir)
+}
+
 proc make-local {args} {
 	prefix [local-prefix] $args
 }
@@ -511,10 +501,10 @@ proc make-local-src {args} {
 }
 
 proc invoke-spec-file {filename} {
-	global tmake
-	lappend tmake(specfiles) $filename
-
-	uplevel #0 source $filename
+	lappend ::tmake(specfiles) $filename
+	# Spec files are loaded at frame level #1, in the scope of run-do
+	# 'define' relies on this
+	uplevel #0 [list run-do $::tmake(defines) [list source $filename]]
 }
 
 proc AutoSubDirs {onoff} {
@@ -538,14 +528,16 @@ proc SubDirs {args} {
 proc save-subdir-vars {} {
 	set saved {}
 	foreach n $::tmake(subdirvars) {
-		dict set saved $n [set ::$n]
+		dict set saved $n [get-define $n]
 	}
+	dputs v "saving subdir vars: $saved"
 	return $saved
 }
 
 proc restore-subdir-vars {dict} {
+	dputs v "Restoring subdir vars: $dict"
 	foreach {n v} $dict {
-		set ::$n $v
+		define $n $v
 	}
 }
 
@@ -585,7 +577,7 @@ proc process-build-spec-file {dir} {
 	set saved [save-subdir-vars]
 
 	BuildSpecProlog
-	set rc [catch {invoke-spec-file $path} msg opts]
+	lassign [invoke-spec-file $path] rc msg opts
 	BuildSpecEpilog
 
 	restore-subdir-vars $saved
@@ -924,23 +916,26 @@ proc show-all-targets {detailed} {
 # Variable Handling
 # ==================================================================
 
-# Set a variable to the given value
+# Set a variable to the given value, unless it was defined with define!
 # 
 # e.g. define CC arm-linux-gcc -mbig-endian
 #
 proc define {name args} {
-	#puts "define $name $args"
 	if {![dict exists $::tmake(fixedvars) $name]} {
-		global $name
-		set $name [join $args]
+		set value [join $args]
+		dputs v "define $name $value"
+		dict set ::tmake(defines) $name $value
+		# Ensure that the value is visibile the current spec file
+		uplevel #1 [list set $name $value]
 	}
 }
 
 proc define! {name args} {
-	#puts "define! $name $args"
+	set value [join $args]
+	dputs v "define! $name $value"
 	dict set ::tmake(fixedvars) $name 1
-	global $name
-	set $name [join $args]
+	dict set ::tmake(defines) $name $value
+	uplevel #1 [list set $name $value]
 }
 
 # Set a variable to the given value
@@ -949,7 +944,7 @@ proc define! {name args} {
 proc define? {name args} {
 	global $name
 	#puts "define? $name $args"
-	if {![info exists $name] || [set $name] eq ""} {
+	if {[get-define $name] eq ""} {
 		define $name {*}$args
 	}
 }
@@ -959,16 +954,21 @@ proc define? {name args} {
 # separated by a space.
 #
 proc define-append {name args} {
-	global $name
-	append-with-space $name [join $args]
+	set value [get-define $name]
+	append-with-space value [join $args]
+	define $name $value
 }
 
 proc get-define {name {default ""}} {
-	global $name
-	if {![info exists $name]} {
+	if {[dict exists $::tmake(defines) $name]} {
+		dict get $::tmake(defines) $name
+	} else {
 		return $default
 	}
-	set $name
+}
+
+proc define-exists {name} {
+	dict exists $::tmake(defines) $name
 }
 
 # If the given var is not set or is "", sets it to $value
@@ -1333,10 +1333,10 @@ proc parse-rule {target arglist} {
 			}
 			getvars {
 				foreach v $optargs {
-					if {![info exists ::$v]} {
+					if {![define-exists $v]} {
 						dev-error "Rule for $target has -getvars for non-existent variable: $v"
 					}
-					lappend info(vars) $v [set ::$v]
+					lappend info(vars) $v [get-define $v]
 				}
 			}
 			default {
@@ -1465,20 +1465,23 @@ proc locate-files {files} {
 	return $result
 }
 
-# Sets target-local variables. e.g. $local, $inputs, $depends and $target
-proc set-target-vars {info} {
-	foreach {n v} [dict get $info vars] {
-		set ::$n $v
+proc set-global {name value} {
+	if {[info exists ::$name] && [set ::$name] eq $value} {
+		return
 	}
-	set ::target [dict get $info target]
-	set ::local [dict get $info local]
-	set ::depends [locate-files [dict get $info depends]]
-	set ::inputs [locate-files [dict get $info inputs]]
+	dputs v "! $name=$value"
+	set ::$name $value
 }
-proc clear-target-vars {vars} {
-	foreach n [dict keys $vars] {
-		set ::$n ""
-	}
+
+# Sets target-local variables. e.g. $local, $inputs, $depends and $target
+proc make-var-dict {info} {
+	set vardict [dict merge [dict get $::tmake(defines)] [dict get $info vars]]
+	dict set vardict target [dict get $info target]
+	dict set vardict local [dict get $info local]
+	dict set vardict depends [locate-files [dict get $info depends]]
+	dict set vardict inputs [locate-files [dict get $info inputs]]
+	#parray vardict
+	return $vardict
 }
 
 proc set-target-result {target result} {
@@ -1515,7 +1518,7 @@ proc run {args} {
 	# XXX: What to do on signal?
 }
 
-proc calc-dyndeps {target} {
+proc calc-dyndeps {vardict target} {
 	array set t [get-rule $target]
 	#puts "=============="
 	#parray t
@@ -1523,7 +1526,12 @@ proc calc-dyndeps {target} {
 	set dyndeps {}
 	if {$t(dyndep) ne ""} {
 		foreach i $t(depends) {
-			lappend dyndeps {*}[uplevel #0 $t(dyndep) $i]
+			lassign [run-do $vardict [concat $t(dyndep) $i]] rc result opts
+			if {$rc == 0} { 
+				lappend dyndeps {*}$result
+			} else {
+				return -code $rc {*}$opts $result
+			}
 		}
 		dputs d "Dynamic dependencies for $target: $dyndeps"
 	}
@@ -1544,11 +1552,17 @@ proc file-exists-all {list missingname} {
 # Unfortunately subst doesn't respect braces, so it is possible
 # for subst to fail on something which isn't supposed to be interepreted
 # by Tcl. So subst, and if that fails, return the script unchanged.
-proc subst-do {script} {
-	if {[catch {uplevel #0 [list subst -noc $script]} expanded]} {
-		return $script
+proc subst-do {__vardict __script} {
+	dict with __vardict {}
+	if {[catch {subst -noc $__script} __expanded]} {
+		return $__script
 	}
-	return $expanded
+	return $__expanded
+}
+
+proc run-do {__vardict __script} {
+	dict with __vardict {}
+	list [catch $__script msg opts] $msg $opts
 }
 
 # ==================================================================
@@ -1649,9 +1663,9 @@ proc build {target} {
 	if {$result >= 0} {
 		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
 		# Need to set target vars before doing this
-		set-target-vars [array get t]
+		set vardict [make-var-dict [array get t]]
 
-		foreach i [calc-dyndeps $ruletarget] {
+		foreach i [calc-dyndeps $vardict $ruletarget] {
 			lappend depends $i
 
 			if {[check-signal]} {
@@ -1691,8 +1705,6 @@ proc build {target} {
 		}
 	}
 
-	set-target-vars [array get t]
-
 	# If this target belongs to a different rule than previously...
 	if {$result == 0 && [llength $t(do)] && [dict exists $tmakecache(target) $target]} {
 		if {$ruletarget ne [dict get $tmakecache(target) $target]} {
@@ -1703,9 +1715,11 @@ proc build {target} {
 		}
 	}
 
+	set vardict [make-var-dict [array get t]]
+
 	if {$result == 0 && [llength $t(do)] && [dict exists $tmakecache(cmd) $ruletarget]} {
 		# 4. Compare previous '-do' commands with current commands
-		set do [subst-do $t(do)]
+		set do [subst-do $vardict $t(do)]
 		set prevdo [dict get $tmakecache(cmd) $ruletarget]
 		if {$do ne $prevdo} {
 			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
@@ -1730,14 +1744,15 @@ proc build {target} {
 	if {$result > 0 && [llength $t(do)]} {
 		#puts "Running rules for $ruletarget"
 		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $ruletarget "with rule @"]"
-		uplevel #0 $t(msg)
+		run-do $vardict $t(msg)
+
 		if {[dict get $tmake(debugtypes) r]} {
 			show-rule $ruletarget
 		}
 		if {$tmake(norun)} {
 			foreach do $t(do) {
 				if {$tmake(norun) == 1} {
-					show-rule-commands [subst-do $do]
+					show-rule-commands [subst-do $vardict $do]
 				}
 			}
 			set rc 0
@@ -1752,7 +1767,7 @@ proc build {target} {
 				if {$t(chdir)} {
 					cd [file dirname [lindex $ruletarget 0]]
 				}
-				set rc [catch {uplevel #0 $do} msg opts]
+				lassign [run-do $vardict $do] rc msg opts
 				# Always restore the current dir afterwards
 				cd $tmake(topbuilddir)
 				if {$rc} {
@@ -1800,7 +1815,7 @@ proc build {target} {
 				}
 			}
 			# Save the commands in the command cache
-			dict set tmakecache(cmd) $ruletarget [subst-do $t(do)]
+			dict set tmakecache(cmd) $ruletarget [subst-do $vardict $t(do)]
 			set tmakecache(write) 1
 		}
 
@@ -1828,8 +1843,6 @@ proc build {target} {
 		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
 			tmake-exit $tmake(exitcode)
 		}
-
-		clear-target-vars $t(vars)
 	}
 
 	if {$result < 0} {
@@ -1852,14 +1865,8 @@ proc build {target} {
 # XXX: Stops scanning after tmake(maxhdrscan) lines with no match
 # 
 proc header-scan-regexp {suffix regex filename} {
-	global tmake
 	#puts "header-scan-regexp $filename"
-
-	if {[is-target? $filename]} {
-		set f [open $filename]
-	} else {
-		set f [open [file-src $filename]]
-	}
+	set f [open $filename]
 	set headers {}
 	set n 0
 	set d 0
@@ -1867,13 +1874,7 @@ proc header-scan-regexp {suffix regex filename} {
 		incr n
 		if {[regexp $regex $buf -> name]} {
 			append name $suffix
-			if {$d > $tmake(maxhdrscan)} {
-				user-notice "Warning:$filename:$n: $d non-include lines before: $buf"
-			}
 			lappend headers $name
-			set d 0
-		} elseif {[incr d] > $tmake(maxhdrscan) && !$tmake(debug)} {
-			break
 		}
 	}
 	close $f
@@ -1905,13 +1906,18 @@ proc find-file {filename paths} {
 proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	global tmake tmakecache
 
-	if {![file exists $filename] && ![file-src-exists $filename]} {
-		#puts "header-scan-regexp-recursive, $filename does not exist"
+	if {[is-target? $filename]} {
+		set filepath $filename
+	} else {
+		set filepath [file-src $filename]
+	}
+	if {![file exists $filepath]} {
+		dputs D "header-scan-regexp-recursive, $filepath does not exist"
 		return {}
 	}
 	dputs d "Scanning $filename for headers: incpaths=$incpaths"
 	# Can we get the result from the cache?
-	set stamp [list [file-real-mtime $filename] $incpaths $suffix $regex]
+	set stamp [list [file mtime $filepath] $incpaths $suffix $regex]
 	if {[dict exists $tmakecache(headerscan) $filename]} {
 		lassign [dict get $tmakecache(headerscan) $filename] cache_stamp headers
 		if {$cache_stamp eq $stamp} {
@@ -1926,7 +1932,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	# Recursively scan files
 	array set deps {}
 	set scanned($filename) 1
-	set toscan [header-scan-regexp $suffix $regex $filename]
+	set toscan [header-scan-regexp $suffix $regex $filepath]
 	while {[llength $toscan]} {
 		set newscan {}
 		foreach d $toscan {
@@ -1936,7 +1942,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 				if {$path ne ""} {
 					set deps($path) 1
 					if {[file exists $filepath]} {
-						lappend newscan {*}[header-scan-regexp $suffix $regex $path]
+						lappend newscan {*}[header-scan-regexp $suffix $regex $filepath]
 					}
 				}
 			}

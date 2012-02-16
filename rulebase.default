@@ -33,15 +33,15 @@ define? OBJCFLAGS ""
 define? INCPATHS ""
 
 # These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
-set C_FLAGS ""
-set CXX_FLAGS ""
-set LD_FLAGS ""
+define C_FLAGS ""
+define CXX_FLAGS ""
+define LD_FLAGS ""
 
 # XXX Should be $TOP/publish
-set PUBLISH publish
+define PUBLISH publish
 
-set PROJLIBS ""
-set SYSLIBS ""
+define PROJLIBS ""
+define SYSLIBS ""
 
 proc ObjectRule.c {obj src} {
 	# Capture the current value of C_FLAGS and INCPATHS
@@ -61,11 +61,12 @@ proc ObjectRule.cpp {obj src} {
 	}
 }
 
-set HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
+define HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
-set SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
+define SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
 
-lappend tmake(subdirvars) C_FLAGS CXX_FLAGS LD_FLAGS LOCAL_LIBS PROJLIBS SYSLIBS INCPATHS
+# XXX: Should be an API for this
+lappend ::tmake(subdirvars) C_FLAGS CXX_FLAGS LD_FLAGS LOCAL_LIBS PROJLIBS SYSLIBS INCPATHS
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
@@ -230,7 +231,7 @@ proc Executable {args} {
 		Publish bin $target
 	}
 	set localtarget [make-local $target]
-	Link $target {*}[Objects {*}[join $args]] {*}$::LOCAL_LIBS {*}$::PROJLIBS
+	Link $target {*}[Objects {*}[join $args]] {*}[get-define LOCAL_LIBS] {*}[get-define PROJLIBS]
 	if {[info exists install]} {
 		set flags bin
 		if {$strip} {
@@ -249,7 +250,7 @@ proc Executable {args} {
 proc Link {target args} {
 	show-this-rule
 
-	define? CCLD $::CC
+	define? CCLD [get-define CC]
 
 	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
 	target [make-local $target] -inputs {*}$args -msg {note Link $target} -getvars CCLD LD_FLAGS SYSLIBS -do {
@@ -259,7 +260,7 @@ proc Link {target args} {
 }
 
 proc publish-one-file {dest src} {
-	hard-link [file join $::PUBLISH $dest] $src -vars dest $dest -msg {note Publish $dest}
+	hard-link [file join [get-define PUBLISH] $dest] $src -vars dest $dest -msg {note Publish $dest}
 }
 
 proc Publish {args} {
@@ -319,7 +320,7 @@ proc SharedObject {args} {
 proc SharedObjectLink {target args} {
 	show-this-rule
 	# Note that we only link against local shared libs, not archive libs
-	target [make-local $target] -inputs {*}$args -do $::SHAREDOBJRULE -msg {note SharedObject $target}
+	target [make-local $target] -inputs {*}$args -do [get-define SHAREDOBJRULE] -msg {note SharedObject $target}
 	Clean $target
 }
 
@@ -384,16 +385,16 @@ proc UseLibs {args} {
 		# REVISIT: If we are to support linking against project shared libs, PROJLIBS
 		#          needs to be just a list of libs which will then be resolved to actual
 		#          targets (archive or shared) at deferred resolution time
-		define-append PROJLIBS [file join $::PUBLISH lib lib$lib.a]
+		define-append PROJLIBS [file join [get-define PUBLISH] lib lib$lib.a]
 	}
 }
 
 proc IncludePaths {args} {
 	show-this-rule
 	foreach dir $args {
-		foreach prefix [list [local-dir] $::tmake(topsrcdir)] {
+		foreach prefix [list [local-dir] [top-src-dir]] {
 			set dir [file-join $prefix $dir]
-			if {$dir ni $::INCPATHS} {
+			if {$dir ni [get-define INCPATHS]} {
 				define-append INCPATHS $dir
 				CFlags [prefix -I $dir]
 				C++Flags [prefix -I $dir]
@@ -439,7 +440,7 @@ proc Load {args} {
 		if {$config} {
 			load-config-file $filename
 		} else {
-			uplevel #0 [list source $filename]
+			source $filename
 		}
 		# If we find the file, we now care about it
 		set nocare 0
@@ -539,7 +540,7 @@ proc chmodx-file {target} {
 
 proc strip-file {target} {
 	vputs "Strip $target"
-	exec $::STRIP $target
+	exec [get-define STRIP true] $target
 }
 
 
@@ -548,7 +549,7 @@ proc InstallFile {dest src {flags {}}} {
 
 	#puts "InstallFile $dest $src"
 
-	set destfile $::DESTDIR$dest
+	set destfile [get-define DESTDIR]$dest
 	if {[is-target? $destfile]} {
 		user-notice [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
 		return
@@ -670,7 +671,7 @@ proc find-project-bin {bin {chdir 0}} {
 		}
 	} else {
 		dputs m "[find-source-location]: find-project-bin: $bin assumed to be published"
-		set publishbin $::PUBLISH/bin/$bin
+		set publishbin [get-define PUBLISH]/bin/$bin
 		if {$chdir} {
 			# cd to local build dir, but file is relative to top of the build dir
 			set src [relative-path $publishbin [file dirname $localbin]]
@@ -710,6 +711,7 @@ proc Phony {target args} {
 }
 
 proc LocalMakefile {name} {
+	# XXX Should be an API for this
 	set ::tmake(localmakefile) $name
 }
 
@@ -736,6 +738,6 @@ Phony clean-orphans -do {
 }
 
 # XXX: Use an official API for this
-lappend tmake(deferred) {
-	IncludePaths $PUBLISH/include
+lappend ::tmake(deferred) {
+	IncludePaths [get-define PUBLISH]/include
 }

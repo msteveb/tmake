@@ -31,10 +31,8 @@ proc do_ifconfig {name expr exprargs} {
 }
 
 proc is-defined? {name} {
-	if {[info exists ::$name]} {
-		if {[set ::$name] ni {"" 0}} {
-			return 1
-		}
+	if {[get-define $name] ni {"" 0}} {
+		return 1
 	}
 	return 0
 }
