@@ -82,7 +82,6 @@ proc BuildSpecProlog {} {
 		clean-target [make-local clean] Clean
 		clean-target [make-local distclean] DistClean
 	}
-	IncludePaths .
 	define testid 0
 }
 
@@ -345,7 +344,7 @@ proc Object {target src} {
 	set src [make-local $src]
 	if {$ext ne ".o"} {
 		set extra {}
-		if {[info procs ObjectRule$ext] eq ""} {
+		if {[info commands ObjectRule$ext] eq ""} {
 			dev-error "Don't know how to build Object from $src"
 		}
 		ObjectRule$ext $obj $src
