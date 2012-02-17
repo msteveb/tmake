@@ -65,9 +65,6 @@ define HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 define SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
 
-# XXX: Should be an API for this
-lappend ::tmake(subdirvars) C_FLAGS CXX_FLAGS LD_FLAGS LOCAL_LIBS PROJLIBS SYSLIBS INCPATHS
-
 # ==================================================================
 # PROLOG/EPILOG HOOKS
 # ==================================================================
@@ -82,7 +79,6 @@ proc BuildSpecProlog {} {
 		clean-target [make-local clean] Clean
 		clean-target [make-local distclean] DistClean
 	}
-	define testid 0
 }
 
 proc BuildSpecEpilog {} {
@@ -463,7 +459,7 @@ proc Test {args} {
 	show-this-rule
 
 	getopt {--interp: --chdir --quiet command args} args
-	set testid test#[incr ::testid]
+	set testid test#[incr ::tmake(testid)]
 	set depends {}
 	set command $command
 	set localcommand [make-local $command]

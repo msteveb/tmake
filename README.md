@@ -1,3 +1,54 @@
+Overview of tmake
+-----------------
+Currently implementation is a usable proof-of-concept.
+It has perfectly acceptable performance for small projects (~1000 files),
+but slows down beyond that. It also has no support for parallel builds.
+
+What it does have:
+- Build descriptions are succinct and declarative
+- A real language for build descriptions (Tcl), with simple conditional syntax
+- Rules can create multiple files
+- Two-stage reparsing to allow build configuration to be generated and reloaded
+  (e.g. via configure or kconfig)
+- Cache of built targets allows for:
+  - Cleaning orphan targets
+  - Rebuilding if build commands change
+  - Rebuilding if the target is to be built by a different rule
+  - A file is "up-to-date" if it rule runs even if the file didn't change (virtual mtime)
+- Good support for "generators" which generate 
+- Dynamic dependency support, including caching dependencies and support for generated files
+- Excellent debugging facilities to identify exactly what is occuring and why
+- 'tmake --find' to find specify rules
+- Support for out-of-tree builds
+- Non-recursive
+- Automatic creation of directories as required
+- Common operations (mkdir, rm) can be done without forking a process
+- Bootstraps with no external tools, just a C compiler
+- Add additional dependencies, bound vars, etc. to existing rules
+- Generates stub Makefiles to easily allow 'make' from any subdirectory
+
+Essentially almost everything listed here: http://www.conifersystems.com/whitepapers/gnu-make/
+is addressed, except performance.
+
+Simple things are simple
+------------------------
+
+# Set CFLAGS for all subsequent sources
+CFlags -DPOLARSSLTEST
+
+# Build a library from sources
+Lib polarssl {
+     aes.c arc4.c asn1parse.c asn1write.c base64.c bignum.c camellia.c
+     certs.c cipher.c cipher_wrap.c ctr_drbg.c debug.c des.c dhm.c
+     entropy.c entropy_poll.c error.c havege.c md.c md_wrap.c md2.c
+     md4.c md5.c net.c padlock.c pem.c pkcs11.c rsa.c sha1.c sha2.c
+     sha4.c ssl_cli.c ssl_srv.c ssl_tls.c timing.c version.c
+     x509parse.c x509write.c xtea.c
+}
+
+# Automatically links against polarssl
+Executable polarssl main.c
+
 High Level vs Low Level Rules
 -----------------------------
 The core tmake essentially has a single command to create a rule, target.
@@ -89,8 +140,12 @@ Explain the '-key values...' structure of arguments to 'target'.
 	created/set according to any bound variables. For example, in the following rule, $C_FLAGS
 	and $INCPATHS are set to the given values before the -dyndep and -do scripts are run.
 	Compare this with $CCACHE, $CC and $CFLAGS which are global variables (defines) which are the
-	same for all rules. Care should be taken to ensure that bound variables do not clash with
-	global variables.
+	same for all rules.
+
+	Note that if a -var is specified multiple times (possibly in multiple rules), the values accumulate
+	(with a space separator). Condsider the rule created by:
+	
+	  Objects auth.app.c
 
 		authapp/auth.app.o: authapp/auth.app.c
 		dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
@@ -99,9 +154,38 @@ Explain the '-key values...' structure of arguments to 'target'.
 		  var INCPATHS=include publish/include authapp
 				run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 
+	Let's add an include path to this rule:
+
+	  Depends auth.app.o -vars INCPATHS axtls
+
+	Now the new rule is:
+
+		authapp/auth.app.o: authapp/auth.app.c
+		dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+		local=authapp
+		  var C_FLAGS=-Wall -g -Os -fstrict-aliasing -Werror -D_GNU_SOURCE -std=gnu99 -Iinclude -Ipublish/include -Iauthapp
+		  var INCPATHS=include publish/include authapp axtls
+				run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+
 -getvars name ...
 	Similar to -vars, except that the value of the variable is taken from current value
 	of the global variable (define)
+
+Variables available during parsing
+----------------------------------
+
+Variables available to commands
+-------------------------------
+In the -do clause of a command, the following variables are defined.
+
+$target  - The target(s) of the rule
+$inputs  - Any files mentioned with -inputs
+$depends - Any files mentioned with -depends, plus any mentioned with -inputs
+$local   - The (relative) directory associated with the rule
+
+In addition, any variables defined with 'define' (including variants) are available.
+
+And any variables bound with -vars or -getvars (these take precedence over global 'define's)
 
 project.spec, build.spec, rulebase.spec, rulebase.default, autosetup/
 ---------------------------------------------------------------------
@@ -306,10 +390,22 @@ The built-in scanner:
   * a target, and thus must be generated before being scanned recursively
   * an existing source file, and thus creates a time-based dependeny
   * missing, and thus assumed to be a system header, and ignored
+* Caches the results of the scan to avoid unnecessary scanning
+* Carefully checks to see that the scan would return the same results as
+  the cache to ensure that changes such as creating files in-tree which
+  shadow system headers cause a rebuild
 
 Dynamic dependencies:
 
 * Are cached, along with the command (paths, pattern, ...), so that the (small) cost of scanning is only incurred when the file changes
+* The set of dependencies is cached. If this set changes, the target is rebuilt.
+  This can occur if a system header was previously shadowed by a source file, but
+  the build changes so that this no longer occurs.
+
+Reliability
+-----------
+
+* Various things are cached to ensure that targets are rebuilt when 
 
 Parallel Builds
 ---------------
@@ -336,3 +432,50 @@ One approach is to write the cache after every change!
 Bootstrapping tmake
 -------------------
 Same explanation of tclsh/jimsh vs jimsh0 as for autosetup
+
+Variables
+---------
+define! - defines a var and marks it as "fixed", which means that only define! can overwrite it
+define  - defines a var, overwriting any existing definition
+define? - defines a var only if it wasn't previously defined or was ""
+define-exists - checks to see if a var is defined
+get-define    - gets the value of a defined variable
+define-append - defines a var if it doesn't exist or is "", or appends (with a space) if it does
+
+Note that only variables defined in the top level project.spec and
+build.spec, and the rulebase (rulebase.default or rulebase.spec)
+are propagated to subdirectories. Any variables defined subdirectory
+build.spec files are only valid for the remainder of that build.spec
+file.
+
+For example, IncludePaths can be used in project.spec or the top level build.spec
+to set paths (via $INCPATHS) for all directories. However when IncludePaths is used
+in a subdirectory, it affects *only* that subdirectory.
+
+Also see the -vars and -getvar rule options which allow a variable to be bound to a rule.
+
+Experiences with porting projects to tmake
+------------------------------------------
+
+polarssl
+~~~~~~~~
+Project has plain Makefile and cmake support.
+Currently configuration is done my manually modifing Makefile and
+include/polarssl/config.h
+
+- Install autosetup and tmake
+- Create basic auto.def to allow configuration of some options and checking
+  some basic compiler settings. Most settings are still hard-coded here.
+- Creates settings.conf and include/polarssl/autoconf.h
+- Modify include/polarssl/config.h to include autoconf.h (to avoid overwriting current version)
+- Currently tmake only supports building polarssl as a static lib
+- Created polarsslwrap based on axtlswrap
+- Test directory uses code generation. scripts/generate_code.pl was hard to work with
+  because it wanted to generate output in the current dir.
+  I changed it slightly to take the full path to the target on the command line.
+
+=> Need support for shared lib
+=> polarsslwrap does not work on Windows because of the lack of fork, exec, poll
+=> Need add all possible options to auto.def, including dependencies
+
+Build times?

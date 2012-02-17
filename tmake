@@ -10,6 +10,7 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 # ==================================================================
 
 set tmake(version) 0.2
+set tmake(cacheversion) 2
 set tmake(debug) 0
 
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
@@ -47,22 +48,20 @@ set tmake(installed) 0
 set tmake(cleaning) 0
 set tmake(init) 0
 set tmake(showcache) 0
+set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {}}
+set tmake(writecache) 0
 
-set tmakecache(file) {}
-set tmakecache(cmd) {}
-set tmakecache(target) {}
-set tmakecache(write) 0
+array set tmakecache $tmake(emptycache)
 
 # Should these really be here?
-set tmakecache(headerscan) {}
 set tmake(testruncount) 0
 set tmake(testpasscount) 0
 
+set tmake(loadedprojectspec) 0
 set tmake(current) {}
 set tmake(rules) {}
 set tmake(targets) {}
 set tmake(numtargets) 0
-set tmake(subdirvars) {}
 set tmake(subdirs) {}
 set tmake(prefix) ""
 set tmake(localdir) .
@@ -443,10 +442,17 @@ proc load-build-description {loadcache} {
 	if {$loadcache && [file exists .makecache]} {
 		lassign [time {source .makecache}] us
 		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
-		set tmakecache(write) 0
+		if {$tmakecache(version) != $tmake(cacheversion)} {
+			user-notice ".makecache is out-of-date -- ignoring"
+			array set tmakecache $tmake(emptycache)
+			# But overwrite the cache next time around
+			set tmake(writecache) 1
+		}
 	}
 
-	process-build-spec-file .
+	set tmake(loadedprojectspec) 1
+
+	process-build-spec-file . 1
 }
 
 proc is-cleaning? {} {
@@ -502,7 +508,12 @@ proc invoke-spec-file {filename} {
 	lappend ::tmake(specfiles) $filename
 	# Spec files are loaded at frame level #1, in the scope of run-do
 	# 'define' relies on this
-	uplevel #0 [list run-do $::tmake(defines) [list source $filename]]
+	set result [uplevel #0 [list run-do $::tmake(defines) [list source $filename]]]
+
+	if {[check-signal]} {
+		tmake-exit 1
+	}
+	return $result
 }
 
 proc AutoSubDirs {onoff} {
@@ -521,22 +532,6 @@ proc AutoSubDirs {onoff} {
 
 proc SubDirs {args} {
 	lappend ::tmake(subdirs) {*}$args
-}
-
-proc save-subdir-vars {} {
-	set saved {}
-	foreach n $::tmake(subdirvars) {
-		dict set saved $n [get-define $n]
-	}
-	dputs v "saving subdir vars: $saved"
-	return $saved
-}
-
-proc restore-subdir-vars {dict} {
-	dputs v "Restoring subdir vars: $dict"
-	foreach {n v} $dict {
-		define $n $v
-	}
 }
 
 proc file-src {path} {
@@ -558,7 +553,7 @@ proc file-src-relative {srcpath builddir} {
 
 # Read in the given spec file in the given directory (relative to topdir)
 # Returns 1 if OK, or 0 if subdirs should be skipped
-proc process-build-spec-file {dir} {
+proc process-build-spec-file {dir {keepdefines 0}} {
 	global tmake
 	dputs m "process-build-spec $dir"
 
@@ -572,13 +567,15 @@ proc process-build-spec-file {dir} {
 		user-error "$path does not exist"
 	}
 
-	set saved [save-subdir-vars]
+	set defines $tmake(defines)
 
 	BuildSpecProlog
 	lassign [invoke-spec-file $path] rc msg opts
 	BuildSpecEpilog
 
-	restore-subdir-vars $saved
+	if {!$keepdefines} {
+		set tmake(defines) $defines
+	}
 
 	dputs T "Parsed [local-prefix]build.spec"
 
@@ -631,19 +628,32 @@ proc get-orphan-targets {} {
 }
 
 proc discard-orphan-targets {} {
-	global tmakecache
+	global tmake tmakecache
+	set discard 0
 
 	foreach i [dict keys $tmakecache(file)] {
 		if {![is-target? $i]} {
+			#puts "Discarding orphan file $i"
 			dict unset tmakecache(file) $i
-			catch {
-				dict unset tmakecache(cmd) [get-rule-target $i]
-			}
-			if {$tmakecache(write) == 0} {
-				dputs C "discarding orphans, updated cache"
-				set tmakecache(write) 1
+			set discard 1
+		}
+	}
+	# Also discard the build commands, targets and dependencies
+	foreach i [dict keys $tmakecache(cmd)] {
+		if {![is-rule? $i]} {
+			#puts "Discarding orphan rule $i"
+			dict unset tmakecache(cmd) $i
+			set discard 1
+			foreach j $i {
+				#puts "Discarding orphan target and deps $j"
+				dict unset tmakecache(targets) $j
+				dict unset tmakecache(deps) $j
 			}
 		}
+	}
+	if {$tmake(writecache) == 0 && $discard} {
+		dputs C "discarding orphans, updated cache"
+		set tmake(writecache) 1
 	}
 }
 
@@ -711,7 +721,8 @@ proc tmake-exit {code} {
 	global tmake tmakecache
 
 	# Write the cache before exiting
-	if {$tmakecache(write)} {
+	if {$tmake(writecache)} {
+		set tmakecache(version) $tmake(cacheversion)
 		lassign [time {
 			set f [open .makecache w]
 			foreach i [array names tmakecache] {
@@ -1169,6 +1180,8 @@ proc target {ruletarget args} {
 
 	array set info [parse-rule $ruletarget $args]
 
+	#dputs p "target $ruletarget @ $info(source)"
+
 	#show-this-rule
 
 	set replace $info(replace)
@@ -1551,8 +1564,11 @@ proc file-exists-all {list missingname} {
 # for subst to fail on something which isn't supposed to be interepreted
 # by Tcl. So subst, and if that fails, return the script unchanged.
 proc subst-do {__vardict __script} {
+	if {[string first {$} $__script] < 0} {
+		return $__script
+	}
 	dict with __vardict {}
-	if {[catch {subst -noc $__script} __expanded]} {
+	if {[catch {subst -nob -noc $__script} __expanded]} {
 		return $__script
 	}
 	return $__expanded
@@ -1663,7 +1679,27 @@ proc build {target} {
 		# Need to set target vars before doing this
 		set vardict [make-var-dict [array get t]]
 
-		foreach i [calc-dyndeps $vardict $ruletarget] {
+		set dyndeps [calc-dyndeps $vardict $ruletarget]
+
+		# Even before we do anything else, if the list of dependencies has changed,
+		# the target needs to be built
+		if {[llength $t(do)]} {
+			if {![dict exists $tmakecache(deps) $ruletarget]} {
+				if {[llength $t(depends)]} {
+					dputs b "No previous dyndeps for $ruletarget"
+					set result 1
+					lappend reason nocache
+				}
+			} else {
+				if {[lsort $dyndeps] ne [dict get $tmakecache(deps) $ruletarget]} {
+					dputs b "dyndeps for $ruletarget have changed, so forcing build"
+					set result 1
+					lappend reason dyndeps
+				}
+			}
+		}
+
+		foreach i $dyndeps {
 			lappend depends $i
 
 			if {[check-signal]} {
@@ -1715,25 +1751,41 @@ proc build {target} {
 
 	set vardict [make-var-dict [array get t]]
 
-	if {$result == 0 && [llength $t(do)] && [dict exists $tmakecache(cmd) $ruletarget]} {
-		# 4. Compare previous '-do' commands with current commands
-		set do [subst-do $vardict $t(do)]
-		set prevdo [dict get $tmakecache(cmd) $ruletarget]
-		if {$do ne $prevdo} {
-			dputs b "Commands for $ruletarget have changed, so forcing rebuild"
-			dputs B "=== old ==="
-			dputs B $prevdo
-			dputs B "=== new ==="
-			dputs B $do
-			dputs B "-----------"
-			lappend reason commands
-			set result 1
+	# 4. Compare previous '-do' commands with current commands
+	if {$result == 0 && [llength $t(do)]} {
+		if {![dict exists $tmakecache(cmd) $ruletarget]} {
+			# If there are no dependencies, changed commands don't cause a rebuild by themselves
+			# XXX: Should there be a special flag for this sort of rule?
+			if {[llength $t(depends)]} {
+				dputs b "No cached commands for $ruletarget, so forcing rebuild"
+				lappend reason nocache
+				set result 1
+			}
 		} else {
-			dputs n "Commands for $ruletarget are unchanged"
+			set do [subst-do $vardict $t(do)]
+			set prevdo [dict get $tmakecache(cmd) $ruletarget]
+			if {$do ne $prevdo} {
+				dputs {b B} "Commands for $ruletarget have changed, so forcing rebuild"
+				if {[debug-is-set B]} {
+					puts "=== old ==="
+					foreach d $prevdo {
+						show-rule-commands $d
+					}
+					puts "=== new ==="
+					foreach d $do {
+						show-rule-commands $d
+					}
+					puts "-----------"
+				}
+				lappend reason commands
+				set result 1
+			} else {
+				dputs n "Commands for $ruletarget are unchanged"
+			}
 		}
 	}
 
-	if {$result > 0} {
+	if {$result > 0 && [llength $t(do)]} {
 		if {[debug-is-set g]} {
 			pputs "\[g\] [join $current { --> }] ($reason)"
 		}
@@ -1803,18 +1855,19 @@ proc build {target} {
 				} elseif {!$t(nocache)} {
 					# Record the time that this target was created, along with the real mtime
 					dict set tmakecache(file) $f [list $now [file-real-mtime $f]]
-					if {$tmakecache(write) == 0} {
+					if {$tmake(writecache) == 0} {
 						dputs C "Targets built, updating cache"
-						set tmakecache(write) 1
+						set tmake(writecache) 1
 					}
 					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 					# Remember the rule which built this target
 					dict set tmakecache(target) $f $ruletarget
 				}
 			}
-			# Save the commands in the command cache
+			# Save the commands in the command cache and the list of dyndeps
 			dict set tmakecache(cmd) $ruletarget [subst-do $vardict $t(do)]
-			set tmakecache(write) 1
+			dict set tmakecache(deps) $ruletarget [lsort $dyndeps]
+			set tmake(writecache) 1
 		}
 
 		if {$rc == 0} {
@@ -1843,13 +1896,16 @@ proc build {target} {
 		}
 	}
 
+	set oldstatus $t(status)
+
 	if {$result < 0} {
 		set t(status) failed
-	} elseif {$result > 1} {
+	} elseif {$result > 0} {
 		set t(status) built
 	} else {
 		set t(status) uptodate
 	}
+	#puts "status changed for $ruletarget from $oldstatus => $t(status) ($result)"
 	update-rule [array get t]
 
 	set tmake(current) $oldcurrent
@@ -1860,8 +1916,6 @@ proc build {target} {
 # Dynamic dependencies
 # ==================================================================
 
-# XXX: Stops scanning after tmake(maxhdrscan) lines with no match
-# 
 proc header-scan-regexp {suffix regex filename} {
 	#puts "header-scan-regexp $filename"
 	set f [open $filename]
@@ -1876,31 +1930,50 @@ proc header-scan-regexp {suffix regex filename} {
 		}
 	}
 	close $f
-	dputs d "header-scan-regexp $filename => $headers"
+	dputs D "header-scan-regexp $filename => $headers"
 	return $headers
 }
 
-# Returns a pair of local-path, source-path
+# Returns a list of {result path}
+# as follows:
+#   "target"  $path-to-filename
+#   "source"  [file-src $path-to-filename]
+#   "none"    $filename
+#
+# XXX: It might be better if we returned *all* of the matches if there is more than one
+#      because we don't know what preprocessor magic might choose one vs the other
 proc find-file {filename paths} {
 	foreach p $paths {
 		set f [file-join $p $filename]
 		if {[is-target? $f]} {
-			# XXX: Is it really OK to build targets here?
-			dputs d "$f is a target, so building first"
-			# XXX: Recursive call to build here
+			dputs D "$f is a target, so building first"
 			if {[build $f] >= 0} {
-				return [list $f $f]
+				return [list target $f]
 			}
 		}
-		if {[file-src-exists $f]} {
-			return [list $f [file-src $f]]
+		set f [file-src $f]
+		if {[file exists $f]} {
+			return [list source $f]
 		}
 	}
+	# There is a problem here.
+	# We didn't find $filename and it's not a target, so we assume
+	# that it is either a system header, or a file which isn't
+	# needed for this build.
+	#
+	# But this result is cached, so if later the file does exist,
+	# either as a target or as a new source file, the cache will be wrong.
+	# How can we invalidate the cache in this case?
+	# We would need to keep the list of these "not a file, not a target" files
+	# and redo find-file for each of them (with the same args) to ensure
+	# that the answer didn't change
+	#
 	dputs D "Not a file and not a target, $filename"
-	return ""
+	return [list none $filename]
 }
 
 # XXX: This could be done better
+#
 proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	global tmake tmakecache
 
@@ -1913,22 +1986,51 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 		dputs D "header-scan-regexp-recursive, $filepath does not exist"
 		return {}
 	}
-	dputs d "Scanning $filename for headers: incpaths=$incpaths"
+	# Note: We always include the current dir to account for #include "file.h"
+	#       It's possible that this may be inappropriate in some circumstances.
+	if {"." ni $incpaths} {
+		lappend incpaths .
+	}
+
+	dputs D "Scanning $filename for headers: incpaths=$incpaths"
 	# Can we get the result from the cache?
 	set stamp [list [file mtime $filepath] $incpaths $suffix $regex]
 	if {[dict exists $tmakecache(headerscan) $filename]} {
-		lassign [dict get $tmakecache(headerscan) $filename] cache_stamp headers
+		lassign [dict get $tmakecache(headerscan) $filename] cache_stamp headers cachedresults
 		if {$cache_stamp eq $stamp} {
-			# Can reuse the cache
-			dputs d "header-scan-regexp $filename (cached) => $headers"
-			return $headers
+			# Need to verify that find-file returns the same result as last time
+			#puts "---- $filename ----"
+			#parray cachedresults
+			set ok 1
+			foreach {cfile ctypepath} $cachedresults {
+				set typepath [find-file $cfile $incpaths]
+				if {$typepath ne $ctypepath} {
+					dputs d "previously $cfile resolved to {$ctypepath}, but now resolves to {$typepath}, discarding cache"
+
+					# Now what if the file was previously a target it is an orphan.
+					# Discard it to avoid mistakenly thinking that it is a new source file.
+					if {[lindex $ctypepath 0] eq "target"} {
+						dputs d "discarding orphan [lindex $typepath 1]"
+						file delete [lindex $typepath 1]
+					}
+					set ok 0
+					break
+				}
+			}
+			if {$ok} {
+				# Can reuse the cache
+				dputs d "header-scan-regexp $filename (cached) => $headers"
+				return $headers
+			}
 		}
 		# Stale
 		dict unset tmakecache(headerscan) $filename
 	}
 
 	# Recursively scan files
+	unset -nocomplain deps results
 	array set deps {}
+	array set results {}
 	set scanned($filename) 1
 	set toscan [header-scan-regexp $suffix $regex $filepath]
 	while {[llength $toscan]} {
@@ -1936,24 +2038,25 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 		foreach d $toscan {
 			if {![info exists scanned($d)]} {
 				set scanned($d) 1
-				lassign [find-file $d $incpaths] path filepath
-				if {$path ne ""} {
-					set deps($path) 1
-					if {[file exists $filepath]} {
-						lappend newscan {*}[header-scan-regexp $suffix $regex $filepath]
-					}
+				lassign [find-file $d $incpaths] type deppath
+				set results($d) [list $type $deppath]
+				if {$type ne "none"} {
+					set deps($deppath) 1
+					lappend newscan {*}[header-scan-regexp $suffix $regex $deppath]
 				}
 			}
 		}
 		set toscan $newscan
 	}
 
+	#puts "---- $filename ----"
+	#parray results
 	# memoize the result
 	set headers [array names deps]
-	dict set tmakecache(headerscan) $filename [list $stamp $headers]
-	if {$tmakecache(write) == 0} {
+	dict set tmakecache(headerscan) $filename [list $stamp $headers [array get results]]
+	if {$tmake(writecache) == 0} {
 		dputs C "New header scan, updating cache"
-		set tmakecache(write) 1
+		set tmake(writecache) 1
 	}
 	return $headers
 }
