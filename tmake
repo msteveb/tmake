@@ -10,7 +10,7 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 # ==================================================================
 
 set tmake(version) 0.2
-set tmake(cacheversion) 2
+set tmake(cacheversion) 3
 set tmake(debug) 0
 
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
@@ -46,6 +46,7 @@ set tmake(defines) {}
 set tmake(fixedvars) {}
 set tmake(installed) 0
 set tmake(cleaning) 0
+set tmake(quiet) 0
 set tmake(init) 0
 set tmake(showcache) 0
 set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {}}
@@ -199,6 +200,9 @@ proc make-parse-options {argv {type tmake}} {
 				}
 				-q - --quickstop {
 					incr tmake(quickstop)
+				}
+				-Q - --quiet {
+					incr tmake(quiet)
 				}
 				-p - --print* {
 					incr tmake(showrules)
@@ -1918,6 +1922,10 @@ proc build {target} {
 
 proc header-scan-regexp {suffix regex filename} {
 	#puts "header-scan-regexp $filename"
+	if {![file exists $filename]} {
+		# Might be a target which failed to build. This will be handled later
+		return {}
+	}
 	set f [open $filename]
 	set headers {}
 	set n 0
@@ -1934,42 +1942,68 @@ proc header-scan-regexp {suffix regex filename} {
 	return $headers
 }
 
-# Returns a list of {result path}
-# as follows:
-#   "target"  $path-to-filename
-#   "source"  [file-src $path-to-filename]
-#   "none"    $filename
+# Returns a list of {type path ...}
+# where type is "target" or "source" and the path is:
 #
-# XXX: It might be better if we returned *all* of the matches if there is more than one
-#      because we don't know what preprocessor magic might choose one vs the other
-proc find-file {filename paths} {
-	foreach p $paths {
-		set f [file-join $p $filename]
-		if {[is-target? $f]} {
-			dputs D "$f is a target, so building first"
-			if {[build $f] >= 0} {
-				return [list target $f]
-			}
+# target -  $path-to-filename
+# source -  [file-src $path-to-filename]
+#
+# If the $path/$filename is neither a target nor source, the empty list is returned
+proc find-file-on-path {filename path} {
+	set f [file-join $path $filename]
+	if {[is-target? $f]} {
+		dputs D "$f is a target, so building first"
+		# Even if it fails to build, it is needed
+		if {[build $f] >= 0} {
+			return [list target $f]
 		}
+	} else {
 		set f [file-src $f]
 		if {[file exists $f]} {
 			return [list source $f]
 		}
 	}
-	# There is a problem here.
-	# We didn't find $filename and it's not a target, so we assume
-	# that it is either a system header, or a file which isn't
-	# needed for this build.
-	#
-	# But this result is cached, so if later the file does exist,
-	# either as a target or as a new source file, the cache will be wrong.
-	# How can we invalidate the cache in this case?
-	# We would need to keep the list of these "not a file, not a target" files
-	# and redo find-file for each of them (with the same args) to ensure
-	# that the answer didn't change
-	#
-	dputs D "Not a file and not a target, $filename"
-	return [list none $filename]
+	return {}
+}
+
+# Returns a list of {type path ...}
+# where type is "target" or "source" and the path is:
+#
+# target -  $path-to-filename
+# source -  [file-src $path-to-filename]
+#
+# Note that the current directory (.) is special.
+# We return both the first match along $paths and any match on "."
+# (
+#      Instead, just the first one and also the the same for "."
+proc find-file {filename paths} {
+	set result {}
+	set seendot 0
+
+	# First search the given paths
+	foreach p $paths {
+		if {$p eq "."} {
+			incr seendot
+		}
+		lappend result {*}[find-file-on-path $filename $p]
+		if {[llength $result]} {
+			break
+		}
+	}
+
+	# If we didn't search ".", do it now
+	if {!$seendot} {
+		lappend result {*}[find-file-on-path $filename .]
+	}
+
+	if {[llength $result] == 0} {
+		dputs D "Not a file and not a target, $filename"
+	}
+	if {[debug-is-set D] && [llength $result] > 2} {
+		dputs D "Note: Found multiple locations for $filename: [join $result]"
+	}
+	#puts "find-file filename=$filename, paths=$paths => $result"
+	return $result
 }
 
 # XXX: This could be done better
@@ -2009,9 +2043,11 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 
 					# Now what if the file was previously a target it is an orphan.
 					# Discard it to avoid mistakenly thinking that it is a new source file.
-					if {[lindex $ctypepath 0] eq "target"} {
-						dputs d "discarding orphan [lindex $typepath 1]"
-						file delete [lindex $typepath 1]
+					foreach {type path} $ctypepath {
+						if {$type eq "target"} {
+							dputs d "discarding orphan $path"
+							file delete $path
+						}
 					}
 					set ok 0
 					break
@@ -2038,9 +2074,9 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 		foreach d $toscan {
 			if {![info exists scanned($d)]} {
 				set scanned($d) 1
-				lassign [find-file $d $incpaths] type deppath
-				set results($d) [list $type $deppath]
-				if {$type ne "none"} {
+				set findfiles [find-file $d $incpaths]
+				set results($d) $findfiles
+				foreach {type deppath} $findfiles {
 					set deps($deppath) 1
 					lappend newscan {*}[header-scan-regexp $suffix $regex $deppath]
 				}
@@ -2075,7 +2111,9 @@ if {[catch {make $argv} msg]} {
 
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
-	pputs "Built $tmake(numtargets) target(s) in [format %.2f $elapsed] seconds"
+	if {!$tmake(quiet)} {
+		pputs "Built $tmake(numtargets) target(s) in [format %.2f $elapsed] seconds"
+	}
 }
 if {$tmake(exitcode)} {
 	puts stderr "*** Error: Targets failed to build"
