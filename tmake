@@ -1632,7 +1632,7 @@ proc build {target} {
 			return 0
 		}
 		built {
-			dputs b "$target has previously been built"
+			#dputs b "$target has previously been built"
 			return 1
 		}
 		checking {
@@ -1969,11 +1969,8 @@ proc header-scan-regexp {suffix regex filename} {
 	return $headers
 }
 
-# Returns a list of {type path ...}
-# where type is "target" or "source" and the path is:
-#
-# target -  $path-to-filename
-# source -  [file-src $path-to-filename]
+# Returns a list of {type path-to-filename}
+# where type is "target" or "source"
 #
 # If the $path/$filename is neither a target nor source, the empty list is returned
 proc find-file-on-path {filename path} {
@@ -1987,8 +1984,7 @@ proc find-file-on-path {filename path} {
 			set result [list target $f]
 		}
 	} else {
-		set f [file-src $f]
-		if {[file exists $f]} {
+		if {[file-src-exists $f]} {
 			set result [list source $f]
 		}
 	}
@@ -1999,12 +1995,12 @@ proc find-file-on-path {filename path} {
 # where type is "target" or "source" and the path is:
 #
 # target -  $path-to-filename
-# source -  [file-src $path-to-filename]
+# source -  $path-to-filename
 #
 # Note that the current directory (.) is special.
-# We return both the first match along $paths and any match on "."
-# (
-#      Instead, just the first one and also the the same for "."
+# We return both the first match along $paths and any match on [file dirname $filename]
+# (Unless they are the same)
+#
 proc find-file {filename paths} {
 	# First check the per-run cache
 	set cachekey "$filename $paths"
