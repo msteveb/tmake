@@ -684,9 +684,11 @@ proc hard-link {args} {
 }
 
 # Helper for installing files
-proc install-file {target source bin} {
+proc install-file {target source flags} {
 	vputs "Copy $source $target"
 	file copy -force $source $target
+	if {"bin" in $flags} { chmodx-file $target }
+	if {"strip" in $flags} { strip-file $target }
 }
 
 proc chmodx-file {target} {
@@ -703,7 +705,6 @@ proc striplib-file {target} {
 	vputs "StripLib $target"
 	exec [get-define STRIPLIB false] $target
 }
-
 
 proc InstallFile {dest src {flags {}}} {
 	show-this-rule
