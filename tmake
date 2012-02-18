@@ -13,7 +13,7 @@ set tmake(version) 0.2
 set tmake(cacheversion) 3
 set tmake(debug) 0
 
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0 x 0}
 set tmake(debughelp) {
 	* "Enable all debug"
 	? "Display help for debug types"
@@ -1126,7 +1126,7 @@ proc get-rule-target {target} {
 
 # Returns the rule for an individual target
 proc get-target-rule {target} {
-	get-rule [get-rule-target $target]
+	dict get $::tmake(rules) [dict get $::tmake(targets) $target]
 }
 
 # Returns the rule for a rule target
@@ -1146,6 +1146,14 @@ proc update-rule {ruledict} {
 		}
 	}
 	dict set ::tmake(rules) $ruletarget $ruledict
+}
+
+proc set-rule-status {ruletarget status} {
+	dict set ::tmake(rules) $ruletarget status $status
+}
+
+proc get-rule-status {ruletarget} {
+	dict get $::tmake(rules) $ruletarget status
 }
 
 proc show-this-rule {} {
@@ -1594,9 +1602,8 @@ proc run-do {__vardict __script} {
 # ==================================================================
 
 proc build {target} {
+	dputs x "build $target"
 	global tmake tmakecache
-	set current $tmake(current)
-	lappend current $target
 	if {![is-target? $target]} {
 		if {[file-src-exists $target]} {
 			dputs n "$target is not a target, but exists"
@@ -1605,25 +1612,38 @@ proc build {target} {
 		dputs b "$target is not a target and does not exist"
 		return -1
 	}
-	array set t [get-target-rule $target]
-	set ruletarget $t(target)
-	if {$t(status) eq "checking"} {
-		dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
-	}
-	if {$t(status) eq "uptodate"} {
-		return 0
-	}
-	if {$t(status) eq "failed"} {
-		dputs b "$target has previously failed to build"
-		return -1
-	}
-	if {$t(status) eq "built"} {
-		dputs b "$target has previously been built"
-		return 1
+
+	set ruletarget [get-rule-target $target]
+
+	switch [get-rule-status $ruletarget] {
+		uptodate {
+			return 0
+		}
+		built {
+			dputs b "$target has previously been built"
+			return 1
+		}
+		checking {
+			set current [list {*}$tmake(current) $target]
+			dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
+		}
+		failed {
+			dputs b "$target has previously failed to build"
+			return -1
+		}
+		unknown {
+		}
+		default {
+			error "Bad status: [get-rule-status $ruletarget]"
+		}
 	}
 
-	set t(status) checking
-	update-rule [array get t]
+	# Set the status now to detect recursive dependencies
+	set-rule-status $ruletarget checking
+	set oldcurrent $tmake(current)
+	lappend tmake(current) $target
+
+	array set t [get-rule $ruletarget]
 
 	set reason {}
 	if {$t(phony)} {
@@ -1638,9 +1658,6 @@ proc build {target} {
 		#dputs b "$ruletarget exists, so checking dependencies"
 		set result 0
 	}
-
-	set oldcurrent $tmake(current)
-	set tmake(current) $current
 
 	# Here is the plan to build $target
 	# 1. Run 'build' for each static dependency
@@ -1663,7 +1680,7 @@ proc build {target} {
 		set rc [build $i]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
-				build-error "[make-source-location $ruletarget "" ": "]Error: Don't know how to build $i: [join [lreverse $current] { <= }]"
+				build-error "[make-source-location $ruletarget "" ": "]Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }]"
 			}
 			set result -1
 			if {$tmake(quickstop)} {
@@ -1715,7 +1732,7 @@ proc build {target} {
 			set rc [build $i]
 			if {$rc < 0} {
 				if {$tmake(exitcode) == 0} {
-					build-error "Error: Don't know how to build $i: [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
+					build-error "Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget @]"
 				}
 				set result -1
 				if {$tmake(quickstop)} {
@@ -1791,13 +1808,13 @@ proc build {target} {
 
 	if {$result > 0 && [llength $t(do)]} {
 		if {[debug-is-set g]} {
-			pputs "\[g\] [join $current { --> }] ($reason)"
+			pputs "\[g\] [join $tmake(current) { --> }] ($reason)"
 		}
 	}
 
 	if {$result > 0 && [llength $t(do)]} {
 		#puts "Running rules for $ruletarget"
-		dputs b "Building [join [lreverse $current] { <= }] [make-source-location $ruletarget "with rule @"]"
+		dputs b "Building [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget "with rule @"]"
 		run-do $vardict $t(msg)
 
 		if {[dict get $tmake(debugtypes) r]} {
@@ -1900,17 +1917,15 @@ proc build {target} {
 		}
 	}
 
-	set oldstatus $t(status)
-
 	if {$result < 0} {
-		set t(status) failed
+		set status failed
 	} elseif {$result > 0} {
-		set t(status) built
+		set status built
 	} else {
-		set t(status) uptodate
+		set status uptodate
 	}
-	#puts "status changed for $ruletarget from $oldstatus => $t(status) ($result)"
-	update-rule [array get t]
+	#puts "status changed for $ruletarget from $t(status) => $status ($result)"
+	set-rule-status $ruletarget $status
 
 	set tmake(current) $oldcurrent
 	return $result
