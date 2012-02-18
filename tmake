@@ -49,7 +49,8 @@ set tmake(cleaning) 0
 set tmake(quiet) 0
 set tmake(init) 0
 set tmake(showcache) 0
-set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {}}
+set tmake(depfindcache) {}
+set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0}
 set tmake(writecache) 0
 
 array set tmakecache $tmake(emptycache)
@@ -61,6 +62,7 @@ set tmake(testpasscount) 0
 set tmake(loadedprojectspec) 0
 set tmake(current) {}
 set tmake(rules) {}
+set tmake(rulestatus) {}
 set tmake(targets) {}
 set tmake(numtargets) 0
 set tmake(subdirs) {}
@@ -512,7 +514,7 @@ proc invoke-spec-file {filename} {
 	lappend ::tmake(specfiles) $filename
 	# Spec files are loaded at frame level #1, in the scope of run-do
 	# 'define' relies on this
-	set result [uplevel #0 [list run-do $::tmake(defines) [list source $filename]]]
+	set result [uplevel #0 [list run-do {} [list source $filename]]]
 
 	if {[check-signal]} {
 		tmake-exit 1
@@ -936,7 +938,7 @@ proc show-all-targets {detailed} {
 proc define {name args} {
 	if {![dict exists $::tmake(fixedvars) $name]} {
 		set value [join $args]
-		dputs v "define $name $value"
+		#dputs v "define $name $value"
 		dict set ::tmake(defines) $name $value
 		# Ensure that the value is visibile the current spec file
 		uplevel #1 [list set $name $value]
@@ -945,7 +947,7 @@ proc define {name args} {
 
 proc define! {name args} {
 	set value [join $args]
-	dputs v "define! $name $value"
+	#dputs v "define! $name $value"
 	dict set ::tmake(fixedvars) $name 1
 	dict set ::tmake(defines) $name $value
 	uplevel #1 [list set $name $value]
@@ -967,12 +969,14 @@ proc define? {name args} {
 # separated by a space.
 #
 proc define-append {name args} {
+	#dputs v "define-append $name $args"
 	set value [get-define $name]
 	append-with-space value [join $args]
 	define $name $value
 }
 
 proc get-define {name {default ""}} {
+	#dputs v "get-define $name"
 	if {[dict exists $::tmake(defines) $name]} {
 		dict get $::tmake(defines) $name
 	} else {
@@ -1054,26 +1058,6 @@ proc merge-vars {dict1 dict2} {
 	return $dict1
 }
 
-# Appends the given arguments to the given keylist in the dictionary
-proc dict-lappend {dictname keys args} {
-	upvar $dictname d
-	if {[dict exists $d {*}$keys]} {
-		set list [dict get $d {*}$keys]
-		lappend list {*}$args
-	} else {
-		set list $args
-	}
-	dict set d {*}$keys $list
-}
-
-# Increments a value in the dictionary
-proc dict-incr {dictname key {incr 1}} {
-	upvar $dictname d
-	set value [dict get $d $key]
-	incr value $incr
-	dict set d $key $value
-}
-
 # ==================================================================
 # File Utilities
 # ==================================================================
@@ -1130,8 +1114,16 @@ proc get-target-rule {target} {
 }
 
 # Returns the rule for a rule target
-proc get-rule {target} {
-	dict get $::tmake(rules) $target
+proc get-rule {ruletarget} {
+	dict get $::tmake(rules) $ruletarget
+}
+
+# Like get-rule, but temporarily zaps the current rule.
+# Makes it faster when updating the rule
+proc take-rule {ruletarget} {
+	set rule [dict get $::tmake(rules) $ruletarget]
+	dict set ::tmake(rules) $ruletarget {}
+	return $rule
 }
 
 proc update-rule {ruledict} {
@@ -1144,16 +1136,17 @@ proc update-rule {ruledict} {
 			}
 			dict set ::tmake(targets) $t $ruletarget
 		}
+		set-rule-status $ruletarget unknown
 	}
 	dict set ::tmake(rules) $ruletarget $ruledict
 }
 
 proc set-rule-status {ruletarget status} {
-	dict set ::tmake(rules) $ruletarget status $status
+	dict set ::tmake(rulestatus) $ruletarget status $status
 }
 
 proc get-rule-status {ruletarget} {
-	dict get $::tmake(rules) $ruletarget status
+	dict get $::tmake(rulestatus) $ruletarget status
 }
 
 proc show-this-rule {} {
@@ -1182,7 +1175,7 @@ proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
 proc target {ruletarget args} {
 	# If the rule aready exists, we are updating
 	if {[is-rule? $ruletarget]} {
-		array set orig [get-rule $ruletarget]
+		array set orig [take-rule $ruletarget]
 	} elseif {[is-target? $ruletarget]} {
 		# Can't update a rule via the invidual target
 		array set orig [get-target-rule $ruletarget]
@@ -1273,8 +1266,14 @@ proc target-add-var {ruletarget varname list} {
 	if {![is-rule? $ruletarget]} {
 		dev-error "$ruletarget is not a rule target"
 	}
-
-	dict-lappend ::tmake(rules) [list $ruletarget vars $varname] {*}$list
+	# Note that if we do this blindly, we will duplicate the dict
+	# Instead, get the current value. Replace it.
+	# lappend.
+	# Update it
+	set vars [dict get $::tmake(rules) $ruletarget vars $varname]
+	dict set ::tmake(rules) $ruletarget vars $varname {}
+	lappend vars {*}$list
+	dict set ::tmake(rules) $ruletarget vars $varname $vars
 }
 
 proc parse-rule-args {arglistname optname} {
@@ -1492,13 +1491,13 @@ proc set-global {name value} {
 	if {[info exists ::$name] && [set ::$name] eq $value} {
 		return
 	}
-	dputs v "! $name=$value"
+	#dputs v "! $name=$value"
 	set ::$name $value
 }
 
-# Sets target-local variables. e.g. $local, $inputs, $depends and $target
+# Returns a dictionary with the bound and rule-specific variables
 proc make-var-dict {info} {
-	set vardict [dict merge [dict get $::tmake(defines)] [dict get $info vars]]
+	set vardict [dict get $info vars]
 	dict set vardict target [dict get $info target]
 	dict set vardict local [dict get $info local]
 	dict set vardict depends [locate-files [dict get $info depends]]
@@ -1576,18 +1575,31 @@ proc file-exists-all {list missingname} {
 # for subst to fail on something which isn't supposed to be interepreted
 # by Tcl. So subst, and if that fails, return the script unchanged.
 proc subst-do {__vardict __script} {
+	# No substitution required?
 	if {[string first {$} $__script] < 0} {
 		return $__script
 	}
-	dict with __vardict {}
-	if {[catch {subst -nob -noc $__script} __expanded]} {
-		return $__script
+	# Create local vars based on $::tmake(defines) and $__vardict
+	# Could use 'dict with $dict {}' here, but this is slow for Jim Tcl
+	foreach __n [dict keys $::tmake(defines)] {
+		set $__n [dict get $::tmake(defines) $__n]
 	}
-	return $__expanded
+	foreach __n [dict keys $__vardict] {
+		set $__n [dict get $__vardict $__n]
+	}
+	# Note: It is an error if the subst fails
+	return [subst -nob -noc $__script]
 }
 
 proc run-do {__vardict __script} {
-	dict with __vardict {}
+	# Create local vars based on $::tmake(defines) and $__vardict
+	# Could use 'dict with $dict {}' here, but this is slow for Jim Tcl
+	foreach __n [dict keys $::tmake(defines)] {
+		set $__n [dict get $::tmake(defines) $__n]
+	}
+	foreach __n [dict keys $__vardict] {
+		set $__n [dict get $__vardict $__n]
+	}
 	list [catch $__script msg opts] $msg $opts
 }
 
@@ -1614,8 +1626,8 @@ proc build {target} {
 	}
 
 	set ruletarget [get-rule-target $target]
-
-	switch [get-rule-status $ruletarget] {
+	set status [get-rule-status $ruletarget]
+	switch $status {
 		uptodate {
 			return 0
 		}
@@ -1634,7 +1646,7 @@ proc build {target} {
 		unknown {
 		}
 		default {
-			error "Bad status: [get-rule-status $ruletarget]"
+			error "Bad status: $status"
 		}
 	}
 
@@ -1695,10 +1707,11 @@ proc build {target} {
 		}
 	}
 
+	set vardict [make-var-dict [array get t]]
+
 	if {$result >= 0} {
 		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
 		# Need to set target vars before doing this
-		set vardict [make-var-dict [array get t]]
 
 		set dyndeps [calc-dyndeps $vardict $ruletarget]
 
@@ -1769,8 +1782,6 @@ proc build {target} {
 			set result 1
 		}
 	}
-
-	set vardict [make-var-dict [array get t]]
 
 	# 4. Compare previous '-do' commands with current commands
 	if {$result == 0 && [llength $t(do)]} {
@@ -1917,6 +1928,7 @@ proc build {target} {
 		}
 	}
 
+	set oldstatus $status
 	if {$result < 0} {
 		set status failed
 	} elseif {$result > 0} {
@@ -1924,7 +1936,7 @@ proc build {target} {
 	} else {
 		set status uptodate
 	}
-	#puts "status changed for $ruletarget from $t(status) => $status ($result)"
+	#puts "status changed for $ruletarget from $oldstatus => $status ($result)"
 	set-rule-status $ruletarget $status
 
 	set tmake(current) $oldcurrent
@@ -1966,19 +1978,21 @@ proc header-scan-regexp {suffix regex filename} {
 # If the $path/$filename is neither a target nor source, the empty list is returned
 proc find-file-on-path {filename path} {
 	set f [file-join $path $filename]
+
+	set result {}
 	if {[is-target? $f]} {
 		dputs D "$f is a target, so building first"
 		# Even if it fails to build, it is needed
 		if {[build $f] >= 0} {
-			return [list target $f]
+			set result [list target $f]
 		}
 	} else {
 		set f [file-src $f]
 		if {[file exists $f]} {
-			return [list source $f]
+			set result [list source $f]
 		}
 	}
-	return {}
+	return $result
 }
 
 # Returns a list of {type path ...}
@@ -1992,12 +2006,21 @@ proc find-file-on-path {filename path} {
 # (
 #      Instead, just the first one and also the the same for "."
 proc find-file {filename paths} {
+	# First check the per-run cache
+	set cachekey "$filename $paths"
+	if {[dict exists $::tmake(depfindcache) $cachekey]} {
+		return [dict get $::tmake(depfindcache) $cachekey]
+	}
+
+	#puts "find-file filename=$filename, paths=$paths"
+
 	set result {}
+	set filedir [file dirname $filename]
 	set seendot 0
 
 	# First search the given paths
 	foreach p $paths {
-		if {$p eq "."} {
+		if {$p eq $filedir} {
 			incr seendot
 		}
 		lappend result {*}[find-file-on-path $filename $p]
@@ -2006,9 +2029,9 @@ proc find-file {filename paths} {
 		}
 	}
 
-	# If we didn't search ".", do it now
+	# If we didn't search $filedir, do it now
 	if {!$seendot} {
-		lappend result {*}[find-file-on-path $filename .]
+		lappend result {*}[find-file-on-path $filename $filedir]
 	}
 
 	if {[llength $result] == 0} {
@@ -2018,6 +2041,9 @@ proc find-file {filename paths} {
 		dputs D "Note: Found multiple locations for $filename: [join $result]"
 	}
 	#puts "find-file filename=$filename, paths=$paths => $result"
+	# Cache this result
+	dict set ::tmake(depfindcache) $cachekey $result
+
 	return $result
 }
 
@@ -2034,11 +2060,6 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	if {![file exists $filepath]} {
 		dputs D "header-scan-regexp-recursive, $filepath does not exist"
 		return {}
-	}
-	# Note: We always include the current dir to account for #include "file.h"
-	#       It's possible that this may be inappropriate in some circumstances.
-	if {"." ni $incpaths} {
-		lappend incpaths .
 	}
 
 	dputs D "Scanning $filename for headers: incpaths=$incpaths"
