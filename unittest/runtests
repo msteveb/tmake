@@ -1,0 +1,135 @@
+# vim:se syn=tcl:
+source tmakeunit.tcl
+
+filedef proj-empty project.spec {}
+
+filedef build-a1 build.spec {
+Executable a a.c
+}
+
+filedef a.c a.c {
+#include <stdio.h>
+#include "a.h"
+
+int main(void) {
+	return 1;
+}
+}
+filedef a.h a.h {
+#ifdef A_H
+#define A_H
+
+/* This is a.h */
+#endif
+}
+
+# ----
+
+# A basic /build/null build/source change/dyndep change/ test
+runtest "Basic build scenario" {
+	msg "initial build"
+	makefiles proj-empty build-a1 a.c a.h
+	build all
+	checkfiles a a.o
+	checkbuilt a a.o
+
+	msg "null build"
+	build all
+	checkbuilt
+
+	msg "touch a.c"
+	makefiles a.c
+	build all
+	checkbuilt a a.o
+
+	msg "touch a.h"
+	makefiles a.h
+	build all
+	checkbuilt a a.o
+}
+
+filedef a-string.c a.c {
+#include <string.h>
+
+int main(void) {
+	return 0;
+}
+}
+filedef string.h string.h {
+/* This is plain string.h */
+}
+filedef string-includes-a.h string.h {
+#include <a.h>
+}
+
+runtest "In-tree shadows system header" {
+	msg "initial build, system header"
+	makefiles proj-empty build-a1 a-string.c
+	build all
+	checkbuilt a a.o
+
+	msg "replace system string.h with local string.h"
+	makefiles string.h
+	build all
+	checkbuilt a a.o
+
+	msg "add unused a.h"
+	makefiles a.h
+	build all
+	checkbuilt
+
+	msg "replace have local string.h include a.h"
+	makefiles string-includes-a.h
+	build all
+	checkbuilt a a.o
+
+	msg "remove local string.h"
+	rmfiles string-includes-a.h
+	build all
+	checkbuilt a a.o
+}
+
+filedef build-a2 build.spec {
+IncludePaths x y
+Executable a a.c
+}
+
+filedef x/a.h x/a.h {
+/* a.h in x */
+}
+
+filedef y/a.h y/a.h {
+/* a.h in y */
+}
+
+runtest "Dyndeps with false positives" {
+	# Here, a.h we make a.h accessible via multiple include paths
+	# The dyndep scanner can't be sure which one will be included.
+	# (Is this true? Isn't the confusion only around . vs not .?)
+	msg "initial build, a.h locally"
+	makefiles proj-empty build-a1 a.c a.h x/a.h
+	build all
+	checkbuilt a a.o
+
+	msg "modify inaccessible x/a.h"
+	makefiles x/a.h
+	build all
+	checkbuilt
+
+	msg "make x/a.h accessible"
+	makefiles build-a2
+	build all
+	checkbuilt a a.o
+
+	msg "modify accessible x/a.h"
+	makefiles x/a.h
+	build all
+	checkbuilt a a.o
+
+	# This should not build anything since y is after x in IncludePaths
+	msg "modify y/a.h"
+	makefiles y/a.h
+	build all
+	checkbuilt
+
+}
