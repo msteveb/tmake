@@ -17,6 +17,7 @@ proc show-help {argv} {
    -C|--directory=<dir>  Run as if from directory <dir>
    -v|--verbose          Force V=1 mode when building to show commands executed
    -n|--dry-run          Show commands which would have been run
+   --genie               Generate an initial build.spec from sources in the current dir
    -d...                 Enable various debugging "types"
    -d?                   Show all individual debugging types
    --debug               Alternative to "-dg"

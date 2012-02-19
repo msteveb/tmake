@@ -191,6 +191,11 @@ proc make-parse-options {argv {type tmake}} {
 					show-help $argv
 					exit 0
 				}
+				--genie {
+					use genie
+					tmake-genie $argv
+					exit 0
+				}
 				--dry-run - --just-print - -n {
 					set tmake(norun) 1
 				}
@@ -275,6 +280,9 @@ proc make {argv} {
 	} else {
 		# Need to find the project top
 		set tmake(topbuilddir) [find-project-top]
+		if {$tmake(topbuilddir) eq ""} {
+			user-error "Failed to find project.spec in any parent directory."
+		}
 		if {[info exists tmake(build)]} {
 			cd $tmake(topbuilddir)
 			if {[file exists $tmake(build)/build.spec]} {
@@ -469,12 +477,14 @@ proc is-cleaning? {} {
 # .spec file processing
 # ==================================================================
 
+# Returns "" if project top not found
 proc find-project-top {} {
 	set topdir [pwd]
 	while {![file exists $topdir/project.spec]} {
 		set parent [file dirname $topdir]
 		if {$topdir eq $parent} {
-			user-error "Failed to find project.spec in any parent directory."
+			dputs m "Project top not found"
+			return ""
 		}
 		set topdir $parent
 	}
@@ -1316,7 +1326,6 @@ proc parse-rule {target arglist} {
 	set info(target) $target
 
 	array set info {
-		status unknown
 		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
 		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
 	}
@@ -1762,6 +1771,7 @@ proc build {target} {
 	}
 
 	if {$tmake(quickstop) && $tmake(exitcode)} {
+		puts stderr "*** Error: Targets failed to build"
 		tmake-exit $tmake(exitcode)
 	}
 
@@ -1924,6 +1934,7 @@ proc build {target} {
 		}
 
 		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
+			puts stderr "*** Error: Targets failed to build"
 			tmake-exit $tmake(exitcode)
 		}
 	}
