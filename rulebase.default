@@ -40,6 +40,7 @@ define LD_FLAGS ""
 # XXX Should be $TOP/publish
 define PUBLISH publish
 
+# XXX Could add this only if we have projlibs
 define PROJLIBS ""
 define SYSLIBS ""
 
@@ -226,7 +227,7 @@ proc Executable {args} {
 		Publish bin $target
 	}
 	set localtarget [make-local $target]
-	Link $target {*}[Objects {*}[join $args]] {*}[get-define LOCAL_LIBS] {*}[get-define PROJLIBS]
+	Link $target {*}[Objects {*}[join $args]] {*}[get-define LOCAL_LIBS]
 	if {[info exists install]} {
 		set flags bin
 		if {$strip} {
@@ -248,8 +249,8 @@ proc Link {target args} {
 	define? CCLD [get-define CC]
 
 	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
-	target [make-local $target] -inputs {*}$args -msg {note Link $target} -getvars CCLD LD_FLAGS SYSLIBS -do {
-		run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $SYSLIBS
+	target [make-local $target] -inputs {*}$args -depends [get-define PROJDEPS] -msg {note Link $target} -getvars CCLD LD_FLAGS PROJLIBS SYSLIBS -do {
+		run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
 	}
 	Clean $target
 }
@@ -289,6 +290,9 @@ proc ArchiveLib {args} {
 	}
 	if {$publish} {
 		Publish lib $libname
+
+		# Alias to make UseLibs work
+		targetalias <lib>$basename [get-define PUBLISH]/lib/$libname
 	}
 }
 
@@ -376,12 +380,14 @@ proc Linker {linker} {
 }
 
 proc UseLibs {args} {
-	foreach lib $args {
-		# REVISIT: If we are to support linking against project shared libs, PROJLIBS
-		#          needs to be just a list of libs which will then be resolved to actual
-		#          targets (archive or shared) at deferred resolution time
-		define-append PROJLIBS [file join [get-define PUBLISH] lib lib$lib.a]
+	# Create/append to PROJLIBS (the link line)
+	if {[get-define PROJLIBS] eq ""} {
+		define PROJLIBS "-L[get-define PUBLISH]/lib"
 	}
+	define-append PROJLIBS [prefix -l $args]
+
+	# Now the dependencies
+	define-append PROJDEPS [prefix <lib> $args]
 }
 
 proc IncludePaths {args} {

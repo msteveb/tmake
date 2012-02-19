@@ -30,6 +30,31 @@ What it does have:
 Essentially almost everything listed here: http://www.conifersystems.com/whitepapers/gnu-make/
 is addressed, except performance.
 
+TODO Items
+----------
+- Support for shared libraries
+- Documentation, especially basic --help documentation, and developer docs (e.g. known rules)
+- tmake-genie?
+- Address known issues below, if possible
+- Do we need a -vars variant which completely replaces the var?
+- I don't think I have used define!, is it necessary?
+
+Known Issues
+------------
+Under Tcl, it is not possible to interrupt ^C, so that make cache
+is not saved if the build is interrupted.
+
+Passing options to tmake via make O=... is a bit awkward.
+
+Installing tmake in the path is not a perfect alternative for
+the make wrappers since:
+- tmake doesn't know where it is for out-of-build trees
+- and thus it doesn't scope targets to the current subdir
+
+Slows down with a large project
+
+No support for non-unix platforms, e.g. msvc
+
 Simple things are simple
 ------------------------
 
@@ -84,10 +109,12 @@ Explain the '-key values...' structure of arguments to 'target'.
 
 -replace
 	First discards any previous rule for the target.
+	Note: I have never used this
 
 -add
 	Normally only one rule for a target may contain -do. With -add, -do commands
 	may be added to an existing rule.
+	Note: I have never used this
 
 -chdir
 	Normally all commands are run from the top level build directory.
@@ -112,6 +139,7 @@ Explain the '-key values...' structure of arguments to 'target'.
 -clean filenames
 	List of files/targets which should be deleted after the -do commands run.
 	Used to clean up temporary files
+	Note: I have never used this
 
 -msg command
 	Tcl script to run when the rule is invoked to build the target.
@@ -123,6 +151,7 @@ Explain the '-key values...' structure of arguments to 'target'.
 -onerror command
 	Tcl script to run if the command fails. Allows for cleanup, e.g. of
 	temporary files.
+	Note: I have never used this
 
 -do command
 	Tcl script to run when the target needs to be built.
@@ -187,18 +216,24 @@ In addition, any variables defined with 'define' (including variants) are availa
 
 And any variables bound with -vars or -getvars (these take precedence over global 'define's)
 
+What happens
+------------
+- parse options
+- locate project top (project.spec)
+- parse project.spec, rulebase.spec or rulebase.default, build.spec files
+- Any files specified with Load are built if necessary
+- If anything was built, the build.spec files are reparsed
+- The specified targets are built
+
+Makefile wrapper
+----------------
+- Created by rulebase.default in Prolog/Epilog
+
 project.spec, build.spec, rulebase.spec, rulebase.default, autosetup/
 ---------------------------------------------------------------------
 - reparsing after project.spec
 - subdirvars
 - BuildSpecProlog/BuildSpecEpilog
-
-Variables/Defines
------------------
-define
-define?
-define!
-set
 
 Default Rulebase
 ----------------
@@ -343,7 +378,7 @@ The idea of Install and 'make install' where a target tree/filesystem is created
 
 Out-of-tree Builds
 ------------------
-Discuss builddir, srcdir, -C and implications
+Discuss builddir, srcdir, -C, -P, --build and implications
 
 make wrapper
 ------------
@@ -373,7 +408,7 @@ The built-in rulebase automatically associates the built-in recursive regex scan
 rules to build object files (.o) from source files (.c) via a rule which looks like:
 
 a.o: a.c
-dyndep=header-scan-regexp-recursive $INCPATHS $HDRPATTERN
+dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
   var INCPATHS=publish/include .
     run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 
@@ -382,9 +417,9 @@ return a list of dependent targets/files.
 
 The built-in scanner:
 
-* Uses a regex to scan for dependencies of the form #include ...
+* Uses a regex to scan for dependencies of the form #include <abc.h> or #include "abc.h"
 * Ignores conditional compilation (#ifdef, etc.)
-* And thus is conservative in that it make create an unnecessary dependency (but not the reverse)
+  * And thus is conservative in that it make create an unnecessary dependency (but not the reverse)
 * Is recursive, so that in the example above, a.o depends upon both a.h and b.h
 * Knows if a dependency is:
   * a target, and thus must be generated before being scanned recursively

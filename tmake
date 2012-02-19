@@ -62,6 +62,7 @@ set tmake(testpasscount) 0
 set tmake(loadedprojectspec) 0
 set tmake(current) {}
 set tmake(rules) {}
+set tmake(aliases) {}
 set tmake(rulestatus) {}
 set tmake(targets) {}
 set tmake(numtargets) 0
@@ -467,6 +468,20 @@ proc load-build-description {loadcache} {
 	set tmake(loadedprojectspec) 1
 
 	process-build-spec-file . 1
+
+	# Now validate that there is no non-phony target which depends on a phony target
+	foreach ruletarget [dict keys $::tmake(rules)] {
+		if {![get-rule-attr $ruletarget phony} {
+			foreach dep [get-rule-attr $ruletarget depends] {
+				if {[is-target? $dep]} {
+					if {[dict get [get-target-rule $dep] phony]} {
+						user-notice "Non phony target $ruletarget @[make-source-location $ruletarget] depends on phony $dep"
+						tmake-exit 1
+					}
+				}
+			}
+		}
+	}
 }
 
 proc is-cleaning? {} {
@@ -925,10 +940,8 @@ proc show-cache {} {
 
 proc show-all-targets {detailed} {
 	foreach i [lsort [dict keys $::tmake(targets)]] {
-		array unset t
-		array set t [get-target-rule $i]
 		if {$detailed eq ""} {
-			if {!$t(phony)} {
+			if {![dict get [get-target-rule $i] phony]} {
 				puts $i
 			}
 		} else {
@@ -1103,29 +1116,43 @@ proc writefile {filename value} {
 # Rule Handling
 # ==================================================================
 
+# If $target is an alias, return the aliased target
+# Otherwise return $target
+proc map-alias {target} {
+	if {[dict exists $::tmake(aliases) $target]} {
+		set target [dict get $::tmake(aliases) $target]
+	}
+	return $target
+}
+
 # Returns 1 if the target is an individual target
 proc is-target? {target} {
-	dict exists $::tmake(targets) $target
+	dict exists $::tmake(targets) [map-alias $target]
 }
 
 # Returns 1 if the target is a rule target
-proc is-rule? {target} {
-	dict exists $::tmake(rules) $target
+proc is-rule? {ruletarget} {
+	dict exists $::tmake(rules) $ruletarget
 }
 
 # Converts a target to the rule target
 proc get-rule-target {target} {
-	dict get $::tmake(targets) $target
+	dict get $::tmake(targets) [map-alias $target]
 }
 
 # Returns the rule for an individual target
 proc get-target-rule {target} {
-	dict get $::tmake(rules) [dict get $::tmake(targets) $target]
+	dict get $::tmake(rules) [dict get $::tmake(targets) [map-alias $target]]
 }
 
 # Returns the rule for a rule target
 proc get-rule {ruletarget} {
 	dict get $::tmake(rules) $ruletarget
+}
+
+# Returns the single attribute for the given rule target
+proc get-rule-attr {ruletarget attr} {
+	dict get $::tmake(rules) $ruletarget $attr
 }
 
 # Like get-rule, but temporarily zaps the current rule.
@@ -1167,15 +1194,19 @@ proc show-this-rule {} {
 
 proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
 	if {[is-rule? $ruletarget]} {
-		array set info [get-rule $ruletarget]
+		set source [get-rule-attr $ruletarget source]
 	} else {
-		array set info [get-target-rule $ruletarget]
+		set source [dict get [get-target-rule $ruletarget] source]
 	}
 
-	if {$info(source) eq "unknown"} {
+	if {$source eq "unknown"} {
 		return ""
 	}
-	return $prefix[join $info(source) ", "]$suffix
+	return $prefix[join $source ", "]$suffix
+}
+
+proc targetalias {alias target} {
+	dict set ::tmake(aliases) $alias $target
 }
 
 # This is the only way to create a rule
@@ -1185,11 +1216,12 @@ proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
 proc target {ruletarget args} {
 	# If the rule aready exists, we are updating
 	if {[is-rule? $ruletarget]} {
+		# Use take-rule here for efficiency
 		array set orig [take-rule $ruletarget]
 	} elseif {[is-target? $ruletarget]} {
 		# Can't update a rule via the invidual target
-		array set orig [get-target-rule $ruletarget]
-		dev-error "Multiple-target rule for $ruletarget was already specified at [make-source-location $orig(source) @]"
+		set source [dict get [get-target-rule $ruletarget] source]
+		dev-error "Multiple-target rule for $ruletarget was already specified at [make-source-location $source @]"
 	}
 	# XXX: Where to we check that we don't have rules {a b} and {b a}? In update-rule?
 
@@ -1229,7 +1261,7 @@ proc target {ruletarget args} {
 
 	if {[llength $info(do)] && [llength $orig(do)]} {
 		#dev-error "$ruletarget already has '-do' @$orig(source)"
-		puts stderr [warning-location "Warning: $ruletarget already has '-do' @$orig(source)"]
+		user-notice [warning-location "Warning: $ruletarget already has '-do' @$orig(source)"]
 		set info(do) {}
 	}
 	if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
@@ -1405,7 +1437,7 @@ proc parse-rule {target arglist} {
 
 proc file-real-mtime {filename} {
 	if {[is-target? $filename]} {
-		file mtime $filename
+		file mtime [map-alias $filename]
 	} else {
 		file mtime [file-src $filename]
 	}
@@ -1558,7 +1590,7 @@ proc calc-dyndeps {vardict target} {
 	if {$t(dyndep) ne ""} {
 		foreach i $t(depends) {
 			lassign [run-do $vardict [concat $t(dyndep) $i]] rc result opts
-			if {$rc == 0} { 
+			if {$rc == 0} {
 				lappend dyndeps {*}$result
 			} else {
 				return -code $rc {*}$opts $result
@@ -1771,7 +1803,7 @@ proc build {target} {
 	}
 
 	if {$tmake(quickstop) && $tmake(exitcode)} {
-		puts stderr "*** Error: Targets failed to build"
+		user-notice "*** Error: Targets failed to build"
 		tmake-exit $tmake(exitcode)
 	}
 
@@ -1934,7 +1966,7 @@ proc build {target} {
 		}
 
 		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
-			puts stderr "*** Error: Targets failed to build"
+			user-notice "*** Error: Targets failed to build"
 			tmake-exit $tmake(exitcode)
 		}
 	}
@@ -2148,7 +2180,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 # ==================================================================
 
 if {[catch {make $argv} msg]} {
-	puts stderr [error-stacktrace $msg]
+	user-notice [error-stacktrace $msg]
 	set tmake(exitcode) 1
 }
 
@@ -2159,7 +2191,7 @@ if {$tmake(numtargets) || $tmake(showtime)} {
 	}
 }
 if {$tmake(exitcode)} {
-	puts stderr "*** Error: Targets failed to build"
+	user-notice "*** Error: Targets failed to build"
 }
 
 tmake-exit $tmake(exitcode)
