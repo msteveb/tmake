@@ -7,7 +7,8 @@
 # Default variable settings and rules
 # ==================================================================
 
-# XXX: If settings are loaded via Load, these should all be ignored
+# If settings are loaded via Load, these should all be ignored
+# Thus we use define?
 define? CCACHE ""
 define? CC cc
 define? CC_FOR_BUILD cc
@@ -41,9 +42,12 @@ define LD_FLAGS ""
 # XXX Should be $TOP/publish
 define PUBLISH publish
 
-# XXX Could add this only if we have projlibs
 define PROJLIBS ""
 define SYSLIBS ""
+
+# Default header pattern for C and C++ dynamic dependencies
+#
+define HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 proc ObjectRule.c {obj src} {
 	# Capture the current value of C_FLAGS and INCPATHS
@@ -62,8 +66,6 @@ proc ObjectRule.cpp {obj src} {
 		header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
 	}
 }
-
-define HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
@@ -317,8 +319,6 @@ proc SharedLib {args} {
 	show-this-rule
 	getopt {--publish --strip --version: --install: basename args} args
 
-	# XXX: On Windows, shared libraries *must* use a .dll extension
-
 	if {![info exists version]} {
 		set version 0
 	}
@@ -359,12 +359,15 @@ proc SharedLib {args} {
 	ObjectCFlags $srcs [get-define SH_CFLAGS]
 
 	# Note: We won't link against local archive libs (LOCAL_LIBS) since they have not been compiled -fpic
-	# XXX: How can we avoid linking against project archive libs (PROJ_LIBS)?
+	# The SharedLibLink rule includes a run-time check for linking against archive libs
 	SharedLibLink $libname {*}[Objects {*}$srcs]
 
 	# Only the fully versioned named is built in the local dir
 	Phony libs $locallibname
 	Clean $libname
+
+	# Note: --publish is dummy. Shared libs always need to be published to be used
+	incr publish
 
 	if {$publish} {
 		# Publish along with the various symlinks
@@ -425,8 +428,10 @@ proc SharedObjectLink {target args} {
 
 proc check-no-archive-libs {target args} {
 	foreach i $args {
-		if {[string match *.a $i]} {
-			dev-error "$target is linking against archive library $i"
+		set realname [map-alias $i]
+		if {[string match *.a $realname]} {
+			build-error "Error: Shared Lib $target may not link against Archive Lib $realname"
+			return -code break
 		}
 	}
 }
@@ -448,7 +453,7 @@ proc SharedLibLink {target args} {
 	#      Also, is LinkFlags/LD_FLAGS also required?
 
 	target [make-local $target] -inputs {*}$args -depends [get-define PROJDEPS] -msg {note SharedLib $target} -getvars CCLD PROJLIBS SYSLIBS -do {
-		check-no-archive-libs $target {*}$PROJLIBS
+		check-no-archive-libs $target {*}$depends
 		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname $inputs $PROJLIBS $SYSLIBS
 	} -vars setsoname $setsoname
 	Clean $target
@@ -592,6 +597,20 @@ proc PublishIncludes {args} {
 	}
 }
 
+proc setup-test-env {} {
+	# Set up LD_LIBRARY_PATH for tests
+	if {[incr ::tmake(setuptestenv)] == 1} {
+		set ldlibpath [get-define LD_LIBRARY_PATH]
+		if {$ldlibpath ne ""} {
+			set path [getenv $ldlibpath ""]
+			# Must use a full path here since tests do chdir
+			set addlib [file-join [get-define builddir] [get-define PUBLISH]/lib]
+			append-with-space path $addlib $::tcl_platform(pathSeparator)
+			set ::env($ldlibpath) $path
+		}
+	}
+}
+
 proc Test {args} {
 	show-this-rule
 
@@ -624,6 +643,7 @@ proc Test {args} {
 	lappend testcommand {*}$args
 
 	target [make-local $testid] -phony -vars testcommand $testcommand {*}$opts -do {
+		setup-test-env
 		incr ::tmake(testruncount)
 		run $testcommand
 		incr ::tmake(testpasscount)
@@ -879,14 +899,4 @@ Phony clean-orphans -do {
 # XXX: Use an official API for this
 lappend ::tmake(deferred) {
 	IncludePaths [get-define PUBLISH]/include
-
-	# Set up LD_LIBRARY_PATH for tests
-	set ldlibpath [get-define LD_LIBRARY_PATH]
-	if {$ldlibpath ne ""} {
-		set path [getenv $ldlibpath ""]
-		# Must use a full path here since tests do chdir
-		set addlib [file-join [pwd] [get-define PUBLISH]/lib]
-		append-with-space path $addlib $::tcl_platform(pathSeparator)
-		set ::env($ldlibpath) $path
-	}
 }
