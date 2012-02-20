@@ -338,7 +338,7 @@ proc SharedLib {args} {
 	# What names may our shared lib have?
 	set nameinfo [list [get-define SH_SOEXTVER] $version %s [get-define SH_SOEXT]]
 	if {$n > 1} {
-		lappend nameinfo [get-define SH_SOEXTVER] $version [lindex [split $version .] 0]
+		lappend nameinfo [get-define SH_SOEXTVER] [lindex [split $version .] 0]
 	}
 
 	set names {}
