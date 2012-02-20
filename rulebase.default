@@ -873,6 +873,20 @@ proc LocalMakefile {name} {
 	set ::tmake(localmakefile) $name
 }
 
+proc add-publish-include {} {
+	# Can't use IncludePaths here because we only want build paths
+	set dir [get-define PUBLISH]/include
+	if {$dir ni [get-define INCPATHS]} {
+		define-append INCPATHS $dir
+		CFlags [prefix -I $dir]
+		C++Flags [prefix -I $dir]
+	}
+}
+
+# XXX: Use an official API for this
+lappend ::tmake(deferred) {
+	add-publish-include
+}
 # ==================================================================
 # Built-in targets
 # ==================================================================
@@ -896,7 +910,3 @@ Phony clean-orphans -do {
 	discard-orphan-targets
 }
 
-# XXX: Use an official API for this
-lappend ::tmake(deferred) {
-	IncludePaths [get-define PUBLISH]/include
-}
