@@ -13,7 +13,8 @@ Clean config.out
 ifconfig CONFIGURED
 
 ifconfig JIM_SHAREDLIB {
-	dev-error "Sorry, --shared not yet implemented in tmake"
+	# Can we get the version from jim.h?
+	alias Lib SharedLib --version=0.71
 }
 
 UseSystemLibs $LIBS
@@ -60,7 +61,7 @@ ifconfig JIM_UTF8 {
 	}
 }
 
-ArchiveLib jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $SRCS
+Lib --publish jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $SRCS
 
 Executable --install=$exec_prefix/bin jimsh jimsh.c
 

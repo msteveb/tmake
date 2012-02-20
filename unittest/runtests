@@ -30,7 +30,6 @@ runtest "Basic build scenario" {
 	msg "initial build"
 	makefiles proj-empty build-a1 a.c a.h
 	build all
-	checkfiles a a.o
 	checkbuilt a a.o
 
 	msg "null build"

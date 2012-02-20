@@ -225,6 +225,36 @@ What happens
 - If anything was built, the build.spec files are reparsed
 - The specified targets are built
 
+Aliases
+-------
+For most rules it is possible to identify the dependencies explicitly
+by name. However in some circumstances the name of the target may not
+be known at the point that the rule is created. Consider the case
+where an executable needs to link against a library created in another
+directory of the project.
+
+  # In the directory creating the library
+  Lib --publish foo foo.c
+
+  # In the directory linking against the library
+  UseLibs foo
+  Executable bar bar.c
+
+In order for this to work, the library in question needs to be
+published. However the executable linking against the library doesn't
+know whether the library will be a shared library or archive library,
+and thus it can't add a dependency on the published library file.
+
+The answer is for the Lib rule to create an alias for the target file.
+If the library as created as an archive library, we will have:
+
+  targetalias <lib>foo $PUBLISH/lib/libfoo.a
+
+Then, the executable can depend and link against <lib>foo which will
+be resolved via the alias to the underlying target. Note that the alias
+name can by anything, but the "<type>name" convention is used to avoid
+conflict with real files or targets.
+
 Makefile wrapper
 ----------------
 - Created by rulebase.default in Prolog/Epilog

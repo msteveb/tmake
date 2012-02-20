@@ -3,7 +3,7 @@
 
 # @synopsis:
 #
-# The 'tmake' module makes it easy to suppor the tmake build system.
+# The 'tmake' module makes it easy to support the tmake build system.
 #
 # The following variables are set:
 #

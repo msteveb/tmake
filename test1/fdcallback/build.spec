@@ -1,7 +1,10 @@
 PublishIncludes fdcallback.h
 
-Lib --publish fdcallback fdcallback.c
-
+# Note that 
 UseLibs timer
+
+SharedLib --publish fdcallback fdcallback.c
+
+#UseLibs fdcallback
 
 Executable --test testfdloop testfdloop.c 

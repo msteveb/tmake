@@ -9,7 +9,9 @@ int cgi_tcl_callback(const char *script, const char *filename, int line, page_t 
 	return cgi_tcl_std_callback(script, filename, line, page, elem);
 }
 
+#if 0
 void cgi_tcl_free(void)
 {
 	cgi_tcl_free_interp();
 }
+#endif

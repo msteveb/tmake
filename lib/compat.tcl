@@ -58,6 +58,13 @@ if {$tmakecompat(istcl)} {
 	proc readdir {dir} {
 		glob -nocomplain -directory $dir -tails *
 	}
+	if {![info exists tcl_platform(pathSeparator)]} {
+		if {$tmakecompat(iswin)} {
+			set tcl_platform(pathSeparator) {;}
+		} else {
+			set tcl_platform(pathSeparator) :
+		}
+	}
 } elseif {$tmakecompat(iswin)} {
 	# On Windows, backslash convert all environment variables
 	# (Assume that Tcl does this for us)

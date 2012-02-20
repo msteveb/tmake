@@ -23,6 +23,7 @@ define? LDFLAGS ""
 
 define? SH_CFLAGS ""
 define? SH_LDFLAGS ""
+define? SH_SOEXT .so
 define? SHOBJ_CFLAGS ""
 define? SHOBJ_LDFLAGS ""
 
@@ -63,8 +64,6 @@ proc ObjectRule.cpp {obj src} {
 }
 
 define HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
-
-define SHAREDOBJRULE {run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS}
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
@@ -259,6 +258,24 @@ proc publish-one-file {dest src} {
 	hard-link [file join [get-define PUBLISH] $dest] $src -vars dest $dest -msg {note Publish $dest}
 }
 
+proc make-shlib-symlinks {first args} {
+	foreach alias $args {
+		exec ln -s -f [file tail $first] $alias
+	}
+}
+
+proc publish-shared-lib {names source} {
+	set published [prefix [get-define PUBLISH]/lib/ $names]
+
+	target $published -inputs $source -msg {note PublishSharedLib $libname}  -do {
+		file delete $target
+		exec ln -f $inputs [lindex $target 0]
+		make-shlib-symlinks {*}$target
+	} -vars libname [lindex $names 0]
+	add-clean [make-local clean] $published
+	add-clean [make-local distclean] $published
+}
+
 proc Publish {args} {
 	show-this-rule
 	getopt {--keepdir dir args} args
@@ -296,6 +313,85 @@ proc ArchiveLib {args} {
 	}
 }
 
+proc SharedLib {args} {
+	show-this-rule
+	getopt {--publish --strip --version: --install: basename args} args
+
+	# XXX: On Windows, shared libraries *must* use a .dll extension
+
+	if {![info exists version]} {
+		set version 0
+	}
+
+	set n 0
+	foreach part [split $version .] {
+		if {![string is integer -strict $part]} {
+			set n -1
+			break
+		}
+		incr n
+	}
+	if {$n < 0 || $n > 3} {
+		dev-error "Not a valid shared library version number: $version"
+	}
+
+	# What names may our shared lib have?
+	set nameinfo [list [get-define SH_SOEXTVER] $version %s [get-define SH_SOEXT]]
+	if {$n > 1} {
+		lappend nameinfo [get-define SH_SOEXTVER] $version [lindex [split $version .] 0]
+	}
+
+	set names {}
+	set libname {}
+
+	foreach {fmt version} $nameinfo {
+		set name lib$basename[format $fmt $version]
+		if {$libname eq {}} {
+			set libname $name
+		}
+		if {$name ni $names} {
+			lappend names $name
+		}
+	}
+
+	set locallibname [make-local $libname]
+	set srcs [join $args]
+	ObjectCFlags $srcs [get-define SH_CFLAGS]
+
+	# Note: We won't link against local archive libs (LOCAL_LIBS) since they have not been compiled -fpic
+	# XXX: How can we avoid linking against project archive libs (PROJ_LIBS)?
+	SharedLibLink $libname {*}[Objects {*}$srcs]
+
+	# Only the fully versioned named is built in the local dir
+	Phony libs $locallibname
+	Clean $libname
+
+	if {$publish} {
+		# Publish along with the various symlinks
+		publish-shared-lib $names $locallibname
+		# Alias to make UseLibs work
+		targetalias <lib>$basename [get-define PUBLISH]/lib/$libname
+
+		# Local executables only link against this lib if it is published
+		# The reason is that it gets difficult to manage LD_LIBRARY_PATH or equalivalent.
+		# If the shared lib is published, a single definition of LD_LIBRARY_PATH=$PUBLISH/lib will work for all shared libs
+		# Thus UseLibs here rather than adding to LOCAL_LIBS
+
+		UseLibs $basename
+	}
+	if {[info exists install]} {
+		set flags bin
+		if {$strip} {
+			if {![define-exists STRIPLIB]} {
+				dev-error "No \$STRIPLIB defined for this platform"
+			}
+			lappend flags striplib
+		}
+		InstallFile [file-join $install $libname] $locallibname $flags
+	}
+}
+
+# If desired, this can be aliased to SharedLib in project.spec
 alias Lib ArchiveLib
 
 proc SharedObject {args} {
@@ -303,9 +399,11 @@ proc SharedObject {args} {
 
 	getopt {--install: sharedobj args} args
 
-	# XXX: Should build objects with -fpic, etc.
-	# Use -vars/ObjectCFlags to do this
-	SharedObjectLink $sharedobj {*}[Objects {*}[join $args]]
+	set srcs [join $args]
+
+	# Must build objects with -fpic, etc.
+	ObjectCFlags $srcs [get-define SHOBJ_CFLAGS]
+	SharedObjectLink $sharedobj {*}[Objects {*}$srcs]
 
 	set sharedobj [make-local $sharedobj]
 
@@ -315,11 +413,44 @@ proc SharedObject {args} {
 	}
 }
 
-# Link an executable from objects
+# Link a dynamically loadable shared object from objects
 proc SharedObjectLink {target args} {
 	show-this-rule
 	# Note that we only link against local shared libs, not archive libs
-	target [make-local $target] -inputs {*}$args -do [get-define SHAREDOBJRULE] -msg {note SharedObject $target}
+	target [make-local $target] -inputs {*}$args -msg {note SharedObject $target} -do {
+		run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS
+	}
+	Clean $target
+}
+
+proc check-no-archive-libs {target args} {
+	foreach i $args {
+		if {[string match *.a $i]} {
+			dev-error "$target is linking against archive library $i"
+		}
+	}
+}
+
+# Link a shared library from objects
+proc SharedLibLink {target args} {
+	show-this-rule
+
+	set setsoname {}
+	if {[get-define SH_SOPREFIX ""] ne ""} {
+		set setsoname [get-define SH_SOPREFIX][file tail $target]
+	}
+
+	define? CCLD [get-define CC]
+
+	# XXX: Here we use $LDFLAGS to capture any user-specied link flags (.e.g. -mbig-endian).
+	#      Assume that these are required both for shared libs and for executables.
+	#      Is it necessary to separate these two?
+	#      Also, is LinkFlags/LD_FLAGS also required?
+
+	target [make-local $target] -inputs {*}$args -depends [get-define PROJDEPS] -msg {note SharedLib $target} -getvars CCLD PROJLIBS SYSLIBS -do {
+		check-no-archive-libs $target {*}$PROJLIBS
+		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname $inputs $PROJLIBS $SYSLIBS
+	} -vars setsoname $setsoname
 	Clean $target
 }
 
@@ -544,6 +675,11 @@ proc strip-file {target} {
 	exec [get-define STRIP true] $target
 }
 
+proc striplib-file {target} {
+	vputs "StripLib $target"
+	exec [get-define STRIPLIB false] $target
+}
+
 
 proc InstallFile {dest src {flags {}}} {
 	show-this-rule
@@ -559,6 +695,7 @@ proc InstallFile {dest src {flags {}}} {
 		install-file $target $inputs $flags
 		if {"bin" in $flags} { chmodx-file $target }
 		if {"strip" in $flags} { strip-file $target }
+		if {"striplib" in $flags} { striplib-file $target }
 	}
 	target install -depends $destfile
 
@@ -729,6 +866,7 @@ Phony libs
 Phony install all
 Phony test
 
+Depends all
 Depends clean clean-orphans
 Depends distclean clean-orphans
 Depends test clean-orphans
@@ -741,4 +879,14 @@ Phony clean-orphans -do {
 # XXX: Use an official API for this
 lappend ::tmake(deferred) {
 	IncludePaths [get-define PUBLISH]/include
+
+	# Set up LD_LIBRARY_PATH for tests
+	set ldlibpath [get-define LD_LIBRARY_PATH]
+	if {$ldlibpath ne ""} {
+		set path [getenv $ldlibpath ""]
+		# Must use a full path here since tests do chdir
+		set addlib [file-join [pwd] [get-define PUBLISH]/lib]
+		append-with-space path $addlib $::tcl_platform(pathSeparator)
+		set ::env($ldlibpath) $path
+	}
 }

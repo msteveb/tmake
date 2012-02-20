@@ -5,4 +5,4 @@ PublishIncludes include/timer.h include/timerqueue.h
 ObjectCFlags timerqueue.c -DDUMMY_DEFINE
 
 # And specify the object file here
-Lib --publish timer timer.c timerqueue.c
+SharedLib --publish --version=1.0 timer timer.c timerqueue.c

@@ -5,6 +5,7 @@ define? DESTDIR _install
 define? CONFIG_DIR $DESTDIR/etc/config
 
 Load $UWEB/lib/build.conf
+define? UWEB_LDLIBS -luweb
 define THEMES $UWEB/themes
 
 LinkFlags -L$UWEB/lib

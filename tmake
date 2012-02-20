@@ -417,6 +417,14 @@ proc make {argv} {
 		set targets all
 	}
 
+	# Always discard orphans before building anything
+	set orphans [get-orphan-targets]
+	if {[llength $orphans]} {
+		file delete {*}$orphans
+		pputs "Clean [llength $orphans] orphan target(s)"
+		discard-orphan-targets
+	}
+
 	dputs T "Building targets"
 
 	foreach t $targets {
@@ -471,7 +479,7 @@ proc load-build-description {loadcache} {
 
 	# Now validate that there is no non-phony target which depends on a phony target
 	foreach ruletarget [dict keys $::tmake(rules)] {
-		if {![get-rule-attr $ruletarget phony} {
+		if {![get-rule-attr $ruletarget phony]} {
 			foreach dep [get-rule-attr $ruletarget depends] {
 				if {[is-target? $dep]} {
 					if {[dict get [get-target-rule $dep] phony]} {
@@ -669,6 +677,7 @@ proc discard-orphan-targets {} {
 			set discard 1
 		}
 	}
+
 	# Also discard the build commands, targets and dependencies
 	foreach i [dict keys $tmakecache(cmd)] {
 		if {![is-rule? $i]} {
