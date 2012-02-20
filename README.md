@@ -367,6 +367,9 @@ When using 'target' directly, use of [make-local].
 publish
 -------
 The concept of publishing binaries, libraries and headers for sharing 
+Note that the publish dir can be changed from the project.spec file. e.g.
+
+  define PUBLISH .publish
 
 Cross Compiling
 ---------------
