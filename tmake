@@ -421,6 +421,7 @@ proc make {argv} {
 	if {[llength $orphans]} {
 		file delete {*}$orphans
 		pputs "Clean [llength $orphans] orphan target(s)"
+		dputs C $orphans
 		discard-orphan-targets
 	}
 
@@ -435,6 +436,48 @@ proc make {argv} {
 			break
 		}
 		dputs T "Built target $t"
+	}
+}
+
+proc load-cache {} {
+	if {[file exists .makecache]} {
+		global tmake tmakecache
+		lassign [time {source .makecache}] us
+		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
+		if {$tmakecache(version) != $tmake(cacheversion)} {
+			user-notice ".makecache is out-of-date -- ignoring"
+			array set tmakecache $tmake(emptycache)
+			# But overwrite the cache next time around
+			set tmakecache(writecache) 1
+		}
+	} else {
+		dputs C "Missing cache, starting with empty cache"
+	}
+}
+
+proc mark-cache-dirty {msg} {
+	global tmakecache
+	if {$tmakecache(writecache) == 0} {
+		dputs C "$msg, marking cache dirty"
+		set tmakecache(writecache) 1
+	}
+}
+
+proc write-cache {} {
+	global tmake tmakecache
+	if {$tmakecache(writecache)} {
+		set tmakecache(version) $tmake(cacheversion)
+		unset tmakecache(writecache)
+		lassign [time {
+			set f [open .makecache w]
+			foreach i [array names tmakecache] {
+				puts $f [list set tmakecache($i) $tmakecache($i)]
+			}
+			close $f
+		}] us
+		dputs C "Wrote cache, .makecache in [expr {($us + 500) / 1000}]ms"
+	} else {
+		dputs C "Cache unchanged, not writing"
 	}
 }
 
@@ -461,15 +504,8 @@ proc load-build-description {loadcache} {
 	}
 
 	# Now load the cache if it exists and it isn't the second time through
-	if {$loadcache && [file exists .makecache]} {
-		lassign [time {source .makecache}] us
-		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
-		if {$tmakecache(version) != $tmake(cacheversion)} {
-			user-notice ".makecache is out-of-date -- ignoring"
-			array set tmakecache $tmake(emptycache)
-			# But overwrite the cache next time around
-			set tmakecache(writecache) 1
-		}
+	if {$loadcache} {
+		load-cache
 	}
 
 	set tmake(loadedprojectspec) 1
@@ -690,9 +726,8 @@ proc discard-orphan-targets {} {
 			}
 		}
 	}
-	if {$tmakecache(writecache) == 0 && $discard} {
-		dputs C "discarding orphans, updated cache"
-		set tmakecache(writecache) 1
+	if {$discard} {
+		mark-cache-dirty "discarded orphan targets"
 	}
 }
 
@@ -760,20 +795,7 @@ proc tmake-exit {code} {
 	global tmake tmakecache
 
 	# Write the cache before exiting
-	if {$tmakecache(writecache)} {
-		set tmakecache(version) $tmake(cacheversion)
-		unset tmakecache(writecache)
-		lassign [time {
-			set f [open .makecache w]
-			foreach i [array names tmakecache] {
-				puts $f [list set tmakecache($i) $tmakecache($i)]
-			}
-			close $f
-		}] us
-		dputs C "Wrote cache, .makecache in [expr {($us + 500) / 1000}]ms"
-	} else {
-		dputs C "Cache unchanged, not writing"
-	}
+	write-cache
 	exit $code
 }
 
@@ -1934,16 +1956,13 @@ proc build {target} {
 			foreach f $ruletarget {
 				if {![file exists $f]} {
 					# XXX: Should onerror run here if --quickstop is set?
+					# XXX: Should the cache still be updated?
 					build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f"
 					# Use break to indicate that we have already output the message
 					set rc 3
 				} elseif {!$t(nocache)} {
 					# Record the time that this target was created, along with the real mtime
 					dict set tmakecache(file) $f [list $now [file-real-mtime $f]]
-					if {$tmakecache(writecache) == 0} {
-						dputs C "Targets built, updating cache"
-						set tmakecache(writecache) 1
-					}
 					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 					# Remember the rule which built this target
 					dict set tmakecache(target) $f $ruletarget
@@ -1952,7 +1971,7 @@ proc build {target} {
 			# Save the commands in the command cache and the list of dyndeps
 			dict set tmakecache(cmd) $ruletarget [subst-do $vardict $t(do)]
 			dict set tmakecache(deps) $ruletarget [lsort $dyndeps]
-			set tmakecache(writecache) 1
+			mark-cache-dirty "Targets built"
 		}
 
 		if {$rc == 0} {
@@ -2176,10 +2195,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	# memoize the result
 	set headers [array names deps]
 	dict set tmakecache(headerscan) $filename [list $stamp $headers [array get results]]
-	if {$tmakecache(writecache) == 0} {
-		dputs C "New header scan, updating cache"
-		set tmake(writecache) 1
-	}
+	mark-cache-dirty "New header scan"
 	return $headers
 }
 
