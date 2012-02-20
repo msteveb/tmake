@@ -792,10 +792,9 @@ proc dev-error {msg} {
 }
 
 proc tmake-exit {code} {
-	global tmake tmakecache
-
 	# Write the cache before exiting
 	write-cache
+	dputs T Done
 	exit $code
 }
 
