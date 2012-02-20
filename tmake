@@ -13,7 +13,7 @@ set tmake(version) 0.2
 set tmake(cacheversion) 3
 set tmake(debug) 0
 
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0 x 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
 set tmake(debughelp) {
 	* "Enable all debug"
 	? "Display help for debug types"
@@ -1687,7 +1687,6 @@ proc run-do {__vardict __script} {
 # ==================================================================
 
 proc build {target} {
-	dputs x "build $target"
 	global tmake tmakecache
 	if {![is-target? $target]} {
 		if {[file-src-exists $target]} {
