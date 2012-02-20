@@ -41,8 +41,8 @@ if {$tmakecompat(istcl)} {
 		}
 		return -code error "environment variable \"$name\" does not exist"
 	}
-	proc alias {new orig} {
-		interp alias {} $new {} $orig
+	proc alias {new old args} {
+		interp alias {} $new {} $old {*}$args
 	}
 	proc exec-save-stderr {args} {
 		set rc [catch {exec >@stdout {*}$args} msg opts]
