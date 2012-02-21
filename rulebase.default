@@ -21,6 +21,7 @@ define? SH_LINKFLAGS ""
 define? CFLAGS ""
 define? CXXFLAGS ""
 define? LDFLAGS ""
+define? HOSTCFLAGS ""
 
 define? SH_CFLAGS ""
 define? SH_LDFLAGS ""
@@ -871,6 +872,16 @@ proc Phony {target args} {
 proc LocalMakefile {name} {
 	# XXX Should be an API for this
 	set ::tmake(localmakefile) $name
+}
+
+# XXX: Only useful for simple cases of building a host executable from C sources
+# 
+proc HostExecutable {target args} {
+	target [make-local $target] -inputs {*}[make-local {*}$args] -getvars HOSTCFLAGS -do {
+		run $CC_FOR_BUILD $HOSTCFLAGS -o $target $inputs
+	}
+	Publish bin $target
+	Clean $target
 }
 
 proc add-publish-include {} {
