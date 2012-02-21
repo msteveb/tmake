@@ -294,8 +294,13 @@ proc make {argv} {
 			set tmake(topsrcdir) .
 		}
 	}
+	# Make these available in the environment for the benefit of generator programs and scripts
+	# which want to be able to find things
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
+
+	# Full path to the top of the build 
+	define TOPBUILDDIR $tmake(topbuilddir)
 
 	if {$tmake(showcache)} {
 		show-cache

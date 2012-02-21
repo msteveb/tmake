@@ -7,7 +7,7 @@ use tmake
 options {
 }
 
-make-tmake-settings settings.conf *
+make-tmake-settings settings.conf {[A-Z]*}
 
 if {![file exists Makefile]} {
     # Normally this would be autosetup/tmake

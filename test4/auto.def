@@ -28,6 +28,14 @@ define EXTRA_CFLAGS ""
 define EXTRA_LDFLAGS ""
 define USE_SYSTEM_SQLITE ""
 
+if {[string match *-darwin* [get-define host]]} {
+    puts [info source {}]
+    if {[cctest -cflags {-Wdeprecated-declarations}]} {
+    puts [info source {}]
+        define-append EXTRA_CFLAGS -Wno-deprecated-declarations
+    }
+}
+
 if {![opt-bool internal-sqlite]} {
   proc find_internal_sqlite {} {
 
@@ -172,4 +180,4 @@ if {![cc-check-functions getpassphrase]} {
 #make-template Makefile.in
 make-config-header autoconfig.h -auto {USE_* FOSSIL_*}
 
-make-tmake-settings settings.conf *
+make-tmake-settings settings.conf {[A-Z]*}

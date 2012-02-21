@@ -17,7 +17,9 @@ ifconfig CONFIGURED
 
 IncludePaths include
 
-CFlags -DHAVE_AUTOCONFIG_H
+# Pull in some autosetup config
+CFlags -DHAVE_AUTOCONFIG_H $EXTRA_CFLAGS
+LinkFlags $EXTRA_LDFLAGS
 UseSystemLibs $LIBS
 
 # XXX: Simple host executable for now

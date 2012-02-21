@@ -608,7 +608,7 @@ proc setup-test-env {} {
 		if {$ldlibpath ne ""} {
 			set path [getenv $ldlibpath ""]
 			# Must use a full path here since tests do chdir
-			set addlib [file-join [get-define builddir] [get-define PUBLISH]/lib]
+			set addlib [file-join [get-define TOPBUILDDIR] [get-define PUBLISH]/lib]
 			append-with-space path $addlib $::tcl_platform(pathSeparator)
 			set ::env($ldlibpath) $path
 		}
