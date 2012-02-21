@@ -1,0 +1,8 @@
+#ifndef XGEN_H
+#define XGEN_H
+
+/* This is xgen.h, built from a template */
+
+#define X 3
+
+#endif

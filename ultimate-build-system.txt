@@ -1,0 +1,587 @@
+A Quest for the Ultimate Build System
+-------------------------------------
+
+For many years...
+
+A build system must have the following attributes.
+
+* Fast (fast)
+* Reliable (reliable)
+* Build descriptions easy to write and easy to understand (comprehensible)
+* Succinct build description (succinct)
+* Readable output - to identify issues (output)
+* Possible to do hard things (possible)
+* Unobtrusive (unobtrusive)
+* Build locally from any directory (local)
+* Build out-of-tree as an option (builddir)
+* Include or support a configuration system (user + environment) (config)
+* Minimal system dependencies/easy boostrap on new systems (bootstrap)
+* Good cross compiling support (cross)
+* Dynamic dependency scanning (dyndep)
+* Ability to find out why things happen, or not (reasoning)
+
+Here are the candidates
+- waf
+- cmake
+- automake
+- jam
+- tmake
+
+Let's see how they fare
+
+tmake:
+  yes: possible, config, cross, reasoning, comprehensible, succinct, output, unobtrusive, builddir, bootstrap, dyndep, local, reliable
+  no: fast
+
+jam:
+  yes: fast, comprehensible, succinct, output, unobtrusive, builddir, bootstrap, dyndep
+  no: possible, config, cross, reasoning
+  maybe: reliable (jamplus is better)
+  ?: local
+
+waf:
+  yes: fast, possible, builddir, config, dyndep
+  no: cross, comprehensible, succinct
+  maybe: bootstrap (requires python)
+  ?: unobtrusive, local, reasoning, output, reliable
+
+cmake:
+  yes: fast, comprehensible, possible, builddir, config, cross, dyndep, output
+  no: succinct, unobtrusive, reasoning
+  maybe: bootstrap (requires c++ to build)
+  ?: local, reliable
+
+automake:
+  yes: succinct, builddir, config (autoconf), bootstrap (user), cross, dyndep
+  no: fast, comprehensible, possible, unobtrusive, local, reasoning, output, bootstrap (dev), reliable
+
+Examples - what is wrong with this?
+-----------------------------------
+
+cmake is incredibly verbose an unwieldy for simple tasks such as adding a generator
+
+From http://www.cmake.org/Wiki/CMake:How_To_Process_Lots_Of_Input_Files
+
+    =======================================================================
+    PROJECT(Tutorial_GenerateFiles)
+
+    # Make sure we know where the executable is
+    SET(EXECUTABLE_OUTPUT_PATH "${Tutorial_GenerateFiles_BINARY_DIR}/bin"
+        CACHE INTERNAL "")
+    SET(LIBRARY_OUTPUT_PATH "${Tutorial_GenerateFiles_BINARY_DIR}/bin"
+        CACHE INTERNAL "")
+
+    # Create the executable
+    ADD_EXECUTABLE(processor processor.c)
+    GET_TARGET_PROPERTY(processorLocation processor LOCATION)
+
+    # Variable to store output files
+    SET(outFiles)
+
+    # Find all the input files
+    FILE(GLOB inFiles RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/*.in")
+
+    FOREACH(infileName ${inFiles})
+        MESSAGE(STATUS "Process file: ${infileName}")
+
+        # Generate output file name
+        STRING(REGEX REPLACE ".in\$" "" outfileName "${infileName}")
+        SET(outfile "${CMAKE_CURRENT_BINARY_DIR}/${outfileName}")
+        MESSAGE(STATUS "Output file: ${outfile}")
+
+        # Generate input file name
+        SET(infile "${CMAKE_CURRENT_SOURCE_DIR}/${infileName}")
+
+        # Custom command to do the processing
+        ADD_CUSTOM_COMMAND(OUTPUT "${outfile}"
+            COMMAND ${processorLocation}
+            "${infile}" "${outfile}"
+            DEPENDS "${infile}" processor # depends on the 'processor'
+            COMMENT "do something")
+
+        # Finally remember the output file for dependencies
+        SET(outFiles ${outFiles} "${outfile}")
+    ENDFOREACH(infileName)
+
+    # Setup a target to drive the conversion
+    ADD_CUSTOM_TARGET(ProcessFiles ALL DEPENDS ${outFiles})
+    ===========================================================================
+
+Now the tmake equivalent
+
+    ===========================================
+    HostExecutable processor processor.c
+
+    foreach src [Glob *.in] {
+        regsub {[.]in$} $src {} target
+        Generate $target processor $src {
+            note Process $inputs
+            #note Output file: $target
+            run $target $inputs $target
+        }
+    }
+    ===========================================
+
+waf is great if you feel like writing a python script
+to perform simple build tasks!
+
+    =====================================================
+    def configure(ctx):
+            pass
+
+    from waflib.Task import Task
+    class cp(Task): 
+            def run(self): 
+                    return self.exec_command('cp %s %s' % (
+                                    self.inputs[0].abspath(), 
+                                    self.outputs[0].abspath()
+                            )
+                    )
+
+    class cat(Task):
+            def run(self):
+                    return self.exec_command('cat %s %s > %s' % (
+                                    self.inputs[0].abspath(),
+                                    self.inputs[1].abspath(),
+                                    self.outputs[0].abspath()
+                            )
+                    )
+
+    def build(ctx):
+
+            cp_1 = cp(env=ctx.env) 
+            cp_1.set_inputs(ctx.path.find_resource('wscript')) 
+            cp_1.set_outputs(ctx.path.find_or_declare('foo.txt'))
+            ctx.add_to_group(cp_1) 
+
+            cp_2 = cp(env=ctx.env)
+            cp_2.set_inputs(ctx.path.find_resource('wscript'))
+            cp_2.set_outputs(ctx.path.find_or_declare('bar.txt'))
+            ctx.add_to_group(cp_2)
+
+            cat_1 = cat(env=ctx.env)
+            cat_1.set_inputs(cp_1.outputs + cp_2.outputs)
+            cat_1.set_outputs(ctx.path.find_or_declare('foobar.txt'))
+            ctx.add_to_group(cat_1)
+    =====================================================
+
+Now the same with tmake
+
+    =====================================================
+    CopyFile foo.txt wscript
+    CopyFile bar.txt wscript
+
+    Generate foobar.txt {} {foo.txt bar.txt} {
+        run cat $inputs >$target
+    }
+    =====================================================
+
+And even without the the built-in CopyFile, it is easy
+
+    =====================================================
+    Generate foo.txt {} wscript {
+        file copy $inputs $target
+    }
+    Generate bar.txt {} wscript {
+        file copy $inputs $target
+    }
+    Generate foobar.txt {} {foo.txt bar.txt} {
+        run cat $inputs >$target
+    }
+    =====================================================
+
+Now let's consider each of the requirements, what it means
+and how tmake addresses it
+
+Fast
+----
+- parallel builds
+- cache dependencies
+
+The current (proof of concept) version of tmake is not fast for two reasons:
+1. It is written in pure Tcl, which is a slower than either compiled lanuages, or Python.
+2. It does not support parallel builds
+
+Note that there is nothing conceptually stopping tmake from supporting parallel builds.
+It is purely an implementation issue. Since it is "fast enough" for a medium sized project,
+both of these can be addressed at the same time.
+
+Reliable
+--------
+As a developer, I want the build system to just "do the right thing".
+This means that if I build 'a' which links against library 'libx.a' in another directory,
+which is build from 'x.c' which includes 'xgen.h' which is generated from 'gen'
+which is built from 'gen.c', then I want 'a' to be rebuilt when 'gen.c' changes.
+I don't want to have to 'make clean' manually.
+I don't want to have to remember to rebuild 'gen' manually, or 'x.h'
+
+Also, if the compiler flags used to build gen.c change, I want 'a' to be rebuilt.
+
+Let's test this scenario. First consider the source tree.
+
+    =========================================
+    $ tree
+    .
+    |-- build.spec
+    |-- gen
+    |   |-- build.spec
+    |   `-- gen.c
+    |-- main
+    |   |-- a.c
+    |   `-- build.spec
+    |-- project.spec
+    `-- sub
+        |-- build.spec
+        |-- x.c
+        |-- x.h
+        `-- xgen.h.in
+    =========================================
+
+Let's built out-of-tree to make it clear.
+
+    =========================================
+    $ tmake --build=obj
+    Publish include/x.h
+    Publish bin/gen
+    Generate sub/xgen.h
+    Cc sub/x.o
+    Ar sub/libx.a
+    Publish lib/libx.a
+    Cc main/a.o
+    Link main/a
+    Built 9 target(s) in 0.18 seconds
+
+    $ tree obj
+    obj
+    |-- gen
+    |   `-- gen
+    |-- main
+    |   |-- a
+    |   `-- a.o
+    |-- publish
+    |   |-- bin
+    |   |   `-- gen
+    |   |-- include
+    |   |   `-- x.h
+    |   `-- lib
+    |       `-- libx.a
+    `-- sub
+        |-- libx.a
+        |-- x.o
+        `-- xgen.h
+    =========================================
+
+Now I am working in the 'main' directory, and I modify the generator
+
+    =========================================
+    $ cd main
+    $ touch ../gen/gen.c 
+    $ make
+    tmake: Entering directory `/Volumes/Development/tmake/test8'
+    Publish bin/gen
+    Generate sub/xgen.h
+    Cc sub/x.o
+    Ar sub/libx.a
+    Publish lib/libx.a
+    Link main/a
+    =========================================
+
+Looks good. Now what if the flags for the generator change?
+
+    =========================================
+    $ make HOSTCFLAGS=-DX=5
+    tmake: Entering directory `/Volumes/Development/tmake/test8'
+    Publish bin/gen
+    Generate sub/xgen.h
+    Cc sub/x.o
+    Ar sub/libx.a
+    Publish lib/libx.a
+    Link main/a
+    =========================================
+
+tmake also considers other factors when determining if a target is out-of-date.
+
+* changed target
+* list of dyndeps changes
+
+Build descriptions easy to write and easy to understand
+-------------------------------------------------------
+It should be possible for a developer unfamiliar with the project
+or build tool at a build description and have a reasonable idea
+of what is going on. This is quite subjective, however plain make clearly passes:
+
+XXX: come back to this
+
+Succinct build description
+--------------------------
+cmake is the canonical example of a verbose build description.
+waf also suffers from use of a scripting language which has a lot of syntax.
+A general purpose language is good, but it shouldn't get in the way when it isn't needed.
+
+Compare:
+
+    === tmake ===============================
+    CFlags -DTEST
+    Executable a a.c b.c [Glob test*.c]
+    =========================================
+
+    === cmake ===============================
+    CFlags -DTEST
+    Executable a a.c b.c [Glob test*.c]
+    cmake_minimum_required (VERSION 2.6)
+    project (a)
+
+    include_directories("${PROJECT_SOURCE_DIR}")
+
+    FILE(GLOB test_sources "test*.c")
+
+    add_definitions(-DTEST)
+    add_executable(a a.c b.c ${test_sources})
+    =========================================
+
+    === waf ===============================
+    def options(opt):
+            opt.load('compiler_c')
+
+    def configure(conf):
+            conf.load('compiler_c')
+
+    def build(bld):
+            bld.program(
+                source       = ['a.c b.c', bld.path.ant_glob('*.c')],
+                target       = 'a', 
+                includes     = ['.'], 
+                install_path = '${SOME_PATH}/bin', 
+                cflags       = ['-DTEST'], 
+        )
+    =========================================
+
+Readable output - to identify issues
+------------------------------------
+Mostly we want to ignore the build output.
+Just enough so we know what is happening, but warnings and errors need to be
+very clear.
+
+automake falls down badly here, but all the other tools do a fine job.
+
+Possible to do hard things
+--------------------------
+There needs to be enough flexibility in the underlying system such that
+(almost?) anything is possible without exponential complexity.
+
+automake and jam both fail here because their models are not flexible
+enough for some tasks. Try implementing shared libraries in Jam.
+
+Unobtrusive
+-----------
+The build sytem is a means to an end. This means that during the normal
+edit/build/test cycle the build system the build system should be unobtrusive.
+
+Generally this means being able to type:
+
+$ make
+$ make install
+$ make test
+$ make mytest
+$ make clean
+
+tmake generates tiny stub Makefiles which provide for a familiar environment.
+
+Build locally from any directory
+--------------------------------
+See the 'Reliable' example above. It must be possible to work in a local
+section of the tree, edit/build/test, while also making occasional changes
+to files in other parts of the project. It should not be necessary
+to either build the entire tree every time, or change directory when working locally.
+
+Build out-of-tree as an option
+------------------------------
+Avoid cluttering the source directory with build targets.
+Very useful when building multiple variants.
+
+'tmake --build' and 'tmake -C, -P'
+
+Include or support a configuration system (user + environment)
+--------------------------------------------------------------
+automake depends on autoconf, which works but is cumbersome (10,000 line configure scripts, m4 macros).
+
+waf and cmake have their own build-in configuration systems, which is good.
+
+jam has no configuration system.
+
+tmake can easily integrate with a build system such as autosetup (autoconf-like),
+or the Linux Kernel configuration system (kconfig), or another system.
+
+Minimal system dependencies/easy boostrap on new systems
+--------------------------------------------------------
+* automake puts minimal requirements on the end user, but the developer requirements are more onerous
+* cmake builds from a significant number of C++ source files
+* jam builds from a handful of C source files
+* waf requires python
+* tmake requires Tcl 8.5+ or can automatically build the included
+  bootstrap Jim Tcl shell (jimsh0.c) with only a C compiler
+
+Good cross compiling support
+----------------------------
+jam and waf have poor support for cross compilation.
+
+tmake cross compilation supports requires autosetup
+
+    =========================================
+    $ ./configure --host=arm-linux
+    ...
+    $ tmake
+    ...
+    =========================================
+
+Dynamic dependency scanning
+---------------------------
+compiler vs non-compiler scanners
+automake relies on gcc to do a good job
+
+Ability to find out why things happen, or not
+---------------------------------------------
+
+When things go wrong...
+
+waf seems to have good debugging facilities
+
+tmake -dg traces the build reasoning, including the dependency chain
+which led to the target being rebuilt.
+
+    =========================================
+    $ touch ../sub/x.c 
+    $ make O=-dg
+    [g] main/all --> main/a --> <lib>x --> sub/libx.a --> sub/x.o (older sub/x.c)
+    Cc sub/x.o
+    [g] main/all --> main/a --> <lib>x --> sub/libx.a (depend sub/x.o)
+    Ar sub/libx.a
+    [g] main/all --> main/a --> <lib>x (depend sub/libx.a)
+    Publish lib/libx.a
+    [g] main/all --> main/a (depend <lib>x)
+    Link main/a
+    Built 4 target(s) in 0.47 seconds
+    =========================================
+
+It is also possible to display the rules associate with targets
+which are built, including the original source location(s) where
+those rules were defined.
+
+    =========================================
+    $ make O=-dgr
+    [g] main/all --> main/a --> <lib>x --> sub/libx.a --> sub/x.o (older sub/x.c)
+    Cc sub/x.o
+    -- sub/x.o ---------------------------------------------------
+    @../sub/build.spec:4
+    sub/x.o: sub/x.c
+    dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+    local=sub
+      var C_FLAGS=-Ipublish/include -Isub -I../sub
+      var INCPATHS=publish/include sub ../sub
+            run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+    [g] main/all --> main/a --> <lib>x --> sub/libx.a (depend sub/x.o)
+    Ar sub/libx.a
+    -- sub/libx.a ------------------------------------------------
+    @../sub/build.spec:4
+    sub/libx.a: sub/x.o
+    local=sub
+            file delete $target
+            run $AR $ARFLAGS $target $inputs
+            run $RANLIB $target
+    [g] main/all --> main/a --> <lib>x (depend sub/libx.a)
+    Publish lib/libx.a
+    -- publish/lib/libx.a ----------------------------------------
+    @../sub/build.spec:4
+    publish/lib/libx.a: sub/libx.a
+    local=sub
+      var dest=lib/libx.a
+            file delete $target
+            exec ln $inputs $target
+    [g] main/all --> main/a (depend <lib>x)
+    Link main/a
+    -- main/a ----------------------------------------------------
+    @../main/build.spec:2
+    main/a: <lib>x main/a.o
+    local=main
+      var CCLD=cc
+      var LD_FLAGS=
+      var PROJLIBS=-Lpublish/lib -lx
+      var SYSLIBS=
+            run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
+    Built 4 target(s) in 0.10 seconds
+    =========================================
+
+When a build description logic error occurs (as opposed to a compiler error),
+the location of the problem is identified, along with the chain of dependencies
+which caused the problem. In the example below, line 4 of sub/build.spec indicates
+that it can't find sub/y.c which is needed to build sub/libx.a, required by main/a.
+
+    =========================================
+    $ make
+    ../sub/build.spec:4: Error: Don't know how to build sub/y.c: sub/y.o <= sub/libx.a <= <lib>x <= main/a <= main/all
+    *** Error: Targets failed to build
+    make: *** [_all] Error 1
+    =========================================
+
+Sometimes something can't be built and it isn't clear why not.
+One approach is to print the entire dependency tree (tmake -p), but this can be
+awkward for a large project. Often a better alternative is to search for a specific rule.
+
+    =========================================
+    $ make x.o
+    Error: Don't know how to build main/x.o
+    *** Error: Targets failed to build
+    make: *** [x.o] Error 1
+    =========================================
+
+Can't build x.o? Why not?
+
+    =========================================
+    $ make O=--find=x.o
+    -- sub/x.o ---------------------------------------------------
+    @../sub/build.spec:4
+    sub/x.o: sub/x.c
+    dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+    local=sub
+      var C_FLAGS=-Ipublish/include -Isub -I../sub
+      var INCPATHS=publish/include sub ../sub
+            run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+    =========================================
+
+Ahh, because x.o is 'sub/x.o'
+
+    =========================================
+    $ make /sub/x.o
+    Cc sub/x.o
+    Built 1 target(s) in 0.51 seconds
+    =========================================
+
+The following additional debug "channels" are available
+
+    =========================================
+    $ make O=-d?
+    Different debugging can be enabled with -d...
+    The different debuggin categories are as follows:
+
+            *       Enable all debug
+            ?       Display help for debug types
+            d       Dynamic dependencies
+            D       Dynamic dependencies (ignored)
+            n       Reasons for targets NOT built
+            b       Reasons for targets BUILT
+            B       Reasons for targets BUILT - changed commands or targets
+            r       Display rules when triggered
+            t       Rules being replaced with 'target -replace'
+            g       Depencency graph for each target
+            p       Print rules while parsing
+            m       Miscellaneous (locating and parsing of files)
+            c       Configuration expressions via ifconfig
+            C       Cache handling
+            T       Timing
+            v       Variable definition
+    =========================================
+
+The most useful are generally 'tmake -db' to see why targets were built,
+'tmake -dn' to see why targets were *not* built, and 'tmake -dd' to example
+dynamic dependencies.
