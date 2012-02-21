@@ -12,6 +12,7 @@ that PATH and determine if something is really executable.
 * change Clean to add-clean and create Clean and DistClean for external consumption
 * It is hard to chain (e.g.) Objects, Link, Executable if the input is local but the result is global
 ** make clean/distclean should not require configure to be run
+   - currently this is an ugly hack to check for known cleaning targets: clean, distclean, clean-orphans
 ** make distclean should remove stub Makefiles (or else tmake --clean should do this)
    - These should become orphan targets
 * Should have SetDefaultTarget and it should default to 'all'
@@ -19,6 +20,20 @@ that PATH and determine if something is really executable.
 * Building in a subdir does not build targets in subdirs of that subdir.
   e.g. subdir/clean does not invoke subdir/unit/clean
   maybe this can be done by depending subdir/clean on subdir/unit/clean instead of clean on subdir/unit/clean
+
+Agressively cleaning orphans
+----------------------------
+Leaving orphan files in the tree can cause unwanted behaviour.
+For example, a shared library may now be created as an archive library,
+but the linker may still pick up the shared library in the tree.
+
+To address this, orphans are cleaned automatically before any non-cleaning
+target is run.
+
+There is one consequence of this. If a target was previously generated but
+is now intended to be a source file, deleting the orphan is undesirable.
+I will consider moving orphans to .trash instead of deleting the directly.
+Then make clean can empty .trash
 
 Which directory as cwd?
 -----------------------
@@ -43,6 +58,7 @@ In order to use the cache, we need:
   so we don't need to care if the targets or incpaths change
 
 When to discard the cache results?
+- when the target becomes an orphan
 
 Reloading build definitions
 ---------------------------

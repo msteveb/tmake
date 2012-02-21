@@ -13,18 +13,19 @@ set tmake(version) 0.2
 set tmake(cacheversion) 3
 set tmake(debug) 0
 
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
 set tmake(debughelp) {
 	* "Enable all debug"
 	? "Display help for debug types"
 	d "Dynamic dependencies"
-	D "Dynamic dependencies (ignored)"
+	D "Dynamic dependencies (detailed)"
 	n "Reasons for targets NOT built"
 	b "Reasons for targets BUILT"
 	B "Reasons for targets BUILT - changed commands or targets"
 	r "Display rules when triggered"
 	t "Rules being replaced with 'target -replace'"
 	g "Depencency graph for each target"
+	G "List goals (targets) as they are attempted"
 	p "Print rules while parsing"
 	m "Miscellaneous (locating and parsing of files)"
 	c "Configuration expressions via ifconfig"
@@ -54,10 +55,7 @@ set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0 
 
 array set tmakecache $tmake(emptycache)
 
-# Should these really be here?
-set tmake(testruncount) 0
-set tmake(testpasscount) 0
-
+set tmake(defaulttarget) all
 set tmake(loadedprojectspec) 0
 set tmake(current) {}
 set tmake(rules) {}
@@ -259,12 +257,6 @@ proc make {argv} {
 
 	make-parse-options $argv
 
-	if {[llength $tmake(cmdline)]} {
-		set targets $tmake(cmdline)
-	} else {
-		set targets all
-	}
-
 	# If topsrcdir is already set, the current dir must be the topbuilddir
 	if {[info exists tmake(topsrcdir)]} {
 		if {[info exists tmake(build)]} {
@@ -351,7 +343,7 @@ proc make {argv} {
 
 	# XXX: Is there a better way to determine if we are cleaning?
 	# target must be a single cleaning target
-	if {$targets in {clean distclean clean-orphans mrproper}} {
+	if {$tmake(cmdline) in {clean distclean clean-orphans}} {
 		set tmake(cleaning) 1
 	}
 
@@ -412,9 +404,12 @@ proc make {argv} {
 		tmake-exit 0
 	}
 
-	if {[llength $targets] == 0} {
-		set targets all
+	if {[llength $tmake(cmdline)]} {
+		set targets $tmake(cmdline)
+	} else {
+		set targets $tmake(defaulttarget)
 	}
+	dputs G "Build [join $targets]"
 
 	# Always discard orphans before building anything
 	set orphans [get-orphan-targets]
@@ -1687,6 +1682,7 @@ proc run-do {__vardict __script} {
 # ==================================================================
 
 proc build {target} {
+	dputs G "build $target"
 	global tmake tmakecache
 	if {![is-target? $target]} {
 		if {[file-src-exists $target]} {

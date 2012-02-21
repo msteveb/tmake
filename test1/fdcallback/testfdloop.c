@@ -6,16 +6,16 @@
 
 static int done = 0;
 
-static void timer_200ms_callback(struct timerqueue_t *tq, void *cookie)
+static void timer_20ms_callback(struct timerqueue_t *tq, void *cookie)
 {
 	putchar('.');
 	fflush(stdout);
 
 	/* And reschedule */
-	timer_queue_add(tq, 200, timer_200ms_callback, cookie);
+	timer_queue_add(tq, 20, timer_20ms_callback, cookie);
 }
 
-static void timer_1s_callback(struct timerqueue_t *tq, void *cookie)
+static void timer_100ms_callback(struct timerqueue_t *tq, void *cookie)
 {
 	static int count;
 
@@ -27,7 +27,7 @@ static void timer_1s_callback(struct timerqueue_t *tq, void *cookie)
 	}
 	else {
 		/* And reschedule */
-		timer_queue_add(tq, 1000, timer_1s_callback, cookie);
+		timer_queue_add(tq, 100, timer_100ms_callback, cookie);
 	}
 }
 
@@ -47,11 +47,11 @@ int main(int argc, char *argv[])
 	struct timerqueue_t *tq = timer_queue_alloc();
 
 	/* Add some timer tasks and some fd tasks */
-	timer_queue_add(tq, 200, timer_200ms_callback, "200ms timer");
+	timer_queue_add(tq, 20, timer_20ms_callback, "20ms timer");
 	add_callback(fileno(stdin), stdin_read, NULL, "reader", "stdin reader");
 
 	/* We want this one to fire immediately, so call it. It will re-add itself */
-	timer_1s_callback(tq, "1s timer");
+	timer_100ms_callback(tq, "100ms timer");
 
 	while (!done) {
 		int need_timeout = !timer_queue_get_timeout(tq, &timeout);
