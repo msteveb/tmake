@@ -61,6 +61,7 @@ set tmake(current) {}
 set tmake(rules) {}
 set tmake(aliases) {}
 set tmake(rulestatus) {}
+set tmake(targetstatus) {}
 set tmake(targets) {}
 set tmake(numtargets) 0
 set tmake(subdirs) {}
@@ -409,7 +410,6 @@ proc make {argv} {
 	} else {
 		set targets $tmake(defaulttarget)
 	}
-	dputs G "Build [join $targets]"
 
 	# Always discard orphans before building anything
 	set orphans [get-orphan-targets]
@@ -1206,11 +1206,11 @@ proc update-rule {ruledict} {
 }
 
 proc set-rule-status {ruletarget status} {
-	dict set ::tmake(rulestatus) $ruletarget status $status
+	dict set ::tmake(rulestatus) $ruletarget $status
 }
 
 proc get-rule-status {ruletarget} {
-	dict get $::tmake(rulestatus) $ruletarget status
+	dict get $::tmake(rulestatus) $ruletarget
 }
 
 proc show-this-rule {} {
@@ -1682,15 +1682,23 @@ proc run-do {__vardict __script} {
 # ==================================================================
 
 proc build {target} {
-	dputs G "build $target"
 	global tmake tmakecache
 	if {![is-target? $target]} {
-		if {[file-src-exists $target]} {
-			dputs n "$target is not a target, but exists"
-			return 0
+		# Cache the result here, mostly to avoid excess messages
+		if {[dict exists $tmake(targetstatus) $target]} {
+			set ret [dict get $tmake(targetstatus) $target]
+		} else {
+			dputs G "build $target"
+			if {[file-src-exists $target]} {
+				dputs n "$target is not a target, but exists"
+				set ret 0
+			} else {
+				dputs b "$target is not a target and does not exist"
+				set ret -1
+			}
+			dict set tmake(targetstatus) $target $ret
 		}
-		dputs b "$target is not a target and does not exist"
-		return -1
+		return $ret
 	}
 
 	set ruletarget [get-rule-target $target]
@@ -1712,6 +1720,7 @@ proc build {target} {
 			return -1
 		}
 		unknown {
+			dputs G "build $target"
 		}
 		default {
 			error "Bad status: $status"
@@ -2208,7 +2217,7 @@ if {[catch {make $argv} msg]} {
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
 	if {!$tmake(quiet)} {
-		pputs "Built $tmake(numtargets) target(s) in [format %.2f $elapsed] seconds"
+		pputs "Built $tmake(numtargets) of [dict size $tmake(targets)] target(s) in [format %.2f $elapsed] seconds"
 	}
 }
 if {$tmake(exitcode)} {
