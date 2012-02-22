@@ -566,6 +566,21 @@ proc make-local {args} {
 	prefix [local-prefix] $args
 }
 
+proc make-local-dirs {args} {
+	lmap dir $args {
+		file-join [local-dir] $dir
+	}
+}
+
+proc make-unlocal {args} {
+	set result {}
+	set striplen [string length [local-prefix]]
+	foreach name $args {
+		lappend result [string range $name $striplen end]
+	}
+	return $result
+}
+
 proc make-prefix {dir} {
 	if {$dir eq "."} {
 		return ""
@@ -750,7 +765,6 @@ proc use {args} {
 			dev-error "use: No such module: $m"
 		}
 		uplevel #0 [list source $source]
-		#lappend ::automf(makefiledeps) $source
 	}
 }
 
