@@ -744,6 +744,7 @@ proc install-file {target source flags} {
 	file copy -force $source $target
 	if {"bin" in $flags} { chmodx-file $target }
 	if {"strip" in $flags} { strip-file $target }
+	if {"striplib" in $flags} { striplib-file $target }
 }
 
 proc chmodx-file {target} {
@@ -773,9 +774,6 @@ proc InstallFile {dest src {flags {}}} {
 	}
 	target $destfile -nocache -inputs $src -vars dest $dest flags $flags -msg {note "Install $dest"} -do {
 		install-file $target $inputs $flags
-		if {"bin" in $flags} { chmodx-file $target }
-		if {"strip" in $flags} { strip-file $target }
-		if {"striplib" in $flags} { striplib-file $target }
 	}
 	target install -depends $destfile
 
