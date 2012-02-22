@@ -44,6 +44,18 @@ if {$tmakecompat(istcl)} {
 	proc alias {new old args} {
 		interp alias {} $new {} $old {*}$args
 	}
+	# Simple single-list lmap with no support for break or continue
+	proc lmap {var list script} {
+		set result {}
+		upvar $var i
+		foreach i $list {
+			lappend result [uplevel 1 $script]
+		}
+		return $result
+	}
+	proc lunique {list} {
+		lsort -unique $list
+	}
 	proc exec-save-stderr {args} {
 		set rc [catch {exec >@stdout {*}$args} msg opts]
 		if {$rc == 0} {
@@ -65,20 +77,26 @@ if {$tmakecompat(istcl)} {
 			set tcl_platform(pathSeparator) :
 		}
 	}
-} elseif {$tmakecompat(iswin)} {
-	# On Windows, backslash convert all environment variables
-	# (Assume that Tcl does this for us)
-	proc getenv {name args} {
-		string map {\\ /} [env $name {*}$args]
-	}
-	proc exec-save-stderr {args} {
-		exec >@stdout {*}$args
-	}
 } else {
-	# Jim on unix is simple
-	alias getenv env
+	if {$tmakecompat(iswin)} {
+		# On Windows, backslash convert all environment variables
+		# (Assume that Tcl does this for us)
+		proc getenv {name args} {
+			string map {\\ /} [env $name {*}$args]
+		}
+	} else {
+		# Jim on unix is simple
+		alias getenv env
+	}
 	proc exec-save-stderr {args} {
 		exec >@stdout {*}$args
+	}
+	proc lunique {list} {
+		set a {}
+		foreach i $list {
+			set a($i) 1
+		}
+		lsort [dict keys $a]
 	}
 }
 
@@ -197,8 +215,8 @@ proc error-location {msg} {
 # warning-location is like error-location except
 # it does not show a stack trace, even when debugging is enabled
 #
-proc warning-location {msg} {
-	set loc [find-source-location]
+proc warning-location {msg {pattern *.spec}} {
+	set loc [find-source-location $pattern]
 	if {$loc ne "unknown"} {
 		return "$loc: $msg"
 	}
@@ -210,7 +228,7 @@ proc warning-location {msg} {
 # Returns "unknown" if not known.
 #
 proc find-source-location {{pattern *.spec}} {
-	# Search back through the stack for the first loca in a .spec file
+	# Search back through the stack for the first location in a .spec file
 	for {set i 1} {$i < [info level]} {incr i} {
 		if {$::tmakecompat(istcl)} {
 			array set info [info frame -$i]
