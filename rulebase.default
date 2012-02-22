@@ -48,17 +48,25 @@ define SYSLIBS ""
 
 # Default header pattern for C and C++ dynamic dependencies
 #
-define HDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
+# All globals variables for rulebase.default are kept in the $::tmakedrb array
+set tmakedrb(testruncount) 0
+set tmakedrb(testpasscount) 0
+set tmakedrb(testid) 0
+set tmakedrb(setuptestenv) 0
+set tmakedrb(objmap) {}
 
-set tmake(testruncount) 0
-set tmake(testpasscount) 0
+# ==================================================================
+# BUILT-IN Object Rules
+# ==================================================================
+
+define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 proc ObjectRule.c {obj src} {
 	# Capture the current value of C_FLAGS and INCPATHS
 	target $obj -inputs $src -msg {note Cc $target} -getvars C_FLAGS INCPATHS -do {
 		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 	} -dyndep {
-		header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 	}
 }
 
@@ -67,7 +75,7 @@ proc ObjectRule.cpp {obj src} {
 	target $obj -inputs $src -msg {note C++ $target} -getvars CXX_FLAGS INCPATHS -do {
 		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
 	} -dyndep {
-		header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 	}
 }
 
@@ -315,18 +323,45 @@ proc Publish {args} {
 	}
 }
 
+# Expands a list of objects which may contain library aliases of the form <lib>$basename
+# which are then expanded to the list of objects for the library
+# The list of objects is created by the ArchiveLib rule
+proc expand-objects {objs} {
+	set result {}
+	foreach obj $objs {
+		if {[string match <lib>* $obj]} {
+			if {![dict exists ::tmakedrb(objmap) $obj]} {
+				build-error "Error: Unable to find objects for unknown lib $obj"
+				return -code break
+			}
+			# XXX: How to guarantee that $SH_CFLAGS are set on these objects?
+			# (Either directly via ObjectCFlags or with a top-level CFlags)
+			#
+			lappend result {*}[dict get $::tmakedrb(objmap) $obj]
+		} else {
+			lappend result $obj
+		}
+	}
+	return $result
+}
+
 proc ArchiveLib {args} {
 	show-this-rule
 	getopt {--publish --install: basename args} args
 
 	set libname lib$basename.a
+	set libalias <lib>$basename
 
 	set target [make-local $libname]
-	target $target -inputs {*}[Objects {*}[join $args]] -msg {note Ar $target} -do {
+	set objects [Objects {*}[join $args]]
+	target $target -inputs {*}$objects -msg {note Ar $target} -do {
 		file delete $target
-		run $AR $ARFLAGS $target $inputs
+		run $AR $ARFLAGS $target {*}[expand-objects $inputs]
 		run $RANLIB $target
 	}
+	# Used to make expand-objects work
+	dict set ::tmakedrb(objmap) $libalias $objects
+
 	# Note: Libraries are not built by default, but are added to a local 'libs' rule
 	Phony libs $target
 	Clean $libname
@@ -339,7 +374,7 @@ proc ArchiveLib {args} {
 		Publish lib $libname
 
 		# Alias to make UseLibs work
-		targetalias <lib>$basename [get-define PUBLISH]/lib/$libname
+		targetalias $libalias [get-define PUBLISH]/lib/$libname
 	}
 }
 
@@ -454,16 +489,6 @@ proc SharedObjectLink {target args} {
 	Clean $target
 }
 
-proc check-no-archive-libs {target args} {
-	foreach i $args {
-		set realname [map-alias $i]
-		if {[string match *.a $realname]} {
-			build-error "Error: Shared Lib $target may not link against Archive Lib $realname"
-			return -code break
-		}
-	}
-}
-
 # Link a shared library from objects
 proc SharedLibLink {target args} {
 	show-this-rule
@@ -481,8 +506,7 @@ proc SharedLibLink {target args} {
 	#      Also, is LinkFlags/LD_FLAGS also required?
 
 	target [make-local $target] -inputs {*}$args -depends [get-define PROJDEPS] -msg {note SharedLib $target} -getvars CCLD PROJLIBS SYSLIBS -do {
-		check-no-archive-libs $target {*}$depends
-		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname $inputs $PROJLIBS $SYSLIBS
+		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
 	} -vars setsoname $setsoname
 	Clean $target
 }
@@ -496,7 +520,11 @@ proc Objects {args} {
 	show-this-rule
 	set objs {}
 	foreach src $args {
-		lappend objs [Object [change-ext .o $src] $src]
+		if {[string match <lib>* $src]} {
+			lappend objs $src
+		} else {
+			lappend objs [Object [change-ext .o $src] $src]
+		}
 	}
 	return $objs
 }
@@ -626,8 +654,9 @@ proc PublishIncludes {args} {
 }
 
 proc setup-test-env {} {
-	# Set up LD_LIBRARY_PATH for tests
-	if {[incr ::tmake(setuptestenv)] == 1} {
+	# Set up LD_LIBRARY_PATH (or equivalent) for tests
+	if {$::tmakedrb(setuptestenv) == 0} {
+		incr ::tmakedrb(setuptestenv)
 		set ldlibpath [get-define LD_LIBRARY_PATH]
 		if {$ldlibpath ne ""} {
 			set path [getenv $ldlibpath ""]
@@ -643,7 +672,7 @@ proc Test {args} {
 	show-this-rule
 
 	getopt {--interp: --chdir --quiet command args} args
-	set testid test#[incr ::tmake(testid)]
+	set testid test#[incr ::tmakedrb(testid)]
 	set depends {}
 	set command $command
 	set localcommand [make-local $command]
@@ -672,9 +701,9 @@ proc Test {args} {
 
 	target [make-local $testid] -phony -vars testcommand $testcommand {*}$opts -do {
 		setup-test-env
-		incr ::tmake(testruncount)
+		incr ::tmakedrb(testruncount)
 		run $testcommand
-		incr ::tmake(testpasscount)
+		incr ::tmakedrb(testpasscount)
 	}
 	Phony test [make-local $testid]
 
@@ -909,11 +938,15 @@ proc DefaultTarget {name} {
 # XXX: Only useful for simple cases of building a host executable from C sources
 # 
 proc HostExecutable {target args} {
-	target [make-local $target] -inputs {*}[make-local {*}$args] -getvars HOSTCFLAGS -do {
+	set localtarget [make-local $target]
+	target $localtarget -inputs {*}[make-local {*}$args] -getvars HOSTCFLAGS -do {
 		run $CC_FOR_BUILD $HOSTCFLAGS -o $target $inputs
+	} -dyndep {
+		header-scan-regexp-recursive $local "" $CHDRPATTERN
 	}
 	Publish bin $target
 	Clean $target
+	return $localtarget
 }
 
 proc add-publish-include {} {
