@@ -49,11 +49,13 @@ define SYSLIBS ""
 # Default header pattern for C and C++ dynamic dependencies
 #
 # All globals variables for rulebase.default are kept in the $::tmakedrb array
-set tmakedrb(testruncount) 0
-set tmakedrb(testpasscount) 0
-set tmakedrb(testid) 0
-set tmakedrb(setuptestenv) 0
-set tmakedrb(objmap) {}
+array set ::tmakedrb {
+	testruncount 0
+	testpasscount 0
+	testid 0
+	setuptestenv 0
+	objmap {}
+}
 
 # ==================================================================
 # BUILT-IN Object Rules
