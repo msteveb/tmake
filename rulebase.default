@@ -220,6 +220,30 @@ proc Glob {args} {
 	lsort $result
 }
 
+proc glob-recursive {localdirs pattern} {
+	set result {}
+	#puts "glob-recursive localdirs=$localdirs, pattern=$pattern"
+	foreach dir $localdirs {
+		set globdir [file-src $dir]
+		foreach path [glob -nocomplain $globdir/*] {
+			set srcpath [file-join $dir [file tail $path]]
+			#puts "$dir + [file tail $path] => $srcpath"
+			if {[file isdir $path]} {
+				lappend result {*}[glob-recursive $srcpath $pattern]
+			} elseif {[string match $pattern [file tail $path]]} {
+				lappend result [make-unlocal $srcpath]
+			}
+		}
+	}
+	return $result
+}
+
+# Recursively find all source files matching $pattern, starting in the given directories
+proc GlobRecursive {dirs pattern} {
+	#puts "GlobRecursive dirs=$dirs, pattern=$pattern"
+	lsort [glob-recursive [make-local-dirs {*}$dirs] $pattern]
+}
+
 # ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================
