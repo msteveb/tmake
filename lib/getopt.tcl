@@ -4,13 +4,14 @@
 # Simple getopt module
 
 # optdef looks something like:
-# --test --install: dest source args
+# --test --install: --excludes:: dest source args
 #
 # Sets variables in the caller's scope with the names given in optdef, except
 # any remaining args are left in the original argv
 #
 # If --test is set, then test=1, otherwise test=0
-# If --install is specified, $install is set, otherwise it left unset
+# If --install is specified, it is stored in $install, otherwise $install is left unset
+# If --excludes is specified (multiple times, each value is stored in the list $install
 
 proc getopt {optdef argvname} {
 	upvar $argvname argv
@@ -20,12 +21,22 @@ proc getopt {optdef argvname} {
 	set haveargs 0
 	set named {}
 	foreach i $optdef {
-		if {[regexp {^--([^:]*)(:)?$} $i -> name colon]} {
-			if {$colon eq ":"} {
-				set valopts($name) 1
-				#uplevel 1 unset -nocomplain $name
-			} else {
-				set boolopts($name) 0
+		if {[regexp {^--([^:]*)(:*)$} $i -> name colon]} {
+			#puts "$i -> $name, [string length $colon]"
+			switch [string length $colon] {
+				0 {
+					set boolopts($name) 0
+				}
+				1 {
+					set valopts($name) 1
+				}
+				2 {
+					set valopts($name) 2
+					uplevel 1 [list set $name {}]
+				}
+				default {
+					dev-error "Bad getopt specification: $i"
+				}
 			}
 			continue
 		}
@@ -60,7 +71,15 @@ proc getopt {optdef argvname} {
 				}
 				dev-error "Unknown option: --$name"
 			}
-			uplevel 1 set $name $value
+			if {$valopts($name) == 1} {
+				if {[info exists seen($name)]} {
+					dev-error "Option --$name given more than once"
+				}
+				incr seen($name)
+				uplevel 1 [list set $name $value]
+			} else {
+				uplevel 1 [list lappend $name $value]
+			}
 		} elseif {[regexp {^--(.*)} $arg -> name]} {
 			# --abc
 			if {![info exists boolopts($name)]} {
