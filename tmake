@@ -554,6 +554,14 @@ proc local-prefix {} {
 	return $::tmake(prefix)
 }
 
+proc local-src-prefix {} {
+	if {$::tmake(topsrcdir) eq "."} {
+		return $::tmake(prefix)
+	} else {
+		return $::tmake(topsrcdir)/$::tmake(prefix)
+	}
+}
+
 proc local-dir {} {
 	return $::tmake(localdir)
 }
@@ -572,13 +580,20 @@ proc make-local-dirs {args} {
 	}
 }
 
+# Reverses make-local
 proc make-unlocal {args} {
-	set result {}
 	set striplen [string length [local-prefix]]
-	foreach name $args {
-		lappend result [string range $name $striplen end]
+	lmap name $args {
+		string range $name $striplen end
 	}
-	return $result
+}
+
+# Reverses make-local-src
+proc make-unlocal-src {args} {
+	set striplen [string length [local-src-prefix]]
+	lmap name $args {
+		string range $name $striplen end
+	}
 }
 
 proc make-prefix {dir} {
@@ -590,7 +605,7 @@ proc make-prefix {dir} {
 }
 
 proc make-local-src {args} {
-	prefix $::tmake(topsrcdir)/[local-prefix] $args
+	prefix [local-src-prefix] $args
 }
 
 proc invoke-spec-file {filename} {

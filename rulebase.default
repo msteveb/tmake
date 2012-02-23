@@ -3,6 +3,8 @@
 #
 # They can be replaced if necessary
 
+use getopt glob
+
 # ==================================================================
 # Default variable settings and rules
 # ==================================================================
@@ -144,117 +146,6 @@ proc BuildSpecEpilog {} {
 }
 
 # ==================================================================
-# HELPERS
-# ==================================================================
-proc expand-wildcard-braces {arglist} {
-	set result {}
-	foreach pattern $arglist {
-		if {[string match {*{*}*} $pattern]} {
-			regexp {^(.*)\{(.*)\}(.*)$} $pattern -> before alts after
-			foreach i [split $alts ,] {
-				lappend result $before$i$after
-			}
-		} else {
-			lappend result $pattern
-		}
-	}
-	#puts "$arglist => $result"
-	return $result
-}
-
-# Returns a list of pairs: src dest
-# The src is a local path, while the dest is relative.
-# so ssl/*.h might return: {axtls/ssl/file.h ssl/file.h}
-#
-proc expand-wildcards {arglist {warn 0} {keepdir 1}} {
-	set pairs {}
-	foreach i $arglist {
-		if {[string match {*[{}*?]*} $i]} {
-			set count 0
-			foreach ii [expand-wildcard-braces $i] {
-				# ii=ssl/*.h
-				# destdir=ssl
-				set destdir [file dirname $ii]
-				# srcdir=axtls/ssl
-				if {$destdir eq "."} {
-					set srcdir [local-dir]
-				} else {
-					set srcdir [make-local $destdir]
-				}
-				# globdir=../axtls/ssl
-				set globdir [file-src $srcdir]
-				if {![file isdir $globdir]} {
-					puts "Warning: $globdir does not exist"
-					continue
-				}
-				# pattern=*.h
-				set pattern [file tail $ii]
-				foreach j [readdir $globdir] {
-					if {[string match $pattern $j]} {
-						incr count
-						# Need to return axtls/ssl/crypto.h ssl/crypto.h
-						if {$keepdir} {
-							lappend pairs [file-join $srcdir $j] [file-join $destdir $j]
-						} else {
-							lappend pairs [file-join $srcdir $j] [file tail $j]
-						}
-					}
-				}
-			}
-			if {$warn && $count == 0} {
-				puts "Warning: No matches for [make-local $i]"
-			}
-		} elseif {[string match *=* $i]} {
-			lassign [split $i =] target src
-			lappend pairs [make-local $src] $target
-		} elseif {$i ne ""} {
-			if {$keepdir} {
-				lappend pairs [make-local $i] $i
-			} else {
-				lappend pairs [make-local $i] [file tail $i]
-			}
-		}
-	}
-	#puts "expand-wildcards [make-local $arglist] => $pairs"
-	return $pairs
-}
-
-proc Glob {args} {
-	#getopt {--tail args} args
-	set result {}
-	foreach pattern $args {
-		foreach {i j} [expand-wildcards $pattern] {
-			lappend result $j
-		}
-	}
-	lsort $result
-}
-
-proc glob-recursive {localdirs pattern} {
-	set result {}
-	#puts "glob-recursive localdirs=$localdirs, pattern=$pattern"
-	foreach dir $localdirs {
-		set globdir [file-src $dir]
-		foreach path [glob -nocomplain $globdir/*] {
-			set srcpath [file-join $dir [file tail $path]]
-			#puts "$dir + [file tail $path] => $srcpath"
-			if {[file isdir $path]} {
-				lappend result {*}[glob-recursive $srcpath $pattern]
-			} elseif {[string match $pattern [file tail $path]]} {
-				lappend result [make-unlocal $srcpath]
-			}
-		}
-	}
-	return $result
-}
-
-# Recursively find all source files matching $pattern, starting in the given directories
-proc GlobRecursive {dirs pattern} {
-	#puts "GlobRecursive dirs=$dirs, pattern=$pattern"
-	lsort [glob-recursive [make-local-dirs {*}$dirs] $pattern]
-}
-
-# ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================
 
@@ -265,8 +156,11 @@ proc Executable {args} {
 		# Revisit: --publish=newname?
 		Publish bin $target
 	}
+	# Flatten and glob inputs
+	set objects [Objects [Glob --all [join $args]]]
+
 	set localtarget [make-local $target]
-	Link $target {*}[Objects {*}[join $args]] {*}[get-define LOCAL_LIBS]
+	Link $target {*}$objects [get-define LOCAL_LIBS]
 	if {[info exists install]} {
 		set flags bin
 		if {$strip} {
@@ -284,6 +178,8 @@ proc Executable {args} {
 # Link an executable from objects
 proc Link {target args} {
 	show-this-rule
+
+	set args [join $args]
 
 	define? CCLD [get-define CC]
 
@@ -316,12 +212,41 @@ proc publish-shared-lib {names source} {
 	add-clean [make-local distclean] $published
 }
 
+proc expand-filespec {dir filelist keepdir} {
+	set result {}
+
+	foreach spec $filelist {
+		if {$spec eq ""} {
+			continue
+		}
+		if {[string match *=* $spec]} {
+			lassign [split $spec =] target src
+			lappend result [file-join $dir $target] [make-local $src]
+			continue
+		}
+		if {[string match {*[{}*?]*} $spec]} {
+			set srcs [Glob --all $spec]
+		} else {
+			set srcs $spec
+		}
+		foreach src $srcs {
+			if {$keepdir} {
+				lappend result [file-join $dir $src] [make-local $src]
+			} else {
+				lappend result [file-join $dir [file tail $src]] [make-local $src]
+			}
+		}
+	}
+	#puts "expand-filespec: $filelist => $result"
+	return $result
+}
+
 proc Publish {args} {
 	show-this-rule
 	getopt {--keepdir dir args} args
 
-	foreach {src dst} [expand-wildcards $args 1 $keepdir] {
-		publish-one-file $dir/$dst $src
+	foreach {dest src} [expand-filespec $dir $args $keepdir] {
+		publish-one-file $dest $src
 	}
 }
 
@@ -332,7 +257,7 @@ proc expand-objects {objs} {
 	set result {}
 	foreach obj $objs {
 		if {[string match <lib>* $obj]} {
-			if {![dict exists ::tmakedrb(objmap) $obj]} {
+			if {![dict exists $::tmakedrb(objmap) $obj]} {
 				build-error "Error: Unable to find objects for unknown lib $obj"
 				return -code break
 			}
@@ -351,18 +276,18 @@ proc ArchiveLib {args} {
 	show-this-rule
 	getopt {--publish --install: basename args} args
 
+	# Flatten and glob inputs
+	set objects [Objects [Glob --all [join $args]]]
+
 	set libname lib$basename.a
 	set libalias <lib>$basename
 
 	set target [make-local $libname]
-	set objects [Objects {*}[join $args]]
 	target $target -inputs {*}$objects -msg {note Ar $target} -do {
 		file delete $target
 		run $AR $ARFLAGS $target {*}[expand-objects $inputs]
 		run $RANLIB $target
 	}
-	# Used to make expand-objects work
-	dict set ::tmakedrb(objmap) $libalias $objects
 
 	# Note: Libraries are not built by default, but are added to a local 'libs' rule
 	Phony libs $target
@@ -377,6 +302,9 @@ proc ArchiveLib {args} {
 
 		# Alias to make UseLibs work
 		targetalias $libalias [get-define PUBLISH]/lib/$libname
+
+		# Used to make expand-objects work
+		dict set ::tmakedrb(objmap) $libalias $objects
 	}
 }
 
@@ -419,13 +347,17 @@ proc SharedLib {args} {
 		}
 	}
 
+	# Flatten and glob inputs
+	set objects [Objects [Glob --all [join $args]]]
+
 	set locallibname [make-local $libname]
 	set srcs [join $args]
+	set libalias <lib>$basename
 	ObjectCFlags $srcs [get-define SH_CFLAGS]
 
 	# Note: We won't link against local archive libs (LOCAL_LIBS) since they have not been compiled -fpic
 	# The SharedLibLink rule includes a run-time check for linking against archive libs
-	SharedLibLink $libname {*}[Objects {*}$srcs]
+	SharedLibLink $libname {*}$objects
 
 	# Only the fully versioned named is built in the local dir
 	Phony libs $locallibname
@@ -438,7 +370,10 @@ proc SharedLib {args} {
 		# Publish along with the various symlinks
 		publish-shared-lib $names $locallibname
 		# Alias to make UseLibs work
-		targetalias <lib>$basename [get-define PUBLISH]/lib/$libname
+		targetalias $libalias [get-define PUBLISH]/lib/$libname
+
+		# Used to make expand-objects work
+		dict set ::tmakedrb(objmap) $libalias $objects
 
 		# Local executables only link against this lib if it is published
 		# The reason is that it gets difficult to manage LD_LIBRARY_PATH or equalivalent.
@@ -467,11 +402,11 @@ proc SharedObject {args} {
 
 	getopt {--install: sharedobj args} args
 
-	set srcs [join $args]
+	set args [join $args]
 
 	# Must build objects with -fpic, etc.
-	ObjectCFlags $srcs [get-define SHOBJ_CFLAGS]
-	SharedObjectLink $sharedobj {*}[Objects {*}$srcs]
+	ObjectCFlags $args [get-define SHOBJ_CFLAGS]
+	SharedObjectLink $sharedobj [Objects $args]
 
 	set sharedobj [make-local $sharedobj]
 
@@ -484,6 +419,9 @@ proc SharedObject {args} {
 # Link a dynamically loadable shared object from objects
 proc SharedObjectLink {target args} {
 	show-this-rule
+
+	set args [join $args]
+
 	# Note that we only link against local shared libs, not archive libs
 	target [make-local $target] -inputs {*}$args -msg {note SharedObject $target} -do {
 		run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS
@@ -494,6 +432,8 @@ proc SharedObjectLink {target args} {
 # Link a shared library from objects
 proc SharedLibLink {target args} {
 	show-this-rule
+
+	set args [join $args]
 
 	set setsoname {}
 	if {[get-define SH_SOPREFIX ""] ne ""} {
@@ -520,6 +460,7 @@ proc SharedLibLink {target args} {
 # and simply returns them
 proc Objects {args} {
 	show-this-rule
+	set args [join $args]
 	set objs {}
 	foreach src $args {
 		if {[string match <lib>* $src]} {
@@ -648,10 +589,11 @@ proc UseSystemLibs {args} {
 }
 
 proc PublishIncludes {args} {
+	show-this-rule
 	getopt {--keepdir args} args
 
-	foreach {src dst} [expand-wildcards $args 1 $keepdir] {
-		publish-one-file include/$dst $src
+	foreach {dest src} [expand-filespec include $args $keepdir] {
+		publish-one-file $dest $src
 	}
 }
 
@@ -794,9 +736,9 @@ proc Install {args} {
 	}
 
 	set srcs {}
-	foreach {src dst} [expand-wildcards $args 1 $keepdir] {
+	foreach {dest src} [expand-filespec $destdir $args $keepdir] {
 		lappend srcs $src
-		InstallFile [file-join $destdir $dst] $src $flags
+		InstallFile $dest $src $flags
 	}
 	return $srcs
 }
@@ -985,4 +927,3 @@ Phony clean-orphans -do {
 	clean-files [get-orphan-targets] "orphan targets"
 	discard-orphan-targets
 }
-

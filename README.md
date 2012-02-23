@@ -259,6 +259,12 @@ Makefile wrapper
 ----------------
 - Created by rulebase.default in Prolog/Epilog
 
+Selecting files by globbing
+---------------------------
+Glob, Glob --recursive, etc.
+Automatic Glob by ArchiveLib, SharedLib, Executable
+Automatic Glob plus renaming for Publish, PublishIncludes, Install
+
 project.spec, build.spec, rulebase.spec, rulebase.default, autosetup/
 ---------------------------------------------------------------------
 - reparsing after project.spec
@@ -522,6 +528,89 @@ in a subdirectory, it affects *only* that subdirectory.
 
 Also see the -vars and -getvar rule options which allow a variable to be bound to a rule.
 
+Libraries from Archive Libraries
+--------------------------------
+Under some circumstances it is necessary to build a target from targets
+across multiple subdirectories. Consider the following (abbreviated) example from libgit2.
+
+	====================================================
+	$ tree libgit2
+	libgit2
+	|-- deps
+	|   |-- http-parser
+	|   `-- zlib
+	|-- include
+	|   `-- git2
+	|-- src
+	|   |-- transports
+	|   |-- unix
+	|   `-- win32
+    |-- tests
+	`-- tests-clar
+		|-- attr
+		|-- buf
+		|-- object
+		|   |-- commit
+		|   |-- raw
+		|   `-- tree
+		|-- odb
+		`-- status
+	====================================================
+
+The final target is either an archive library (libgit2.a) or a shared library (libgit2.so)
+It is composed of groups of objects from deps/http-parser, src, src/transports and possibly
+deps/zlib and src/unix or src/win32.
+
+It would be possible to build the library at the top level from objects in lower
+levels, for example:
+
+	====================================================
+	Lib git2 deps/http-parser/*.c src/*.c src/unix/*.c
+	====================================================
+
+However this forces all of the build rules (CFlags, IncludePaths, etc.) to
+be specified at the top level. It is better if the components can be
+built individually and then combined to form the final library.
+tmake supports this by allowing library objects to be combined into other archive
+and shared libaries. This is done as follows.
+
+	=== deps/http-parser/build.spec ====================
+	Lib --publish http-parser *.c
+	====================================================
+
+	=== src/build.spec =================================
+	Lib --publish src *.c transports/*.c unix/*.c
+	====================================================
+
+	=== build.spec =====================================
+	Lib git2 <lib>http-parser <lib>src
+	====================================================
+
+The special objects selector, <lib>name, is used
+to select all the objects from the corresponding published library.
+
+(Note that this is related to the mechanism which allows published
+libraries to be found by other components with UseLibs)
+
+When the inputs to the git2 library are collected, the selector
+such as <lib>src is replaced with the *objects* which are listed
+as inputs to the src library. In addition, a dependency on the 'src'
+library is added to the 'git2' library to ensure that the objects
+are available when required.
+
+This approach has the advantage that the conglomerate library can be created
+in any directory, not just a parent of each of the component libraries.
+
+The same mechanism can be used for creating a shared libraries from other
+libraries, and both shared and archive libraries can be used as the component
+libraries.
+
+Note 1: The <lib> selector selects the *objects* from the component library, not the library itself.
+Note 2: The component library must be published in order to be available.
+Note 3: When creating a conglomerate shared library, the appropriate compile flags (e.g. $(SH\_CFLAGS)
+        must be added to objects in the component libraries. tmake is not able to automatically
+        determine if this restriction has been followed.
+
 Experiences with porting projects to tmake
 ------------------------------------------
 
@@ -538,7 +627,7 @@ include/polarssl/config.h
 - Modify include/polarssl/config.h to include autoconf.h (to avoid overwriting current version)
 - Currently tmake only supports building polarssl as a static lib
 - Created polarsslwrap based on axtlswrap
-- Test directory uses code generation. scripts/generate_code.pl was hard to work with
+- Test directory uses code generation. scripts/generate\_code.pl was hard to work with
   because it wanted to generate output in the current dir.
   I changed it slightly to take the full path to the target on the command line.
 
@@ -547,3 +636,27 @@ include/polarssl/config.h
 => Need add all possible options to auto.def, including dependencies
 
 Build times?
+
+libgit2
+~~~~~~~
+Was waf, now cmake
+- Installed autosetup and tmake
+- Converted autoconfig + user config from cmake to auto.def
+
+- Required addition of building libraries from libraries
+- Required addition of GlobRecursive
+  - Might be nice to have --exclude or something similar
+  - Can GlobRecursive become Glob --recursive?
+- Added Template support as tmake module for .pc (pkg-config)
+- tests-clar/clar was awkward since it wouldn't generate sources out-of-tree.
+  Needed to manually move them to the build tree. (Alternatively, could have modified clar).
+- Probably need PublishIncludes --dir=<subdir>
+
+* Didn't do thread support
+* tmake currently doesn't support MSVC, but I left in as much support as possible
+* No pkg-config support for zlib searching
+
+fossil
+~~~~~~
+- A number of HostExecutable generators are used
+- Most of these could be easily replaced with Tcl commands or scripts
