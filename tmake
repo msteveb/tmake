@@ -632,9 +632,13 @@ proc file-src-exists {path} {
 }
 
 # If $builddir is a dir from the top of the build tree,
+# (defaults to [local-dir])
 # return a relative path to $srcpath from the src tree.
-# XXX: srcdir might not be appropriate here. should this be topsrcdir?
-proc file-src-relative {srcpath builddir} {
+#
+proc file-src-relative {srcpath {builddir {}}} {
+	if {$builddir eq ""} {
+		set builddir [local-dir]
+	}
 	set src [file join $::tmake(topsrcdir) $srcpath]
 	set build [file join $::tmake(topbuilddir) $builddir]
 	relative-path $src $build
