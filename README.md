@@ -528,6 +528,66 @@ in a subdirectory, it affects *only* that subdirectory.
 
 Also see the -vars and -getvar rule options which allow a variable to be bound to a rule.
 
+Multiple Targets on the Command Line
+------------------------------------
+Explain how rulebase is parsed, then the build descriptions, then for each target
+the any 'Load' targets are built, and if necessary, the build descriptions are re-read.
+Also, the target status is reset after every target.
+
+clean, distclean and clean-orphans are special
+----------------------------------------------
+In that they don't causing building of the Load targets.
+
+Reinvoking the Build
+--------------------
+Consider the following project.spec:
+
+	====================================================
+	Load user.conf
+
+	Phony default -do {
+		file copy -force [file-src default.conf] user.conf
+	}
+	Phony debug -do {
+		file copy -force [file-src debug.conf] user.conf
+	}
+	====================================================
+
+The user configuration is loaded from user.conf, which is assumed
+to be created externally. Two phony targets (actions) also exist
+which can set a specific configuration. It is now possible to set
+the configuration and rebuild with the command line:
+
+    $ tmake default all
+	
+It might be desirable for the single action to both update the configuration
+and rebuild. One way to do this may be with a recursive invocation of tmake:
+
+	====================================================
+	Load user.conf
+
+	Phony default -do {
+		file copy -force [file-src default.conf] user.conf
+		run [info nameofexecutable] $::argv0 all
+	}
+	====================================================
+
+However this is cumbersome and inefficient. A better way to achieve this
+is to have the rule re-add a new target.
+
+	====================================================
+	Load user.conf
+
+	Phony default -do {
+		file copy -force [file-src default.conf] user.conf
+		add-build-targets all
+	}
+	====================================================
+
+In this case, once the rule has run, a new target is added 
+to the build, as if added on the original command line.
+If the target was already on the command line, this has no effect.
+
 Libraries from Archive Libraries
 --------------------------------
 Under some circumstances it is necessary to build a target from targets
