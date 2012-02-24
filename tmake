@@ -854,6 +854,7 @@ proc vputs {msg} {
 
 proc pputs {msg} {
 	puts $msg
+	flush stdout
 }
 
 # Returns 1 if any of the debug types is set

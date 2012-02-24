@@ -95,18 +95,33 @@ if {$tmakecompat(istcl)} {
 		proc getenv {name args} {
 			string map {\\ /} [env $name {*}$args]
 		}
+		proc exec-save-stderr {args} {
+			# If the command is a shell script, we need to manually implement #!/bin/sh
+			# by running "sh script ..."
+			set scriptargs [lassign $args script]
+			if {[file exists $script]} {
+				set f [open $script]
+				if {[gets $f buf] > 0} {
+					if {[regexp {^#!([^ ]*)(.*)$} $buf -> cmd cmdargs]} {
+						set args [list [file tail $cmd] {*}$cmdargs {*}$args]
+					}
+				}
+				close $f
+			}
+			exec >@stdout {*}$args
+		}
 	} else {
 		# Jim on unix is simple
 		alias getenv env
+		proc exec-save-stderr {args} {
+			exec >@stdout {*}$args
+		}
 	}
 	proc env-save {} {
 		return $::env
 	}
 	proc env-restore {newenv} {
 		set ::env $newenv
-	}
-	proc exec-save-stderr {args} {
-		exec >@stdout {*}$args
 	}
 	proc lunique {list} {
 		set a {}

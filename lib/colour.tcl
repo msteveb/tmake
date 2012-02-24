@@ -24,7 +24,7 @@ set tmake(ansicodes) {
 proc init-colour {} {
 	global tmake
 
-	if {[getenv NOCOLOR ""] eq "" && [getenv TERM ""] ni {dumb emacs msys}} {
+	if {[getenv NOCOLOR ""] eq "" && [getenv TERM ""] ni {dumb emacs cygwin}} {
 		set tmake(colout) [isatty? stdout]
 		set tmake(colerr) [isatty? stderr]
 	}
