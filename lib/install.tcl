@@ -21,9 +21,14 @@ proc tmake_install {dir} {
 
 			# Insert the static modules here
 			puts $f "set tmake(installed) 1"
+			set modules {}
 			foreach file [lsort [glob -nocomplain $::tmake(dir)/lib/*.tcl]] {
+				lappend modules [file rootname [file tail $file]]
 				puts $f "# ----- module [file tail $file] -----"
 				puts $f [readfile $file]
+			}
+			foreach m $modules {
+				puts $f "if {\[info procs init-$m\] ne {}} {init-$m}"
 			}
 		}
 		close $in

@@ -796,6 +796,9 @@ proc use {args} {
 			dev-error "use: No such module: $m"
 		}
 		uplevel #0 [list source $source]
+		if {[info procs init-$m] ne {}} {
+			init-$m
+		}
 	}
 }
 

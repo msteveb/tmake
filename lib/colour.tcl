@@ -1,13 +1,6 @@
 set tmake(colout) 0
 set tmake(colerr) 0
 
-if {[getenv NOCOLOR ""] eq "" && [getenv TERM ""] ni {dumb emacs msys}} {
-	catch {
-		set tmake(colout) [stdout isatty]
-		set tmake(colerr) [stderr isatty]
-	}
-}
-
 set tmake(ansicodes) {
 	none "\x1b\[0m"
 	black "\x1b\[30m"
@@ -26,6 +19,17 @@ set tmake(ansicodes) {
 	lpurple "\x1b\[35;1m"
 	lcyan "\x1b\[36;1m"
 	white "\x1b\[37;1m"
+}
+
+proc init-colour {} {
+	global tmake
+
+	if {[getenv NOCOLOR ""] eq "" && [getenv TERM ""] ni {dumb emacs msys}} {
+		catch {
+			set tmake(colout) [stdout isatty]
+			set tmake(colerr) [stderr isatty]
+		}
+	}
 }
 
 proc colstr {colour string} {
