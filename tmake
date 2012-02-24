@@ -1966,7 +1966,9 @@ proc build {target} {
 				if {$t(chdir)} {
 					cd [file dirname [lindex $ruletarget 0]]
 				}
+				set oldenv [env-save]
 				lassign [run-do $vardict $do] rc msg opts
+				env-restore $oldenv
 				# Always restore the current dir afterwards
 				cd $tmake(topbuilddir)
 				if {$rc} {

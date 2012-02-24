@@ -41,6 +41,13 @@ if {$tmakecompat(istcl)} {
 		}
 		return -code error "environment variable \"$name\" does not exist"
 	}
+	proc env-save {} {
+		array get ::env
+	}
+	proc env-restore {newenv} {
+		array unset ::env *
+		array set ::env $newenv
+	}
 	proc alias {new old args} {
 		interp alias {} $new {} $old {*}$args
 	}
@@ -88,6 +95,12 @@ if {$tmakecompat(istcl)} {
 		# Jim on unix is simple
 		alias getenv env
 	}
+	proc env-save {} {
+		return $::env
+	}
+	proc env-restore {newenv} {
+		set ::env $newenv
+	}
 	proc exec-save-stderr {args} {
 		exec >@stdout {*}$args
 	}
@@ -98,6 +111,9 @@ if {$tmakecompat(istcl)} {
 		}
 		lsort [dict keys $a]
 	}
+}
+proc setenv {name value} {
+	set ::env($name) $value
 }
 
 # In case 'file normalize' doesn't exist
