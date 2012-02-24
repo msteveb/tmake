@@ -88,7 +88,8 @@ proc make-parse-options {argv {type tmake}} {
 				-C {
 					# This will fail with a fatal error if not a dir
 					cd $arg
-					pputs "tmake: Entering directory `[pwd]'"
+					# emulate make for vim quickerr
+					pputs [colout green "tmake: Entering directory `[pwd]'"]
 				}
 				-P {
 					set tmake(topsrcdir) [file-normalize $arg]
@@ -251,6 +252,7 @@ proc make {argv} {
 		set tmake(dir) [file dirname $::argv0]
 		use compat
 	}
+	use colour
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
@@ -289,7 +291,8 @@ proc make {argv} {
 			set tmake(topsrcdir) [relative-path $top]
 		} else {
 			if {[relative-path $tmake(topbuilddir)] ne "."} {
-				pputs "tmake: Entering directory `$tmake(topbuilddir)'"
+				# emulate make for vim quickerr
+				pputs [colout green "tmake: Entering directory `$tmake(topbuilddir)'"]
 			}
 			cd $tmake(topbuilddir)
 			set tmake(topsrcdir) .
@@ -312,7 +315,7 @@ proc make {argv} {
 
 	set tmake(prefix) ""
 
-	use getopt config colour
+	use getopt config
 
 	set rulebase [file-src rulebase.spec]
 	if {![file exists $rulebase]} {
