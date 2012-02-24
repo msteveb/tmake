@@ -280,6 +280,7 @@ proc error-stacktrace {msg} {
 		lassign $newstacktrace p f l
 		if {$f ne ""} {
 			set prefix "$f:$l: "
+			set newstacktrace [lrange $newstacktrace 3 end]
 		} else {
 			set prefix ""
 		}
