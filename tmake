@@ -495,9 +495,6 @@ proc load-build-description {loadcache} {
 	dputs T "Parsed project.spec"
 
 	# Loaded in the global scope 
-	if {![file-src-exists build.spec]} {
-		user-error "No build.spec in the current directory"
-	}
 
 	foreach i $tmake(deferred) {
 		uplevel #0 $i
@@ -661,9 +658,10 @@ proc file-src-relative {srcpath {builddir {}}} {
 
 # Read in the given spec file in the given directory (relative to topdir)
 # Returns 1 if OK, or 0 if subdirs should be skipped
-proc process-build-spec-file {dir {keepdefines 0}} {
+proc process-build-spec-file {dir {optional 0}} {
 	global tmake
 	dputs m "process-build-spec $dir"
+	set ignore 0
 
 	set tmake(localdir) $dir
 	set tmake(prefix) [make-prefix $dir]
@@ -672,20 +670,27 @@ proc process-build-spec-file {dir {keepdefines 0}} {
 	set path [file-join $srcdir build.spec]
 
 	if {![file exists $path]} {
-		user-error "$path does not exist"
+		# The top level build.spec is optional
+		if {!$optional} {
+			user-error "$path does not exist"
+		}
+		incr ignore
 	}
 
 	set defines $tmake(defines)
 
 	BuildSpecProlog
-	lassign [invoke-spec-file $path] rc msg opts
+	if {$ignore} {
+		set rc 0
+	} else {
+		lassign [invoke-spec-file $path] rc msg opts
+
+		dputs T "Parsed [local-prefix]build.spec"
+	}
 	BuildSpecEpilog
 
-	if {!$keepdefines} {
-		set tmake(defines) $defines
-	}
+	set tmake(defines) $defines
 
-	dputs T "Parsed [local-prefix]build.spec"
 
 	if {$rc == 20} {
 		dputs m "Skipping $path"
@@ -713,11 +718,7 @@ proc process-build-spec-file {dir {keepdefines 0}} {
 
 	# Now process subdirs
 	foreach d $subdirs {
-		if {[file-src-exists $d/build.ignore]} {
-			dputs m "Ignoring $d because build.ignore exists"
-		} else {
-			process-build-spec-file $d
-		}
+		process-build-spec-file $d
 	}
 	incr tmake(depth) -1
 }

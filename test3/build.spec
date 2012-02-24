@@ -1,21 +1,4 @@
-# vim:set syntax=tcl:
-
-define? UWEB /usr/local/uweb
-define? DESTDIR _install
-define? CONFIG_DIR $DESTDIR/etc/config
-
-Load $UWEB/lib/build.conf
-define? UWEB_LDLIBS -luweb
-define THEMES $UWEB/themes
-
-LinkFlags -L$UWEB/lib
-UseSystemLibs -luweb -ljim $UWEB_LDLIBS
-
-if {[regexp -line {^LDFLAGS := (.*)$} [readfile $UWEB/lib/build-default.mak] -> libs]} {
-	UseSystemLibs $libs
-}
-
-CFlags -Wall -g -Os -I. -I$UWEB/include
+CFlags -Wall -Os
 
 Executable --install=/home/httpd/cgi-bin web auth.c customstorage.c init.c main.c tclcustom.c \
 	[CgiSources *.page *.app *.menus]
