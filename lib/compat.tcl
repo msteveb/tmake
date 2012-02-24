@@ -77,6 +77,10 @@ if {$tmakecompat(istcl)} {
 	proc readdir {dir} {
 		glob -nocomplain -directory $dir -tails *
 	}
+	proc isatty? {channel} {
+		# XXX: Does this work reliably on all (non-windows) platforms?
+		dict exists [fconfigure $channel] -xchar
+	}
 	if {![info exists tcl_platform(pathSeparator)]} {
 		if {$tmakecompat(iswin)} {
 			set tcl_platform(pathSeparator) {;}
@@ -110,6 +114,14 @@ if {$tmakecompat(istcl)} {
 			set a($i) 1
 		}
 		lsort [dict keys $a]
+	}
+	proc isatty? {channel} {
+		set tty 0
+		catch {
+			# isatty is a recent addition to Jim Tcl
+			set tty [$channel isatty]
+		}
+		return $tty
 	}
 }
 proc setenv {name value} {

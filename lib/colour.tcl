@@ -25,10 +25,8 @@ proc init-colour {} {
 	global tmake
 
 	if {[getenv NOCOLOR ""] eq "" && [getenv TERM ""] ni {dumb emacs msys}} {
-		catch {
-			set tmake(colout) [stdout isatty]
-			set tmake(colerr) [stderr isatty]
-		}
+		set tmake(colout) [isatty? stdout]
+		set tmake(colerr) [isatty? stderr]
 	}
 }
 

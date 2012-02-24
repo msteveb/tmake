@@ -371,8 +371,6 @@ proc make {argv} {
 
 		set tmake(addtargets) {}
 
-		dputs {b T} "Building requested: $target"
-
 		# Reset the status of every rule to "unknown"
 		foreach ruletarget [dict keys $tmake(rules)] {
 			set-rule-status $ruletarget unknown
@@ -427,7 +425,7 @@ proc make {argv} {
 			}
 		}
 
-		dputs T "Building target $target"
+		dputs {b T} "Building target $target"
 
 		if {[build $target] < 0} {
 			if {$tmake(exitcode) == 0} {
@@ -812,7 +810,7 @@ proc use {args} {
 # exits with a non-zero return code.
 #
 proc user-error {msg} {
-	puts stderr [colerr red "Error: $msg"]
+	puts stderr [colerr lred "Error: $msg"]
 	puts stderr "Try: 'tmake --help' for options"
 	tmake-exit 1
 }
@@ -822,7 +820,7 @@ proc user-error {msg} {
 # Indicate that something failed to build and set exitcode=1
 proc build-error {msg} {
 	dputs b "BUILD ERROR: $msg"
-	puts stderr [colerr red $msg]
+	puts stderr [colerr lred $msg]
 	set ::tmake(exitcode) 1
 }
 # @user-notice msg
@@ -835,7 +833,7 @@ proc user-notice {msg} {
 
 # Incorrect usage in the build.spec file. Identify the location.
 proc dev-error {msg} {
-	puts stderr [colerr red [error-location "Error: $msg"]]
+	puts stderr [colerr lred [error-location "Error: $msg"]]
 	tmake-exit 1
 }
 
@@ -1638,7 +1636,7 @@ proc set-target-result {target result} {
 
 proc note {type args} {
 	if {$::tmake(verbose) == 0} {
-		pputs "    [pad $type 10] [join $args]"
+		pputs "    [pad $type 12] [join $args]"
 	}
 }
 
@@ -1895,7 +1893,7 @@ proc build {target} {
 	}
 
 	if {$tmake(quickstop) && $tmake(exitcode)} {
-		user-notice [colerr red "*** Error: Targets failed to build"]
+		user-notice [colerr lred "*** Error: Targets failed to build"]
 		tmake-exit $tmake(exitcode)
 	}
 
@@ -2055,7 +2053,7 @@ proc build {target} {
 		}
 
 		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
-			user-notice [colerr red "*** Error: Targets failed to build"]
+			user-notice [colerr lred "*** Error: Targets failed to build"]
 			tmake-exit $tmake(exitcode)
 		}
 	}
@@ -2275,7 +2273,7 @@ proc colerr {colour string} {
 # ==================================================================
 
 if {[catch {make $argv} msg]} {
-	user-notice [colerr red [error-stacktrace $msg]]
+	user-notice [colerr lred [error-stacktrace $msg]]
 	set tmake(exitcode) 1
 }
 
@@ -2286,7 +2284,7 @@ if {$tmake(numtargets) || $tmake(showtime)} {
 	}
 }
 if {$tmake(exitcode)} {
-	user-notice [colerr red "*** Error: Targets failed to build"]
+	user-notice [colerr lred "*** Error: Targets failed to build"]
 }
 
 tmake-exit $tmake(exitcode)
