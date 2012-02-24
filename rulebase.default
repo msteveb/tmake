@@ -612,39 +612,63 @@ proc setup-test-env {} {
 	}
 }
 
+# Run an executable test
+# The executable must be built in the current dir
+#
 proc Test {args} {
 	show-this-rule
 
 	getopt {--interp: --chdir --quiet command args} args
 	set testid test#[incr ::tmakedrb(testid)]
 	set depends {}
-	set command $command
 	set localcommand [make-local $command]
 
 	set opts {}
+	set deps {}
+	set vars {}
+	set testcommand {}
 
 	if {$chdir} {
-		# XXX: Will -chdir mess up the path to interp and command?
 		lappend opts -chdir
 	}
 	if {!$quiet} {
 		lappend opts -msg [list note "Test $localcommand"]
 	}
 
-	set testcommand {}
+	# If there is an interpreter, find it
 	if {[info exists interp]} {
-		lassign [find-project-bin $interp $chdir] dep filename
-		lappend opts -depends $dep
-		lappend testcommand $filename 
+		lassign [find-project-bin $interp -chdir $chdir -optional 1] dep filename
+
+		# In this case, the command is a script - find it
+		if {$chdir} {
+			set scriptpath [file-src-relative $localcommand]
+		} else {
+			set scriptpath [file-src $localcommand]
+		}
+		lappend vars testcommand [list $filename $scriptpath {*}$args]
+
+		if {$dep ne ""} {
+			lappend deps $dep
+		}
+
+	} else {
+		# Find the local or published command and add it to the command and deps
+		lassign [find-project-bin $command -chdir $chdir -optional 0] dep filename
+
+		lappend vars testcommand [list $filename {*}$args]
+		lappend deps $dep
 	}
-	lassign [find-project-bin $command $chdir] dep filename
-	lappend opts -depends $dep
-	lappend testcommand $filename
 
-	lappend testcommand {*}$args
+	# set up srcpath to allow the test command/script to find resources
+	if {$chdir} {
+		lappend vars srcpath [file-src-relative [local-dir]]
+	} else {
+		lappend vars srcpath [file-src [local-dir]]
+	}
 
-	target [make-local $testid] -phony -vars testcommand $testcommand {*}$opts -do {
+	target [make-local $testid] -phony -depends $deps -vars {*}$vars {*}$opts -do {
 		setup-test-env
+		set ::env(SRCDIR) $srcpath
 		incr ::tmakedrb(testruncount)
 		run $testcommand
 		incr ::tmakedrb(testpasscount)
@@ -809,35 +833,49 @@ proc add-clean {type filelist} {
 
 # Returns a list of {dependency filename}
 #
-proc find-project-bin {bin {chdir 0}} {
+proc find-project-bin {bin args} {
+	array set opts [list -chdir 0 -optional 0 {*}$args]
+
 	set localbin [make-local $bin]
+
 	if {[is-target? $localbin]} {
 		dputs m "[find-source-location]: find-project-bin: $localbin is a local target"
-		if {$chdir} {
-			return [list $localbin $bin]
+		if {$opts(-chdir)} {
+			return [list $localbin ./$bin]
 		} else {
+			# Use ./ if local-dir is "."
 			return [list $localbin [local-dir]/$bin]
 		}
-	} elseif {[file-src-exists $localbin]} {
-		dputs m "[find-source-location]: find-project-bin: $localbin exists as source"
-		if {$chdir} {
-			# cd to local build dir, but file is relative to the top of the src dir
-			set src [file-src-relative $localbin [file dirname $localbin]]
-			return [list $localbin ./$src]
-		} else {
-			return [list $localbin [file-src $localbin]]
-		}
-	} else {
-		dputs m "[find-source-location]: find-project-bin: $bin assumed to be published"
-		set publishbin [get-define PUBLISH]/bin/$bin
-		if {$chdir} {
-			# cd to local build dir, but file is relative to top of the build dir
-			set src [relative-path $publishbin [file dirname $localbin]]
-			return [list $localbin $src]
+	}
+
+	if {[regexp {^<bin>(.*)} $bin -> basename]} {
+		dputs m "[find-source-location]: find-project-bin: $bin is a publish target"
+		set publishbin [get-define PUBLISH]/bin/$basename
+		if {$opts(-chdir)} {
+			# Need to adjust the interp to account for chdir
+			return [list $publishbin [file-src-relative $publishbin]]
 		} else {
 			return [list $publishbin $publishbin]
 		}
 	}
+
+	if {[file-src-exists $localbin]} {
+		dputs m "[find-source-location]: find-project-bin: $localbin exists as source"
+		if {$opts(-chdir)} {
+			# Need to adjust the interp to account for chdir
+			return [list $localbin [file-src-relative $localbin]]
+		} else {
+			return [list $localbin [file-src $localbin]]
+		}
+	}
+
+	if {$opts(-optional)} {
+		dputs m "[find-source-location]: find-project-bin: $bin is assumed to be external"
+		return [list "" $bin]
+	}
+
+	# Not found
+	dev-error "$bin is neither a local nor a published (<bin>) target"
 }
 
 proc Generate {args} {
