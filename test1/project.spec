@@ -1,4 +1,5 @@
 define PUBLISH .publish
+define? DESTDIR _install
 
 # vim:set syntax=tcl:
 
