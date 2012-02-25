@@ -1658,8 +1658,9 @@ proc run {args} {
 		puts [colout grey $msg]
 	}
 	if {$rc == 1} {
+		pputs \n\t$cmdline\n
 		# On error, display the command and the error and return break
-		build-error "\n\t$cmdline\n$msg\n"
+		build-error "$msg\n"
 		return -code break
 	}
 	# XXX: What to do on signal?

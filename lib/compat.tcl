@@ -31,16 +31,6 @@ if {$tmakecompat(iswin)} {
 }
 
 if {$tmakecompat(istcl)} {
-	# Tcl doesn't have the env command
-	proc getenv {name args} {
-		if {[info exists ::env($name)]} {
-			return $::env($name)
-		}
-		if {[llength $args]} {
-			return [lindex $args 0]
-		}
-		return -code error "environment variable \"$name\" does not exist"
-	}
 	proc env-save {} {
 		array get ::env
 	}
@@ -139,6 +129,23 @@ if {$tmakecompat(istcl)} {
 		return $tty
 	}
 }
+
+proc getenv {name args} {
+	if {[info exists ::env($name)]} {
+		set value $::env($name)
+	} elseif {[llength $args]} {
+		set value [lindex $args 0]
+	} else {
+		return -code error "environment variable \"$name\" does not exist"
+	}
+	if {$::tmakecompat(iswin) && !$::tmakecompat(istcl)} {
+		# On Windows, backslash convert all environment variables
+		# (Assume that Tcl does this for us)
+		set value [string map {\\ /} $value]
+	}
+	return $value
+}
+
 proc setenv {name value} {
 	set ::env($name) $value
 }
