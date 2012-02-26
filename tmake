@@ -369,7 +369,7 @@ proc make {argv} {
 	}
 
 	# Build each target, resetting the status and possibly reloading every time
-	while {[llength $targets]} {
+	while {[llength $targets] && $tmake(exitcode) == 0} {
 		set targets [lassign $targets target]
 
 		set tmake(addtargets) {}

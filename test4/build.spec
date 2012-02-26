@@ -3,7 +3,7 @@
 # The rest of the build description is only used if configured
 ifconfig CONFIGURED
 
-IncludePaths include
+IncludePaths . include
 
 # Pull in some autosetup config
 CFlags -DHAVE_AUTOCONFIG_H $EXTRA_CFLAGS

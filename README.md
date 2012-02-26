@@ -32,17 +32,19 @@ is addressed, except performance.
 
 TODO Items
 ----------
-- Support for shared libraries
 - Documentation, especially basic --help documentation, and developer docs (e.g. known rules)
 - tmake-genie?
 - Address known issues below, if possible
 - Do we need a -vars variant which completely replaces the var?
 - I don't think I have used define!, is it necessary?
+- Lots of windows support
+  - 
 
 Known Issues
 ------------
 Under Tcl, it is not possible to interrupt ^C, so that make cache
-is not saved if the build is interrupted.
+is not saved if the build is interrupted. Should the cache be saved periodically?
+The same is true when running the non-msys jimsh under the msys shell. 
 
 Passing options to tmake via make O=... is a bit awkward.
 

@@ -10,8 +10,8 @@ Install /lib/jim $UWEB/lib/jim/*.tcl *.tcl
 
 Phony run install -do {
 	file mkdir $CONFIG_DIR
-	set ::env(UWEB_CONFIG_DIR) [file join [pwd] $CONFIG_DIR]
-	set ::env(TCLLIBPATH) [file join [pwd] $DESTDIR/lib/jim]
+	setenv UWEB_CONFIG_DIR [file join [pwd] $CONFIG_DIR]
+	setenv TCLLIBPATH [file join [pwd] $DESTDIR/lib/jim]
 
 	puts "Point your browser to http://localhost:8000/"
 	run $DESTDIR/home/httpd/cgi-bin/web server 8000

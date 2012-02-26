@@ -226,24 +226,6 @@ proc install-shared-lib {dest names source flags} {
 	add-clean uninstall $installed
 }
 
-if 0 {
-	target $published -inputs $source -msg {note PublishSharedLib $libname}  -do {
-		file delete $target
-		exec ln -f $inputs [lindex $target 0]
-		make-shlib-symlinks {*}$target
-	} -vars libname [lindex $names 0]
-	add-clean [make-local clean] $published
-	add-clean [make-local distclean] $published
-	set symlinks {}
-	foreach name $names {
-		lappend symlinks [file-join $install $name]
-	}
-	target $installedlib -add -do {
-		make-shlib-symlinks {*}$symlinks
-	} -vars symlinks $symlinks
-	add-clean uninstall $symlinks
-}
-
 proc expand-filespec {dir filelist keepdir} {
 	set result {}
 
