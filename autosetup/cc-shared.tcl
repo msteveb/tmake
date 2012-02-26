@@ -10,7 +10,7 @@
 ## SH_LDFLAGS        Flags to use linking (creating) a shared library
 ## SH_SOPREFIX       Prefix to use to set the soname when creating a shared library
 ## SH_SOEXT          Extension for shared libs
-## SH_SOEXTVER       Format for versioned shared libs
+## SH_SOEXTVER       Format for versioned shared libs - %s = version
 ## SHOBJ_CFLAGS      Flags to use compiling sources destined for a shared object
 ## SHOBJ_LDFLAGS     Flags to use linking a shared object, undefined symbols allowed
 ## SHOBJ_LDFLAGS_R   - as above, but all symbols must be resolved
@@ -40,16 +40,13 @@ switch -glob -- [get-define host] {
 		define SH_SOEXTVER ".%s.dylib"
 		define LD_LIBRARY_PATH DYLD_LIBRARY_PATH
 	}
-	*-*-ming* {
+	*-*-ming* - *-*-cygwin - *-*-msys {
+		define LD_LIBRARY_PATH PATH
 		define SH_LDFLAGS -shared
 		define SHOBJ_LDFLAGS -shared
 		define SHOBJ_LDFLAGS_R -shared
 		define SH_SOEXT ".dll"
-	}
-	*-*-cygwin {
-		define SH_LDFLAGS -shared
-		define SHOBJ_LDFLAGS -shared
-		define SH_SOEXT ".dll"
+		define SH_SOEXTVER .dll
 	}
 	sparc* {
 		# gcc on sparc
