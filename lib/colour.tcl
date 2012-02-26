@@ -1,3 +1,8 @@
+# Copyright (c) 2012 WorkWare Systems http://www.workware.net.au/
+# All rights reserved
+
+# Module to provide colourised output to ANSI-compatible terminals
+
 set tmake(colout) 0
 set tmake(colerr) 0
 

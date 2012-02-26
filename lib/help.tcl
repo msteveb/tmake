@@ -12,7 +12,7 @@ proc show-help {argv} {
 {Usage: tmake [options] [targets]
 
    tmake builds projects based on simple, flexible build descriptions.
-   
+
    -h|--help             This help, or help for the specified rule
    -C|--directory=<dir>  Run as if from directory <dir>
    -v|--verbose          Force V=1 mode when building to show commands executed

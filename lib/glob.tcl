@@ -1,14 +1,11 @@
 # Copyright (c) 2012 WorkWare Systems http://www.workware.net.au/
 # All rights reserved
 
-# File globbing
+# Module which provides local-aware file globbing
 
-proc globputs {msg} {
-	#puts $msg
-}
-
-# Patterns are local-src patterns
-proc glob-nonrecursive {patterns all {types file} {exclude {}}} {
+# Patterns are file patterns actual paths, typically created by make-local-src
+# If $all is true, non-patterns are returned as-is
+proc glob-nonrecursive {patterns all {istype isfile} {exclude {}}} {
 	set result {}
 
 	# Optimise the common case
@@ -23,20 +20,18 @@ proc glob-nonrecursive {patterns all {types file} {exclude {}}} {
 			continue
 		}
 		set globpattern $pattern
-		globputs "glob -nocomplain $globpattern => [glob -nocomplain $globpattern]"
 		foreach path [glob -nocomplain $globpattern] {
-			# XXX: Can we exclude here? Based on dir? tail? other?
-			if {[file type $path] in $types && [file tail $path] ni $exclude} {
+			if {[file $istype $path] && [file tail $path] ni $exclude} {
 				lappend result $path
 			}
 		}
 	}
 
-	globputs "glob-nonrecursive: $patterns => [lsort $result]"
 	return $result
 }
 
-proc glob-recursive {patterns {exclude {}}} {
+# Patterns are file patterns actual paths, typically created by make-local-src
+proc glob-recursive {patterns type {exclude {}}} {
 	set result {}
 
 	foreach pattern $patterns {
@@ -44,45 +39,37 @@ proc glob-recursive {patterns {exclude {}}} {
 		set dirpattern [file dirname $pattern]
 		set tailpattern [file tail $pattern]
 
-		#puts "got $pattern => dirpattern=$dirpattern, tailpattern=$tailpattern"
-		#puts "Finding directories for $dirpattern => [glob-nonrecursive $dirpattern 0 directory $exclude]"
-
 		# Find all directories which match the directory pattern
-		foreach dir [glob-nonrecursive $dirpattern 0 directory $exclude] {
-			globputs "Recursing for [file-join $dir $tailpattern]"
-			lappend result {*}[glob-recursive [file-join $dir/* $tailpattern] $exclude]
-			#globputs "Now checking $dir for files matching $tailpattern"
-			lappend result {*}[glob-nonrecursive [file-join $dir $tailpattern] 0 file $exclude]
+		foreach dir [glob-nonrecursive $dirpattern 0 isdir $exclude] {
+			lappend result {*}[glob-recursive [file-join $dir/* $tailpattern] $type $exclude]
+			lappend result {*}[glob-nonrecursive [file-join $dir $tailpattern] 0 $type $exclude]
 		}
 	}
-	globputs "glob-recursive $patterns => [lsort $result]"
 	return $result
 }
 
+# Normally only returns files.
+# --dirs returns directories as well
 proc Glob {args} {
 	show-this-rule
 
-	globputs "\n\nIn [local-dir], Glob $args"
-
-	getopt {--warn --all --recursive --exclude:: args} args
-
-	#puts "In [local-dir]: Glob $args => "
+	getopt {--warn --dirs --all --recursive --exclude:: args} args
 
 	set args [make-local-src {*}[join $args]]
-
-	globputs " -- local-src args = $args"
-
-	#globputs "\n\nIn [local-dir], about to glob $args"
+	if {$dirs} {
+		set type exists
+	} else {
+		set type isfile
+	}
 
 	if {$recursive} {
-		set paths [glob-recursive $args $exclude]
+		set paths [glob-recursive $args $type $exclude]
 	} else {
-		set paths [glob-nonrecursive $args $all file $exclude]
+		set paths [glob-nonrecursive $args $all $type $exclude]
 	}
 
 	if {[llength $paths]} {
 		set paths [make-unlocal-src {*}$paths]
-		globputs " => [lsort $paths]"
 	} else {
 		if {$warn} {
 			user-notice "Warning: No matches for Glob $args"
