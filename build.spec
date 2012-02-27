@@ -1,7 +1,6 @@
 AutoSubDirs off
 
-#target clean -replace -phony
-foreach dir [Glob --dirs test?] {
+foreach dir [Glob --dirs {test[0-9]}] {
 	Phony all-$dir -do "run tmake -C $dir"
 	Depends all all-$dir
 	Phony clean-$dir -nofail -do "run tmake -C $dir clean"
