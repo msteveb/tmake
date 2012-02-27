@@ -1151,7 +1151,7 @@ proc autosetup_help {what} {
 # If not already paged and stdout is a tty, pipe the output through the pager
 # This is done by reinvoking autosetup with --nopager added
 proc use_pager {} {
-    if {![opt-bool nopager] && [getenv PAGER ""] ne "" && ![string match "not a tty" [exec tty]]} {
+    if {![opt-bool nopager] && [getenv PAGER ""] ne "" && [isatty? stdin] && [isatty? stdout]} {
         catch {
             exec [info nameofexecutable] $::argv0 --nopager {*}$::argv | [getenv PAGER] >@stdout <@stdin 2>/dev/null
         }
@@ -1546,15 +1546,28 @@ if {$autosetup(istcl)} {
 		}
 		return -code error "environment variable \"$name\" does not exist"
 	}
-} elseif {$autosetup(iswin)} {
-	# On Windows, backslash convert all environment variables
-	# (Assume that Tcl does this for us)
-	proc getenv {name args} {
-		string map {\\ /} [env $name {*}$args]
+	proc isatty? {channel} {
+		dict exists [fconfigure $channel] -xchar
 	}
 } else {
-	# Jim on unix is simple
-	alias getenv env
+	if {$autosetup(iswin)} {
+		# On Windows, backslash convert all environment variables
+		# (Assume that Tcl does this for us)
+		proc getenv {name args} {
+			string map {\\ /} [env $name {*}$args]
+		}
+	} else {
+		# Jim on unix is simple
+		alias getenv env
+	}
+	proc isatty? {channel} {
+		set tty 0
+		catch {
+			# isatty is a recent addition to Jim Tcl
+			set tty [$channel isatty]
+		}
+		return $tty
+	}
 }
 
 # In case 'file normalize' doesn't exist

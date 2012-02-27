@@ -39,6 +39,7 @@
 #define TCL_PLATFORM_PATH_SEPARATOR ":"
 #define HAVE_VFORK
 #define HAVE_WAITPID
+#define HAVE_ISATTY
 #define HAVE_SYS_TIME_H
 #define HAVE_DIRENT_H
 #define HAVE_UNISTD_H
@@ -1111,7 +1112,7 @@ int Jim_globInit(Jim_Interp *interp)
 "		if {[string match {*[[*?]*} $pattern]} {\n"
 "\n"
 "			set files [readdir -nocomplain $dir]\n"
-"		} elseif {[file isdir $dir] && [file exists $dir/$pattern]} {\n"
+"		} elseif {[file isdir $dir] && [file exists [file join $dir $pattern]]} {\n"
 "			set files [list $pattern]\n"
 "		} else {\n"
 "			set files \"\"\n"
