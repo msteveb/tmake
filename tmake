@@ -2097,10 +2097,13 @@ proc build {target} {
 # ==================================================================
 
 proc header-scan-regexp {suffix regex filename} {
-	#puts "header-scan-regexp $filename"
 	if {![file exists $filename]} {
-		# Might be a target which failed to build. This will be handled later
-		return {}
+		set filename [file-src $filename]
+		if {![file exists $filename]} {
+			# Might be a target which failed to build. This will be handled later
+			dputs D "header-scan-regexp $filename => <does not exist>"
+			return {}
+		}
 	}
 	set f [open $filename]
 	set headers {}
@@ -2151,13 +2154,14 @@ proc find-file-on-path {filename path} {
 # (Unless they are the same)
 #
 proc find-file {filename paths} {
+	#puts "find-file filename=$filename, paths=$paths"
+
 	# First check the per-run cache
 	set cachekey "$filename $paths"
 	if {[dict exists $::tmake(depfindcache) $cachekey]} {
+		#puts "=> (cached) [dict get $::tmake(depfindcache) $cachekey]"
 		return [dict get $::tmake(depfindcache) $cachekey]
 	}
-
-	#puts "find-file filename=$filename, paths=$paths"
 
 	set result {}
 	set filedir [file dirname $filename]
@@ -2188,6 +2192,8 @@ proc find-file {filename paths} {
 	#puts "find-file filename=$filename, paths=$paths => $result"
 	# Cache this result
 	dict set ::tmake(depfindcache) $cachekey $result
+
+	#puts "=> [dict get $::tmake(depfindcache) $cachekey]"
 
 	return $result
 }
