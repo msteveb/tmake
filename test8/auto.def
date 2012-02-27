@@ -1,0 +1,14 @@
+# vim:se syn=tcl:
+#
+
+use cc cc-shared tmake
+
+options {
+}
+
+make-tmake-settings settings.conf {[A-Z]*}
+
+if {![file exists Makefile]} {
+    # Normally this would be autosetup/tmake
+    catch {exec ../tmake --init}
+}

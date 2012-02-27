@@ -24,6 +24,7 @@ define? CFLAGS ""
 define? CXXFLAGS ""
 define? LDFLAGS ""
 define? HOSTCFLAGS ""
+define? EXEEXT ""
 
 define? SH_CFLAGS ""
 define? SH_LDFLAGS ""
@@ -152,42 +153,47 @@ proc BuildSpecEpilog {} {
 proc Executable {args} {
 	show-this-rule
 	getopt {--test --nobuild --publish --strip --install: target args} args
-	if {$publish} {
-		# Revisit: --publish=newname?
-		Publish bin $target
-	}
+
+	set localtarget [make-local $target]
+	set targetexe $target[get-define EXEEXT]
+	set localtargetexe $localtarget[get-define EXEEXT]
+
 	# Flatten and glob inputs
 	set objects [Objects [Glob --all [join $args]]]
 
-	set localtarget [make-local $target]
-	Link $target {*}$objects [get-define LOCAL_LIBS]
+	define? CCLD [get-define CC]
+
+	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
+	target [make-local $targetexe] -inputs {*}$objects  [get-define LOCAL_LIBS] -depends [get-define PROJDEPS] -msg {note Link $target} -do {
+		run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
+	} -getvars CCLD LD_FLAGS PROJLIBS SYSLIBS
+
+	if {$targetexe ne $target} {
+		targetalias $localtarget $localtargetexe
+	}
+	Clean $targetexe
+
+	if {$publish} {
+		# Revisit: --publish=newname?
+		Publish bin $targetexe
+
+		if {$localtargetexe ne $localtarget} {
+			targetalias <bin>$target [file join [file join [get-define PUBLISH] bin] $targetexe]
+		}
+	}
+
 	if {[info exists install]} {
 		set flags bin
 		if {$strip} {
 			lappend flags strip
 		}
-		InstallFile [file-join $install $target] $localtarget $flags
+		InstallFile [file-join $install $targetexe] $localtargetexe $flags
 	}
 	if {$test} {
 		Test --chdir $target
 	} elseif {!$nobuild} {
-		Phony all $localtarget
+		Phony all $localtargetexe
 	}
-}
-
-# Link an executable from objects
-proc Link {target args} {
-	show-this-rule
-
-	set args [join $args]
-
-	define? CCLD [get-define CC]
-
-	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
-	target [make-local $target] -inputs {*}$args -depends [get-define PROJDEPS] -msg {note Link $target} -getvars CCLD LD_FLAGS PROJLIBS SYSLIBS -do {
-		run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
-	}
-	Clean $target
 }
 
 proc publish-one-file {dest src} {
@@ -352,6 +358,9 @@ proc SharedLib {args} {
 	set libname {}
 
 	foreach {fmt version} $nameinfo {
+		if {$fmt eq ""} {
+			continue
+		}
 		set name lib$basename[format $fmt $version]
 		if {$libname eq {}} {
 			set libname $name
@@ -867,9 +876,9 @@ proc find-project-bin {bin args} {
 		set publishbin [get-define PUBLISH]/bin/$basename
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
-			return [list $publishbin [file-src-relative $publishbin]]
+			return [list $bin [file-src-relative $publishbin]]
 		} else {
-			return [list $publishbin $publishbin]
+			return [list $bin $publishbin]
 		}
 	}
 
@@ -933,13 +942,22 @@ proc DefaultTarget {name} {
 # 
 proc HostExecutable {target args} {
 	set localtarget [make-local $target]
-	target $localtarget -inputs {*}[make-local {*}$args] -getvars HOSTCFLAGS -do {
+
+	set localtargetexe $localtarget[get-define EXEEXT]
+	set targetexe $target[get-define EXEEXT]
+
+	target $localtargetexe -inputs {*}[make-local {*}$args] -msg {note HostExecutable $target} -getvars HOSTCFLAGS -do {
 		run $CC_FOR_BUILD $HOSTCFLAGS -o $target $inputs
 	} -dyndep {
 		header-scan-regexp-recursive $local "" $CHDRPATTERN
 	}
-	Publish bin $target
-	Clean $target
+	Publish bin $targetexe
+	Clean $targetexe
+
+	if {$localtargetexe ne $localtarget} {
+		targetalias $localtarget $localtargetexe
+		targetalias <bin>$target [file join [file join [get-define PUBLISH] bin] $targetexe]
+	}
 	return $localtarget
 }
 
