@@ -960,6 +960,11 @@ proc show-rule {target} {
 						lappend lines "$n={[join [split [string trim $v] \n] {;}]}"
 					}
 				}
+				alias {
+					if {$v ne ""} {
+						lappend lines "$n=$v"
+					}
+				}
 				default {
 					if {$v ne ""} {
 						lappend lines "$n=[string trim $v]"
@@ -1262,6 +1267,15 @@ proc update-rule {ruledict} {
 		}
 		set-rule-status $ruletarget unknown
 	}
+	set alias [dict get $ruledict alias]
+	if {$alias ne ""} {
+#?		if {[llength $ruletarget]} {
+#?			puts ruletarget=$ruletarget
+#?			dev-error "Alias not allowed for rule with multiple targets at [make-source-location $ruletarget]"
+#?		}
+		dict set ::tmake(aliases) $alias [lindex $ruletarget 0]
+	}
+
 	dict set ::tmake(rules) $ruletarget $ruledict
 }
 
@@ -1274,7 +1288,11 @@ proc get-rule-status {ruletarget} {
 }
 
 proc show-this-rule {} {
-	dputs p "[find-source-location] [info level -1]" 0
+	set where "[find-source-location] "
+	if {$where eq "unknown "} {
+		set where ""
+	}
+	dputs p "$where[info level -1]" 0
 }
 
 proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
@@ -1288,10 +1306,6 @@ proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
 		return ""
 	}
 	return $prefix[join $source ", "]$suffix
-}
-
-proc targetalias {alias target} {
-	dict set ::tmake(aliases) $alias $target
 }
 
 # This is the only way to create a rule
@@ -1442,7 +1456,7 @@ proc parse-rule {target arglist} {
 	set info(target) $target
 
 	array set info {
-		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {}
+		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
 		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
 	}
 
@@ -1462,7 +1476,7 @@ proc parse-rule {target arglist} {
 			clean {
 				set info($opt) $optargs
 			}
-			do - msg - dyndep - onerror {
+			do - msg - dyndep - onerror - alias {
 				if {[llength $optargs] > 1} {
 					dev-error "Rule for $target has more than one '-$opt' parameter"
 				}

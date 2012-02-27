@@ -13,25 +13,26 @@ use getopt glob
 # Thus we use define?
 define? CCACHE ""
 define? CC cc
-define? CC_FOR_BUILD cc
 define? CXX c++
 define? AR ar
 define? RANLIB ranlib
 define? STRIP strip
 define? ARFLAGS cr
-define? SH_LINKFLAGS ""
 define? CFLAGS ""
 define? CXXFLAGS ""
 define? LDFLAGS ""
-define? HOSTCFLAGS ""
 define? EXEEXT ""
 
 define? SH_CFLAGS ""
 define? SH_LDFLAGS ""
+define? SH_LINKFLAGS ""
 define? SH_SOEXT .so
 define? SHOBJ_CFLAGS ""
 define? SHOBJ_LDFLAGS ""
 
+define? CC_FOR_BUILD cc
+define? HOST_CFLAGS ""
+define? HOST_EXEEXT ""
 
 define? LOCAL_LIBS ""
 define? DESTDIR ""
@@ -150,6 +151,12 @@ proc BuildSpecEpilog {} {
 # HIGH LEVEL RULES
 # ==================================================================
 
+proc target-alias {target targetexe} {
+	if {$target ne $targetexe} {
+		list -alias [make-local $target]
+	}
+}
+
 proc Executable {args} {
 	show-this-rule
 	getopt {--test --nobuild --publish --strip --install: target args} args
@@ -164,22 +171,13 @@ proc Executable {args} {
 	define? CCLD [get-define CC]
 
 	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
-	target [make-local $targetexe] -inputs {*}$objects  [get-define LOCAL_LIBS] -depends [get-define PROJDEPS] -msg {note Link $target} -do {
+	target $localtargetexe -inputs {*}$objects [get-define LOCAL_LIBS] -depends [get-define PROJDEPS] -msg {note Link $target} -do {
 		run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
-	} -getvars CCLD LD_FLAGS PROJLIBS SYSLIBS
-
-	if {$targetexe ne $target} {
-		targetalias $localtarget $localtargetexe
-	}
+	} -getvars CCLD LD_FLAGS PROJLIBS SYSLIBS {*}[target-alias $target $targetexe]
 	Clean $targetexe
 
 	if {$publish} {
-		# Revisit: --publish=newname?
-		Publish bin $targetexe
-
-		if {$localtargetexe ne $localtarget} {
-			targetalias <bin>$target [file join [file join [get-define PUBLISH] bin] $targetexe]
-		}
+		PublishBin $target
 	}
 
 	if {[info exists install]} {
@@ -196,8 +194,17 @@ proc Executable {args} {
 	}
 }
 
+proc publish-dir {dir} {
+	file-join [get-define PUBLISH] $dir
+}
+
+proc publish-prefix {dir} {
+	make-prefix [publish-dir $dir]
+}
+
 proc publish-one-file {dest src} {
-	hard-link [file join [get-define PUBLISH] $dest] $src -vars dest $dest -msg {note Publish $dest}
+	#puts "publish-one-file: dest=$dest, src=$src, realdest=[publish-dir $dest]"
+	hard-link [publish-dir $dest] $src -vars dest $dest -msg {note Publish $dest}
 }
 
 proc make-shlib-symlinks {first args} {
@@ -206,14 +213,14 @@ proc make-shlib-symlinks {first args} {
 	}
 }
 
-proc publish-shared-lib {names source} {
-	set published [prefix [get-define PUBLISH]/lib/ $names]
+proc publish-shared-lib {names source alias} {
+	set published [prefix [publish-prefix lib] $names]
 
-	target $published -inputs $source -msg {note PublishSharedLib $libname} -do {
+	target $published -inputs $source -msg {note Publish lib/$libname} -do {
 		file delete {*}$target
 		exec ln -f $inputs [lindex $target 0]
 		make-shlib-symlinks {*}$target
-	} -vars libname [lindex $names 0]
+	} -vars libname [lindex $names 0] -alias $alias
 	add-clean [make-local clean] $published
 	add-clean [make-local distclean] $published
 }
@@ -261,9 +268,42 @@ proc expand-filespec {dir filelist keepdir} {
 	return $result
 }
 
+proc PublishBin {args} {
+	show-this-rule
+
+	getopt {--script args} args
+
+	set destdir [publish-dir bin]
+
+	if {$script} {
+		set exe ""
+	} else {
+		set exe [get-define EXEEXT]
+	}
+
+
+	foreach {dest src} [expand-filespec $destdir $args 0] {
+		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $dest} -alias <bin>[file tail $dest]
+	}
+}
+
+proc publish-lib {libname alias} {
+	show-this-rule
+
+	hard-link [publish-prefix lib]$libname [make-local $libname] -vars dest lib/$libname -msg {note Publish $dest} -alias $alias
+}
+
+
 proc Publish {args} {
 	show-this-rule
 	getopt {--keepdir dir args} args
+
+	if {$dir eq "bin"} {
+		user-notice [colerr purple [warning-location "Warning: Use PublishBin to publish binaries"]]
+	}
+	if {$dir eq "lib" && [string match lib* $args]} {
+		user-notice [colerr purple [warning-location "Warning: Use Lib --publish to publish libraries"]]
+	}
 
 	foreach {dest src} [expand-filespec $dir $args $keepdir] {
 		publish-one-file $dest $src
@@ -302,26 +342,23 @@ proc ArchiveLib {args} {
 	set libname lib$basename.a
 	set libalias <lib>$basename
 
-	set target [make-local $libname]
-	target $target -inputs {*}$objects -msg {note Ar $target} -do {
+	set locallibname [make-local $libname]
+	target $locallibname -inputs {*}$objects -msg {note Ar $target} -do {
 		file delete $target
 		run $AR $ARFLAGS $target {*}[expand-objects $inputs]
 		run $RANLIB $target
 	}
 
 	# Note: Libraries are not built by default, but are added to a local 'libs' rule
-	Phony libs $target
+	Phony libs $locallibname
 	Clean $libname
-	define-append LOCAL_LIBS $target
+	define-append LOCAL_LIBS $locallibname
 
 	if {[info exists install]} {
-		InstallFile [file-join $install $libname] $target
+		InstallFile [file-join $install $libname] $locallibname
 	}
 	if {$publish} {
-		Publish lib $libname
-
-		# Alias to make UseLibs work
-		targetalias $libalias [get-define PUBLISH]/lib/$libname
+		publish-lib $libname $libalias
 
 		# Used to make expand-objects work
 		dict set ::tmakedrb(objmap) $libalias $objects
@@ -378,9 +415,23 @@ proc SharedLib {args} {
 	set libalias <lib>$basename
 	ObjectCFlags $srcs [get-define SH_CFLAGS]
 
-	# Note: We won't link against local archive libs (LOCAL_LIBS) since they have not been compiled -fpic
-	# The SharedLibLink rule includes a run-time check for linking against archive libs
-	SharedLibLink $libname {*}$objects
+	set setsoname {}
+	if {[get-define SH_SOPREFIX ""] ne ""} {
+		set setsoname [get-define SH_SOPREFIX][file tail $libname]
+	}
+
+	define? CCLD [get-define CC]
+
+	# Note: Do not link against local archive libs (LOCAL_LIBS)
+	# XXX: Here we use $LDFLAGS to capture any user-specied link flags (.e.g. -mbig-endian).
+	#      Assume that these are required both for shared libs and for executables.
+	#      Is it necessary to separate these two?
+	#      Also, is LinkFlags/LD_FLAGS also required?
+
+	target $locallibname -inputs {*}$objects -depends [get-define PROJDEPS] -msg {note SharedLib $target} -do {
+		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
+	} -getvars CCLD PROJLIBS SYSLIBS -vars setsoname $setsoname
+	Clean $locallibname
 
 	# Only the fully versioned named is built in the local dir
 	Phony libs $locallibname
@@ -390,10 +441,8 @@ proc SharedLib {args} {
 	incr publish
 
 	if {$publish} {
-		# Publish along with the various symlinks
-		publish-shared-lib $names $locallibname
-		# Alias to make UseLibs work
-		targetalias $libalias [get-define PUBLISH]/lib/$libname
+		# Publish along with the various symlinks and create an alias
+		publish-shared-lib $names $locallibname $libalias
 
 		# Used to make expand-objects work
 		dict set ::tmakedrb(objmap) $libalias $objects
@@ -421,60 +470,29 @@ proc SharedLib {args} {
 # If desired, this can be aliased to SharedLib in project.spec
 alias Lib ArchiveLib
 
+# Build a dynamically loadable shared object from objects
 proc SharedObject {args} {
 	show-this-rule
 
-	getopt {--install: sharedobj args} args
+	getopt {--install: target args} args
 
-	set args [join $args]
+	set srcs [join $args]
 
 	# Must build objects with -fpic, etc.
-	ObjectCFlags $args [get-define SHOBJ_CFLAGS]
-	SharedObjectLink $sharedobj [Objects $args]
+	ObjectCFlags $srcs [get-define SHOBJ_CFLAGS]
 
-	set sharedobj [make-local $sharedobj]
-
-	Phony all $sharedobj
-	if {[info exists install]} {
-		Install --bin $install $sharedobj
-	}
-}
-
-# Link a dynamically loadable shared object from objects
-proc SharedObjectLink {target args} {
-	show-this-rule
-
-	set args [join $args]
+	set localtarget [make-local $target]
 
 	# Note that we only link against local shared libs, not archive libs
-	target [make-local $target] -inputs {*}$args -msg {note SharedObject $target} -do {
+	target $localtarget -inputs {*}[Objects $srcs] -msg {note SharedObject $target} -do {
 		run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS
 	}
 	Clean $target
-}
+	Phony all $localtarget
 
-# Link a shared library from objects
-proc SharedLibLink {target args} {
-	show-this-rule
-
-	set args [join $args]
-
-	set setsoname {}
-	if {[get-define SH_SOPREFIX ""] ne ""} {
-		set setsoname [get-define SH_SOPREFIX][file tail $target]
+	if {[info exists install]} {
+		Install --bin $install $localtarget
 	}
-
-	define? CCLD [get-define CC]
-
-	# XXX: Here we use $LDFLAGS to capture any user-specied link flags (.e.g. -mbig-endian).
-	#      Assume that these are required both for shared libs and for executables.
-	#      Is it necessary to separate these two?
-	#      Also, is LinkFlags/LD_FLAGS also required?
-
-	target [make-local $target] -inputs {*}$args -depends [get-define PROJDEPS] -msg {note SharedLib $target} -getvars CCLD PROJLIBS SYSLIBS -do {
-		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
-	} -vars setsoname $setsoname
-	Clean $target
 }
 
 # Create an object file from each source file
@@ -541,7 +559,7 @@ proc Linker {linker} {
 proc UseLibs {args} {
 	# Create/append to PROJLIBS (the link line)
 	if {[get-define PROJLIBS] eq ""} {
-		define PROJLIBS "-L[get-define PUBLISH]/lib"
+		define PROJLIBS "-L[publish-dir lib]"
 	}
 	define-append PROJLIBS [prefix -l $args]
 
@@ -627,7 +645,7 @@ proc setup-test-env {} {
 	if {$ldlibpath ne ""} {
 		set path [getenv $ldlibpath ""]
 		# Must use a full path here since tests do chdir
-		set addlib [file-join [get-define TOPBUILDDIR] [get-define PUBLISH]/lib]
+		set addlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
 		append-with-space path $addlib $::tcl_platform(pathSeparator)
 		setenv $ldlibpath $path
 	}
@@ -873,7 +891,7 @@ proc find-project-bin {bin args} {
 
 	if {[regexp {^<bin>(.*)} $bin -> basename]} {
 		dputs m "[find-source-location]: find-project-bin: $bin is a publish target"
-		set publishbin [get-define PUBLISH]/bin/$basename
+		set publishbin [publish-prefix bin]$basename
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
 			return [list $bin [file-src-relative $publishbin]]
@@ -943,21 +961,19 @@ proc DefaultTarget {name} {
 proc HostExecutable {target args} {
 	set localtarget [make-local $target]
 
-	set localtargetexe $localtarget[get-define EXEEXT]
-	set targetexe $target[get-define EXEEXT]
+	# Hmmm, EXEEXT may be different on the host
+	set localtargetexe $localtarget[get-define HOST_EXEEXT]
+	set targetexe $target[get-define HOST_EXEEXT]
 
-	target $localtargetexe -inputs {*}[make-local {*}$args] -msg {note HostExecutable $target} -getvars HOSTCFLAGS -do {
-		run $CC_FOR_BUILD $HOSTCFLAGS -o $target $inputs
+	target $localtargetexe -inputs {*}[make-local {*}$args] -msg {note HostExecutable $target} -getvars HOST_CFLAGS -do {
+		run $CC_FOR_BUILD $HOST_CFLAGS -o $target $inputs
 	} -dyndep {
 		header-scan-regexp-recursive $local "" $CHDRPATTERN
-	}
-	Publish bin $targetexe
+	} {*}[target-alias $target $targetexe]
+
+	PublishBin $target
 	Clean $targetexe
 
-	if {$localtargetexe ne $localtarget} {
-		targetalias $localtarget $localtargetexe
-		targetalias <bin>$target [file join [file join [get-define PUBLISH] bin] $targetexe]
-	}
 	return $localtarget
 }
 
