@@ -41,6 +41,7 @@ if {$tmakecompat(istcl)} {
 	proc alias {new old args} {
 		interp alias {} $new {} $old {*}$args
 	}
+	alias array-set array set
 	# Simple single-list lmap with no support for break or continue
 	proc lmap {var list script} {
 		set result {}
@@ -50,9 +51,7 @@ if {$tmakecompat(istcl)} {
 		}
 		return $result
 	}
-	proc lunique {list} {
-		lsort -unique $list
-	}
+	alias lunique lsort -unique
 	proc exec-save-stderr {args} {
 		set rc [catch {exec >@stdout {*}$args} msg opts]
 		if {$rc == 0} {
@@ -110,6 +109,7 @@ if {$tmakecompat(istcl)} {
 	proc env-save {} {
 		return $::env
 	}
+	alias array-set set
 	proc env-restore {newenv} {
 		set ::env $newenv
 	}
@@ -150,10 +150,9 @@ proc setenv {name value} {
 	set ::env($name) $value
 }
 
-# In case 'file normalize' doesn't exist
-#
-proc file-normalize {path} {
-	if {[catch {file normalize $path} result]} {
+if {[catch {file normalize .}]} {
+	# 'file normalize' doesn't exist
+	proc file-normalize {path} {
 		if {$path eq ""} {
 			return ""
 		}
@@ -166,8 +165,10 @@ proc file-normalize {path} {
 			set result [file join [pwd] [file tail $path]]
 		}
 		cd $oldpwd
+		return $result
 	}
-	return $result
+} else {
+	alias file-normalize file normalize
 }
 
 proc file-join {dir path} {
@@ -344,9 +345,7 @@ if {[catch {clock millis}]} {
 		expr {[clock seconds] * 1000.0}
 	}
 } else {
-	proc clock-millis {} {
-		clock millis
-	}
+	alias clock-millis clock millis
 }
 
 if {[info commands signal] ne ""} {

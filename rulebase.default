@@ -93,8 +93,9 @@ proc BuildSpecProlog {} {
 	if {[local-prefix] ne ""} {
 		set parentprefix [make-prefix [file dirname [local-dir]]]
 		foreach t {all clean distclean test} {
-			Phony $t
-			target $parentprefix$t -phony -depends [make-local $t]
+			set localtarget [make-local $t]
+			target $localtarget -phony
+			target $parentprefix$t -phony -depends $localtarget
 		}
 		clean-target [make-local clean] Clean
 		clean-target [make-local distclean] DistClean
@@ -879,7 +880,7 @@ proc find-project-bin {bin args} {
 	set localbin [make-local $bin]
 
 	if {[is-target? $localbin]} {
-		dputs m "[find-source-location]: find-project-bin: $localbin is a local target"
+		dputxs m {[find-source-location]: find-project-bin: $localbin is a local target}
 		if {$opts(-chdir)} {
 			return [list $localbin ./$bin]
 		} else {
@@ -889,7 +890,7 @@ proc find-project-bin {bin args} {
 	}
 
 	if {[regexp {^<bin>(.*)} $bin -> basename]} {
-		dputs m "[find-source-location]: find-project-bin: $bin is a publish target"
+		dputxs m {[find-source-location]: find-project-bin: $bin is a publish target}
 		set publishbin [publish-prefix bin]$basename
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
@@ -900,7 +901,7 @@ proc find-project-bin {bin args} {
 	}
 
 	if {[file-src-exists $localbin]} {
-		dputs m "[find-source-location]: find-project-bin: $localbin exists as source"
+		dputxs m {[find-source-location]: find-project-bin: $localbin exists as source}
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
 			return [list $localbin [file-src-relative $localbin]]
@@ -910,7 +911,7 @@ proc find-project-bin {bin args} {
 	}
 
 	if {$opts(-optional)} {
-		dputs m "[find-source-location]: find-project-bin: $bin is assumed to be external"
+		dputxs m {[find-source-location]: find-project-bin: $bin is assumed to be external}
 		return [list "" $bin]
 	}
 

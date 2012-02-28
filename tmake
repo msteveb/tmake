@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2011 WorkWare Systems http://www.workware.net.au/
+# Copyright (c) 2011-2012 WorkWare Systems http://www.workware.net.au/
 # All rights reserved
 # vim:se syntax=tcl:
 # \
@@ -13,7 +13,7 @@ set tmake(version) 0.2
 set tmake(cacheversion) 3
 set tmake(debug) 0
 
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0 x 0}
 set tmake(debughelp) {
 	* "Enable all debug"
 	? "Display help for debug types"
@@ -34,6 +34,7 @@ set tmake(debughelp) {
 	v "Variable definition"
 }
 set tmake(verbose) 0
+set tmake(showdelta) 0
 set tmake(norun) 0
 set tmake(showtime) 0
 set tmake(quickstop) 0
@@ -155,6 +156,9 @@ proc make-parse-options {argv {type tmake}} {
 				--find {
 					set tmake(findtarget) $value
 				}
+				--delta {
+					incr tmake(showdelta)
+				}
 				--build {
 					set tmake(build) $value
 				}
@@ -252,14 +256,27 @@ proc make {argv} {
 		set tmake(dir) [file dirname $::argv0]
 		use compat
 	}
+
 	use colour
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
 	set tmake(start) [clock-millis]
+	set tmake(prevtime) $tmake(start)
 	set tmake(cmdline) {}
 
 	make-parse-options $argv
+
+	# We want disabled debugging to be as fast as possible
+	# These are called very frequently
+	foreach i {n G d D} {
+		if {[debug-is-set $i]} {
+			alias dputs-$i dputs $i
+		} else {
+			# proc with null body is specially optimised
+			proc dputs-$i {args} {}
+		}
+	}
 
 	# If topsrcdir is already set, the current dir must be the topbuilddir
 	if {[info exists tmake(topsrcdir)]} {
@@ -391,7 +408,7 @@ proc make {argv} {
 			set reload 0
 			foreach {t nocare} $tmake(projfiles) {
 				if {$nocare && ![is-target? $t]} {
-					dputs n "Load --nocare $t, not a target"
+					dputs-n "Load --nocare $t, not a target"
 					continue
 				}
 				set rc [build $t]
@@ -411,7 +428,7 @@ proc make {argv} {
 			if {$reload} {
 				# Restore the state
 				unset tmake
-				array set tmake $tmake_save
+				array-set tmake $tmake_save
 
 				load-build-description 0
 
@@ -458,7 +475,7 @@ proc load-cache {} {
 		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
 		if {$tmakecache(version) != $tmake(cacheversion)} {
 			user-notice ".makecache is out-of-date -- ignoring"
-			array set tmakecache $tmake(emptycache)
+			array-set tmakecache $tmake(emptycache)
 			# But overwrite the cache next time around
 			set tmakecache(writecache) 1
 		}
@@ -878,15 +895,32 @@ proc dputs {types msg {indent 1}} {
 	}
 }
 
+proc dputs-null {args} {}
+
+# Like dputs, but msg needs to be expanded with subst
+# This is used for messages which may be expensive to evalue
+proc dputxs {types msg {indent 1}} {
+	if {[debug-is-set $types]} {
+		dputs $types [uplevel 1 [list subst $msg]]
+	}
+}
+
 proc dbg-msg-indent {{autoindent 1}} {
+	global tmake
+
 	set now [clock-millis]
-	set elapsed [expr {$now - $::tmake(start)}]
+	if {$tmake(showdelta)} {
+		set time [expr {$now - $tmake(prevtime)}]
+		set tmake(prevtime) $now
+	} else {
+		set time [expr {$now - $tmake(start)}]
+	}
 	if {$autoindent && [debug-is-set G]} {
 		set indent [string repeat "    " [llength $::tmake(current)]]
 	} else {
 		set indent {}
 	}
-	return [format %5dms $elapsed]$indent
+	return [format %5dms $time]$indent
 }
 
 proc pad {text width {char { }}} {
@@ -925,7 +959,7 @@ proc show-rule {target} {
 		set ruletarget $target
 	}
 	if {[is-rule? $ruletarget]} {
-		array set t [get-rule $ruletarget]
+		array-set t [get-rule $ruletarget]
 		set flags {}
 		set lines {}
 		puts [pad "-- $ruletarget " 60 -]--
@@ -1164,7 +1198,7 @@ proc merge-vars {dict1 dict2} {
 		if {[dict size $dict1] == 0} {
 			return $dict2
 		}
-		array set d1 $dict1
+		array-set d1 $dict1
 		foreach {n v} $dict2 {
 			append-with-space d1($n) $v
 		}
@@ -1269,10 +1303,6 @@ proc update-rule {ruledict} {
 	}
 	set alias [dict get $ruledict alias]
 	if {$alias ne ""} {
-#?		if {[llength $ruletarget]} {
-#?			puts ruletarget=$ruletarget
-#?			dev-error "Alias not allowed for rule with multiple targets at [make-source-location $ruletarget]"
-#?		}
 		dict set ::tmake(aliases) $alias [lindex $ruletarget 0]
 	}
 
@@ -1318,14 +1348,14 @@ proc target {ruletarget args} {
 	# If the rule aready exists, we are updating
 	if {[is-rule? $ruletarget]} {
 		# Use take-rule here for efficiency
-		array set orig [take-rule $ruletarget]
+		array-set orig [take-rule $ruletarget]
 	} elseif {[is-target? $ruletarget]} {
 		# Can't update a rule via the invidual target
 		set source [dict get [get-target-rule $ruletarget] source]
 		dev-error "Multiple-target rule for $ruletarget was already specified at [make-source-location $source @]"
 	}
 
-	array set info [parse-rule $ruletarget $args]
+	array-set info [parse-rule $ruletarget $args]
 
 	#dputs p "target $ruletarget @ $info(source)"
 
@@ -1448,6 +1478,11 @@ proc parse-rule-args {arglistname optname} {
 # Returns a dictionary (list) representing the parsed target rule
 #
 proc parse-rule {target arglist} {
+	array-set info {
+		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
+		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
+	}
+
 	set info(source) [find-source-location *build.spec]
 	if {$info(source) eq "unknown"} {
 		set info(source) [find-source-location *.spec]
@@ -1456,11 +1491,6 @@ proc parse-rule {target arglist} {
 		}
 	}
 	set info(target) $target
-
-	array set info {
-		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
-		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
-	}
 
 	# Parse an option followed by multiple non-options
 	while {[llength $arglist]} {
@@ -1612,7 +1642,7 @@ proc needbuild? {targets depends depname} {
 		dputs b "$oldest_target is older than $newest_depends, so forcing rebuild"
 		return 1
 	}
-	dputs n "$targets is newer than $depends, so not forcing rebuild"
+	dputs-n "$targets is newer than $depends, so not forcing rebuild"
 	return 0
 }
 
@@ -1683,7 +1713,7 @@ proc run {args} {
 }
 
 proc calc-dyndeps {vardict target} {
-	array set t [get-rule $target]
+	array-set t [get-rule $target]
 	#puts "=============="
 	#parray t
 
@@ -1697,7 +1727,7 @@ proc calc-dyndeps {vardict target} {
 				return -code $rc {*}$opts $result
 			}
 		}
-		dputs d "Dynamic dependencies for $target: $dyndeps"
+		dputs-d "Dynamic dependencies for $target: $dyndeps"
 	}
 	return $dyndeps
 }
@@ -1763,9 +1793,9 @@ proc build {target} {
 		if {[dict exists $tmake(targetstatus) $target]} {
 			set ret [dict get $tmake(targetstatus) $target]
 		} else {
-			dputs G "build $target"
+			dputs-G "build $target"
 			if {[file-src-exists $target]} {
-				dputs n "$target is not a target, but exists"
+				dputs-n "$target is not a target, but exists"
 				set ret 0
 			} else {
 				dputs b "$target is not a target and does not exist"
@@ -1795,7 +1825,7 @@ proc build {target} {
 			return -1
 		}
 		unknown {
-			dputs G "build $target"
+			dputs-G "build $target"
 		}
 		default {
 			error "Bad status: $status"
@@ -1807,7 +1837,7 @@ proc build {target} {
 	set oldcurrent $tmake(current)
 	lappend tmake(current) $target
 
-	array set t [get-rule $ruletarget]
+	array-set t [get-rule $ruletarget]
 
 	set reason {}
 	if {$t(phony)} {
@@ -1965,7 +1995,7 @@ proc build {target} {
 				lappend reason commands
 				set result 1
 			} else {
-				dputs n "Commands for $ruletarget are unchanged"
+				dputs-n "Commands for $ruletarget are unchanged"
 			}
 		}
 	}
@@ -2103,7 +2133,7 @@ proc header-scan-regexp {suffix regex filename} {
 		set filename [file-src $filename]
 		if {![file exists $filename]} {
 			# Might be a target which failed to build. This will be handled later
-			dputs D "header-scan-regexp $filename => <does not exist>"
+			dputs-D "header-scan-regexp $filename => <does not exist>"
 			return {}
 		}
 	}
@@ -2119,7 +2149,7 @@ proc header-scan-regexp {suffix regex filename} {
 		}
 	}
 	close $f
-	dputs D "header-scan-regexp $filename => $headers"
+	dputs-D "header-scan-regexp $filename => $headers"
 	return $headers
 }
 
@@ -2132,7 +2162,7 @@ proc find-file-on-path {filename path} {
 
 	set result {}
 	if {[is-target? $f]} {
-		dputs D "$f is a target, so building first"
+		dputs-D "$f is a target, so building first"
 		# Even if it fails to build, it is needed
 		if {[build $f] >= 0} {
 			set result [list target $f]
@@ -2186,10 +2216,10 @@ proc find-file {filename paths} {
 	}
 
 	if {[llength $result] == 0} {
-		dputs D "Not a file and not a target, $filename"
+		dputs-D "Not a file and not a target, $filename"
 	}
 	if {[debug-is-set D] && [llength $result] > 2} {
-		dputs D "Note: Found multiple locations for $filename: [join $result]"
+		dputs-D "Note: Found multiple locations for $filename: [join $result]"
 	}
 	#puts "find-file filename=$filename, paths=$paths => $result"
 	# Cache this result
@@ -2211,11 +2241,12 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 		set filepath [file-src $filename]
 	}
 	if {![file exists $filepath]} {
-		dputs D "header-scan-regexp-recursive, $filepath does not exist"
+		dputs-D "header-scan-regexp-recursive, $filepath does not exist"
 		return {}
 	}
+	set cachekey "$incpaths $suffix $regex $filename"
 
-	dputs D "Scanning $filename for headers: incpaths=$incpaths"
+	dputs-D "Scanning $filename for headers: incpaths=$incpaths"
 	# Can we get the result from the cache?
 	set stamp [list [file mtime $filepath] $incpaths $suffix $regex]
 	if {[dict exists $tmakecache(headerscan) $filename]} {
@@ -2228,13 +2259,13 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 			foreach {cfile ctypepath} $cachedresults {
 				set typepath [find-file $cfile $incpaths]
 				if {$typepath ne $ctypepath} {
-					dputs d "previously $cfile resolved to {$ctypepath}, but now resolves to {$typepath}, discarding cache"
+					dputs-d "previously $cfile resolved to {$ctypepath}, but now resolves to {$typepath}, discarding cache"
 
 					# Now what if the file was previously a target it is an orphan.
 					# Discard it to avoid mistakenly thinking that it is a new source file.
 					foreach {type path} $ctypepath {
 						if {$type eq "target"} {
-							dputs d "discarding orphan $path"
+							dputs-d "discarding orphan $path"
 							file delete $path
 						}
 					}
@@ -2244,7 +2275,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 			}
 			if {$ok} {
 				# Can reuse the cache
-				dputs d "header-scan-regexp $filename (cached) => $headers"
+				dputs-d "header-scan-regexp $filename (cached) => $headers"
 				return $headers
 			}
 		}
