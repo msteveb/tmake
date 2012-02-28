@@ -323,7 +323,7 @@ proc make {argv} {
 	}
 	lassign [invoke-spec-file $rulebase] rc msg opts
 	if {$rc != 0 && $rc != 2} {
-		return -code $rc {*}$opts $msg 
+		return -code $rc {*}$opts $msg
 	}
 
 	dputs T "Parsed rulebase"
@@ -1288,11 +1288,13 @@ proc get-rule-status {ruletarget} {
 }
 
 proc show-this-rule {} {
-	set where "[find-source-location] "
-	if {$where eq "unknown "} {
-		set where ""
+	if {[debug-is-set p]} {
+		set where "[find-source-location] "
+		if {$where eq "unknown "} {
+			set where ""
+		}
+		dputs p "$where[info level -1]" 0
 	}
-	dputs p "$where[info level -1]" 0
 }
 
 proc make-source-location {ruletarget {prefix {}} {suffix {}}} {

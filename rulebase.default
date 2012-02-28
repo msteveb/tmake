@@ -520,7 +520,6 @@ proc Object {target src} {
 	set obj [make-local $target]
 	set src [make-local $src]
 	if {$ext ne ".o"} {
-		set extra {}
 		if {[info commands ObjectRule$ext] eq ""} {
 			dev-error "Don't know how to build Object from $src"
 		}

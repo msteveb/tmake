@@ -339,11 +339,14 @@ proc error-stacktrace {msg} {
 	}
 }
 
-proc clock-millis {} {
-	if {[catch {clock millis} result]} {
-		set result [expr {[clock seconds] * 1000.0}]
+if {[catch {clock millis}]} {
+	proc clock-millis {} {
+		expr {[clock seconds] * 1000.0}
 	}
-	return $result
+} else {
+	proc clock-millis {} {
+		clock millis
+	}
 }
 
 if {[info commands signal] ne ""} {
