@@ -1005,12 +1005,27 @@ Phony libs
 Phony install all
 Phony test
 
-Depends all
 Depends clean clean-orphans
 Depends distclean clean-orphans
-Depends test clean-orphans
 
+# Invoked manually
 Phony clean-orphans -do {
 	clean-files [get-orphan-targets] "orphan targets"
 	discard-orphan-targets
+	if {[file exists .trash]} {
+		note Clean .trash
+		file delete -force .trash
+	}
+}
+
+# Automatic invocation, so move files to trash
+# (This overrides the built-in version which simply deletes)
+# .trash will be deleted on 'make clean-orphans' (and thus clean and distclean)
+proc delete-orphan-files {args} {
+	file mkdir .trash
+	foreach file $args {
+		if {[file exists $file]} {
+			file rename -force $file .trash/[string map {/ _} $file]
+		}
+	}
 }

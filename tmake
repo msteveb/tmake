@@ -438,7 +438,7 @@ proc make {argv} {
 			# Discard orphans before building any non-cleaning target
 			set orphans [get-orphan-targets]
 			if {[llength $orphans]} {
-				file delete {*}$orphans
+				delete-orphan-files {*}$orphans
 				note Clean removing [llength $orphans] orphan target(s)
 				dputs C $orphans
 				discard-orphan-targets
@@ -2322,6 +2322,9 @@ proc colerr {colour string} {
 	return $string
 }
 
+# Core implementation simply removes files
+# Project or rulebase can override this
+alias delete-orphan-files file delete
 
 # Embedded modules are inserted below here
 ##-- CUT HERE --##
