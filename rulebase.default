@@ -479,20 +479,21 @@ proc SharedObject {args} {
 
 	set srcs [join $args]
 
+	define? CCLD [get-define CC]
+
 	# Must build objects with -fpic, etc.
 	ObjectCFlags $srcs [get-define SHOBJ_CFLAGS]
 
 	set localtarget [make-local $target]
 
-	# Note that we only link against local shared libs, not archive libs
-	target $localtarget -inputs {*}[Objects $srcs] -msg {note SharedObject $target} -do {
-		run $CC $SHOBJ_LDFLAGS -o $target $inputs $SYSLIBS
-	}
+	target $localtarget -inputs {*}[Objects $srcs] -depends [get-define PROJDEPS] -msg {note SharedObject $target} -do {
+		run $CCLD $SHOBJ_LDFLAGS -o $target {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
+	} -getvars CCLD PROJLIBS SYSLIBS
 	Clean $target
 	Phony all $localtarget
 
 	if {[info exists install]} {
-		Install --bin $install $localtarget
+		Install --bin $install $target
 	}
 }
 
