@@ -150,21 +150,23 @@ proc setenv {name value} {
 	set ::env($name) $value
 }
 
-if {[catch {file normalize .}]} {
-	# 'file normalize' doesn't exist
+if {!$tmakecompat(istcl)} {
+	# Jim Tcl can't normalize a non-existent path
 	proc file-normalize {path} {
 		if {$path eq ""} {
 			return ""
 		}
-		set oldpwd [pwd]
-		if {[file isdir $path]} {
-			cd $path
-			set result [pwd]
-		} else {
-			cd [file dirname $path]
-			set result [file join [pwd] [file tail $path]]
+		if {[catch {file normalize $path} result]} {
+			set oldpwd [pwd]
+			if {[file isdir $path]} {
+				cd $path
+				set result [pwd]
+			} else {
+				cd [file dirname $path]
+				set result [file join [pwd] [file tail $path]]
+			}
+			cd $oldpwd
 		}
-		cd $oldpwd
 		return $result
 	}
 } else {

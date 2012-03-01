@@ -1090,7 +1090,11 @@ proc show-all-targets {detailed} {
 #
 proc define {name args} {
 	if {![dict exists $::tmake(fixedvars) $name]} {
-		set value [join $args]
+		if {[llength $args]} {
+			set value [join $args]
+		} else {
+			set value 1
+		}
 		#dputs v "define $name $value"
 		dict set ::tmake(defines) $name $value
 		# Ensure that the value is visibile the current spec file
