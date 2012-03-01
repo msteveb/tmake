@@ -334,6 +334,10 @@ proc make {argv} {
 
 	use getopt config
 
+	# Core implementation simply removes files
+	# Project or rulebase can override this
+	alias delete-orphan-files file delete
+
 	set rulebase [file-src rulebase.spec]
 	if {![file exists $rulebase]} {
 		set rulebase $tmake(dir)/rulebase.default
@@ -2321,10 +2325,6 @@ proc colout {colour string} {
 proc colerr {colour string} {
 	return $string
 }
-
-# Core implementation simply removes files
-# Project or rulebase can override this
-alias delete-orphan-files file delete
 
 # Embedded modules are inserted below here
 ##-- CUT HERE --##
