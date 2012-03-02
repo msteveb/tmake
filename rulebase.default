@@ -44,7 +44,6 @@ define C_FLAGS ""
 define CXX_FLAGS ""
 define LD_FLAGS ""
 
-# XXX Should be $TOP/publish
 define PUBLISH publish
 
 define PROJLIBS ""
@@ -956,6 +955,7 @@ proc LocalMakefile {name} {
 }
 
 proc DefaultTarget {name} {
+	show-this-rule
 	set ::tmake(defaulttarget) $name
 }
 
