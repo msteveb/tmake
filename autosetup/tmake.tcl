@@ -11,9 +11,15 @@
 
 use system
 
-module-options {}
+module-options {
+	objdir:dir	=> {Automatically set --build=dir for tmake}
+}
 
 define CONFIGURED
+
+if {[opt-val objdir] ne ""} {
+	writefile $::autosetup(srcdir)/tmake.opt "--build=[opt-val objdir]\n"
+}
 
 # @make-tmake-settings outfile patterns ...
 #

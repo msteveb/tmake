@@ -13,4 +13,4 @@ Depends settings.conf auto.def -do {
 	run [set AUTOREMAKE] >config.out
 }
 Clean config.out config.log
-DistClean settings.conf
+DistClean settings.conf [file-src tmake.opt]

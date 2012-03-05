@@ -5,6 +5,8 @@ Depends settings.conf -do {
 }
 DistClean settings.conf
 
+ifconfig CONFIGURED
+
 IncludePaths mDNSCore mDNSShared
 
 CFlags -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\" \
@@ -13,6 +15,7 @@ CFlags -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\" \
     -DMDNS_DEBUGMSGS=0
 
 CFlags -Wno-deprecated-declarations
+
 
 if {[string match *-linux* $host]} {
         CFlags -DUSES_NETLINK -DHAVE_LINUX

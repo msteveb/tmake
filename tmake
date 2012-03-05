@@ -9,7 +9,7 @@ dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 # Initialiation
 # ==================================================================
 
-set tmake(version) 0.2
+set tmake(version) {0.2 (5-Mar-2012)}
 set tmake(cacheversion) 3
 set tmake(debug) 0
 
@@ -89,11 +89,6 @@ proc make-parse-options {argv {type tmake}} {
 				-C {
 					# This will fail with a fatal error if not a dir
 					cd $arg
-					# emulate make for vim quickerr
-					pputs [colout green "tmake: Entering directory `[pwd]'"]
-				}
-				-P {
-					set tmake(topsrcdir) [file-normalize $arg]
 				}
 				default {
 					error "Unexpected $nextarg"
@@ -222,9 +217,6 @@ proc make-parse-options {argv {type tmake}} {
 				-C {
 					set nextopt $arg
 				}
-				-P {
-					set nextopt $arg
-				}
 				-- {
 				}
 				default {
@@ -234,12 +226,8 @@ proc make-parse-options {argv {type tmake}} {
 			continue
 		}
 
-		# Must be a target. If is of the form subdir//target or /target, this means the global 'target'
-		if {[regexp {//(.*)} $arg -> realtarget] || [regexp {^/(.*)} $arg -> realtarget]} {
-			lappend tmake(cmdline) $realtarget
-		} else {
-			lappend tmake(cmdline) $arg
-		}
+		# Must be a target
+		lappend tmake(cmdline) $arg
 	}
 	if {[info exists nextopt]} {
 		user-error "$nextopt requires an argument"
@@ -264,8 +252,16 @@ proc make {argv} {
 	set tmake(start) [clock-millis]
 	set tmake(prevtime) $tmake(start)
 	set tmake(cmdline) {}
+	set tmake(initialdir) [pwd]
 
 	make-parse-options $argv
+
+	# Need to find the project top
+	set tmake(topsrcdir) [find-project-top]
+	if {$tmake(topsrcdir) eq ""} {
+		user-error "Failed to find project.spec in any parent directory."
+	}
+	make-parse-options [readfile $tmake(topsrcdir)/tmake.opt ""]
 
 	# We want disabled debugging to be as fast as possible
 	# These are called very frequently
@@ -278,43 +274,33 @@ proc make {argv} {
 		}
 	}
 
-	# If topsrcdir is already set, the current dir must be the topbuilddir
-	if {[info exists tmake(topsrcdir)]} {
-		if {[info exists tmake(build)]} {
-			user-error "Use -C or --build, not both"
-		}
-		if {[file exists build.spec]} {
-			user-error "-C [pwd] looks like a source directory, not a build directory"
-		}
-		set tmake(topbuilddir) [pwd]
-		set tmake(topsrcdir) [relative-path $tmake(topsrcdir)]
-		dputs m "Top build dir is $tmake(topbuilddir)"
-		dputs m "Top source dir is $tmake(topsrcdir)"
+	# By default, the build directory is 'objdir', but this
+	# can be changed with --build, either on the command line or from tmake.opt
+	# XXX: Currently tmake.opt overrides the command line because it it parsed later.
+	if {![info exists tmake(build)]} {
+		dputs m "Setting --build=objdir"
+		set tmake(build) objdir
 	} else {
-		# Need to find the project top
-		set tmake(topbuilddir) [find-project-top]
-		if {$tmake(topbuilddir) eq ""} {
-			user-error "Failed to find project.spec in any parent directory."
-		}
-		if {[info exists tmake(build)]} {
-			cd $tmake(topbuilddir)
-			if {[file exists $tmake(build)/build.spec]} {
-				user-error "--build=$tmake(build) looks like a source directory, not a build directory"
-			}
-			set top [pwd]
-			file mkdir $tmake(build)
-			cd $tmake(build)
-			set tmake(topbuilddir) [pwd]
-			set tmake(topsrcdir) [relative-path $top]
-		} else {
-			if {[relative-path $tmake(topbuilddir)] ne "."} {
-				# emulate make for vim quickerr
-				pputs [colout green "tmake: Entering directory `$tmake(topbuilddir)'"]
-			}
-			cd $tmake(topbuilddir)
-			set tmake(topsrcdir) .
-		}
+		dputs m "Got --build=$tmake(build)"
 	}
+
+	set tmake(topbuilddir) [file-join $tmake(topsrcdir) $tmake(build)]
+
+	# Find the current dir relative to topsrcdir
+	set tmake(subdir) [relative-path [pwd] $tmake(topsrcdir)]
+
+	# May as well create the build dir now
+	file mkdir $tmake(topbuilddir)
+
+	cd $tmake(topbuilddir)
+	if {[pwd] ne $tmake(initialdir)} {
+		# emulate make for vim quickerr
+		pputs [colout green "tmake: Entering directory `$tmake(topbuilddir)'"]
+	}
+
+	# Now make topsrcdir releative
+	set tmake(topsrcdir) [relative-path $tmake(topsrcdir)]
+
 	# Make these available in the environment for the benefit of generator programs and scripts
 	# which want to be able to find things
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
@@ -383,10 +369,19 @@ proc make {argv} {
 		tmake-exit 0
 	}
 
+	# Targets are relative to the local dir, $tmake(subdir),
+	# unless prefixed with / in which case they are global.
 	if {[llength $tmake(cmdline)]} {
-		set targets $tmake(cmdline)
+		foreach arg $tmake(cmdline) {
+			if {[regexp {//(.*)} $arg -> realtarget] || [regexp {^/(.*)} $arg -> realtarget]} {
+				puts "$arg => $realtarget"
+				lappend targets $realtarget
+			} else {
+				lappend targets [file-join $tmake(subdir) $arg]
+			}
+		}
 	} else {
-		set targets $tmake(defaulttarget)
+		lappend targets [file-join $tmake(subdir) $tmake(defaulttarget)]
 	}
 
 	# Build each target, resetting the status and possibly reloading every time
@@ -1701,7 +1696,7 @@ proc note {type args} {
 proc run {args} {
 	set cmdline [join $args]
 	set cmd [lindex $cmdline 0]
-	if {![string match */* $cmd] && [file exists $cmd]} {
+	if {![string match */* $cmd] && [file isfile $cmd]} {
 		set cmdline ./$cmdline
 	}
 	vputs [string trim $cmdline]
@@ -1907,7 +1902,7 @@ proc build {target} {
 
 		# Even before we do anything else, if the list of dependencies has changed,
 		# the target needs to be built
-		if {[llength $t(do)]} {
+		if {$result == 0 && [llength $t(do)]} {
 			if {$t(phony)} {
 				# Phony target isn't going to get rebuild regardless
 			} elseif {![dict exists $tmakecache(deps) $ruletarget]} {
