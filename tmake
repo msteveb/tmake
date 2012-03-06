@@ -704,6 +704,19 @@ proc file-build-relative {buildpath {srcdir {}}} {
 	relative-path $build $src
 }
 
+# If $builddir is a dir from the top of the build tree,
+# (defaults to [local-dir])
+# return a relative path to $srcpath from the build tree.
+#
+proc file-src-relative {srcpath {builddir {}}} {
+	if {$builddir eq ""} {
+		set builddir [local-dir]
+	}
+	set src [file join $::tmake(topsrcdir) $srcpath]
+	set build [file join $::tmake(topbuilddir) $builddir]
+	relative-path $src $build
+}
+
 # Read in the given spec file in the given directory (relative to topdir)
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir {optional 0}} {
