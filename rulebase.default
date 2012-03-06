@@ -330,11 +330,12 @@ proc expand-objects {objs} {
 			# XXX: How to guarantee that $SH_CFLAGS are set on these objects?
 			# (Either directly via ObjectCFlags or with a top-level CFlags)
 			#
-			lappend result {*}[dict get $::tmakedrb(objmap) $obj]
+			lappend result {*}[file-build [dict get $::tmakedrb(objmap) $obj]]
 		} else {
 			lappend result $obj
 		}
 	}
+	#puts "expand-objects $objs =>\n$result"
 	return $result
 }
 
