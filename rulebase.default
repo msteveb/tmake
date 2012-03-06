@@ -145,7 +145,7 @@ proc BuildSpecEpilog {} {
 		}
 
 		# Arrange to delete this (source) Makefile on distclean
-		add-clean [make-local distclean] [file-join [get-define TOPSRCDIR] $makefile]
+		DistClean --src $makefile
 	}
 }
 
@@ -671,6 +671,10 @@ proc setup-test-env {} {
 	}
 }
 
+proc get-test-id {} {
+	return test#[incr ::tmakedrb(testid)]
+}
+
 # Run an executable test
 # The executable must be built in the current dir
 #
@@ -678,7 +682,7 @@ proc Test {args} {
 	show-this-rule
 
 	getopt {--interp: --chdir --quiet command args} args
-	set testid test#[incr ::tmakedrb(testid)]
+	set testid [get-test-id]
 	set depends {}
 	set localcommand [make-local $command]
 
@@ -727,7 +731,7 @@ proc Test {args} {
 
 	target [make-local $testid] -phony -depends $deps -vars {*}$vars {*}$opts -do {
 		setup-test-env
-		set ::env(SRCDIR) $srcpath
+		setenv SRCDIR $srcpath
 		incr ::tmakedrb(testruncount)
 		run $testcommand
 		incr ::tmakedrb(testpasscount)
@@ -872,16 +876,28 @@ proc clean-target {type msg} {
 }
 
 proc Clean {args} {
-	if {[lindex $args 0] in {clean distclean}} {
-		dev-error "fix call to Clean"
-	}
-	add-clean [make-local clean] [make-local {*}[join $args]]
 	# DistClean also cleans these files
 	DistClean {*}$args
+
+	getopt {--src args} args
+	set args [join $args]
+
+	if {$src} {
+		add-clean [make-local clean] [prefix [local-src-prefix] $args]
+	} else {
+		add-clean [make-local clean] [make-local {*}$args]
+	}
 }
 
 proc DistClean {args} {
-	add-clean [make-local distclean] [make-local {*}[join $args]]
+	getopt {--src args} args
+	set args [join $args]
+
+	if {$src} {
+		add-clean [make-local distclean] [prefix [local-src-prefix] $args]
+	} else {
+		add-clean [make-local distclean] [make-local {*}$args]
+	}
 }
 
 # This adds files to be cleaned for the given type
