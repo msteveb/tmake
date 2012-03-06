@@ -6,7 +6,9 @@ use cc cc-shared tmake
 options {
 }
 
-make-tmake-settings settings.conf {[A-Z]*}
+set objdir [get-define TOPBUILDDIR objdir]
+
+make-tmake-settings $objdir/settings.conf {[A-Z]*}
 
 if {![file exists Makefile]} {
     # Normally this would be autosetup/tmake

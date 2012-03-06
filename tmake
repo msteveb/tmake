@@ -308,8 +308,8 @@ proc make {argv} {
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
 
+	define TOPSRCDIR $tmake(topsrcdir)
 	define TOPBUILDDIR $tmake(topbuilddir)
-	define TOPSRCDIR $tmake(topbuilddir)
 
 	if {$tmake(showcache)} {
 		show-cache
@@ -2113,14 +2113,11 @@ proc build {target} {
 			file delete {*}$ruletarget
 
 			# Try to run onerror
-			if {[catch {
-				dputs b $t(onerror)
-				uplevel #0 $t(onerror)
-				if {$rc == 1} {
-					build-error [error-stacktrace $msg]
-				}
-			} fmsg fopts]} {
+			lassign [run-do $vardict $t(onerror)] frc fmsg fopts
+			if {$frc} {
 				build-error [error-stacktrace $fmsg]
+			} elseif {$rc == 1} {
+				build-error [error-stacktrace $msg]
 			}
 			set result -1
 		}
