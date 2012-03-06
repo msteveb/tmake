@@ -673,6 +673,10 @@ proc build-prefix {} {
 	make-prefix $::tmake(build)
 }
 
+proc build-dir {} {
+	return $::tmake(build)
+}
+
 proc file-build-exists {path} {
 	file exists [file-build $path]
 }
@@ -1658,10 +1662,10 @@ proc locate-files {files} {
 	set result {}
 	foreach f $files {
 		if {[is-target? $f]} {
-			puts "$f is a target => [file-build $f]"
+			#puts "$f is a target => [file-build $f]"
 			lappend result [file-build $f]
 		} else {
-			puts "$f is not a target"
+			#puts "$f is not a target"
 			lappend result $f
 		}
 	}
@@ -1704,8 +1708,8 @@ proc note {type args} {
 proc run {args} {
 	set cmdline [join $args]
 	set cmd [lindex $cmdline 0]
-	puts "run: do we need to convert $cmd to a path from [pwd]?"
-	# Is cmd a 
+	#puts "run: do we need to convert $cmd to a path from [pwd]?"
+	# Is cmd a file in the current dir?
 	if {![string match */* $cmd] && [file isfile $cmd]} {
 		set cmdline ./$cmdline
 	}
@@ -1746,8 +1750,9 @@ proc calc-dyndeps {vardict target} {
 }
 
 proc file-exists-all {list missingname} {
+	set prefix [build-prefix]
 	foreach f $list {
-		if {![file exists $f]} {
+		if {![file exists $prefix$f]} {
 			upvar $missingname missing
 			set missing $f
 			return 0
@@ -2177,11 +2182,10 @@ proc header-scan-regexp {suffix regex filename} {
 proc find-file-on-path {filename path} {
 	set f [file-join $path $filename]
 
-	puts "find-file-on-path $filename + $path => $f"
+	#puts "find-file-on-path $filename + $path => $f"
 
 	set result {}
 	if {[is-target? $f]} {
-		puts "  => $f is a target"
 		dputs-D "$f is a target, so building first"
 		# Even if it fails to build, it is needed
 		if {[build $f] >= 0} {
@@ -2189,10 +2193,10 @@ proc find-file-on-path {filename path} {
 		}
 	} else {
 		if {[file exists $f]} {
-			puts "  => $f exists"
+			#puts "  => $f exists"
 			set result [list source $f]
 		} else {
-			puts "  => $f does not exist"
+			#puts "  => $f does not exist"
 		}
 	}
 	return $result

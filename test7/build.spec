@@ -1,3 +1,4 @@
+# XXX: If cross compiling, should use HostExecutable here
 Executable processor processor.c
 
 foreach infile [Glob *.in] {

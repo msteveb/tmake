@@ -17,10 +17,6 @@ module-options {
 
 define CONFIGURED
 
-if {[opt-val objdir] ne ""} {
-	writefile $::autosetup(srcdir)/tmake.opt "--build=[opt-val objdir]\n"
-}
-
 # @make-tmake-settings outfile patterns ...
 #
 # Examines all defined variables which match the given patterns
@@ -30,6 +26,7 @@ if {[opt-val objdir] ne ""} {
 ## define ABC {3 monkeys}
 #
 # If the file would be unchanged, it is not written.
+#
 proc make-tmake-settings {file args} {
 	file mkdir [file dirname $file]
 	set lines {}

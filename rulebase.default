@@ -223,26 +223,20 @@ proc publish-prefix {dir} {
 
 proc publish-one-file {dest src} {
 	#puts "publish-one-file: dest=$dest, src=$src, realdest=[publish-dir $dest]"
-	hard-link [publish-dir $dest] $src -vars dest $dest -msg {note Publish $dest}
+	hard-link [publish-dir $dest] $src -vars dest $dest -msg {note Publish $target}
 }
 
 proc make-shlib-symlinks {first args} {
 	foreach alias $args {
-		puts "make-shlib-symlinks: exec ln -s -f [file tail $first] $alias"
 		exec ln -s -f [file tail $first] $alias
 	}
 }
 
 proc publish-shared-lib {names source alias} {
-	puts "names=$names"
 	set published [prefix [publish-prefix lib] {*}$names]
 
-	puts "publish-shared-lib: published=$published, source=$source"
-
-	target $published -inputs $source -msg {note Publish lib/$libname} -do {
+	target $published -inputs $source -msg {note Publish [lindex $target 0]} -do {
 		file delete {*}$target
-		puts "target=$target"
-		puts "exec ln -f inputs=$inputs target0=[lindex $target 0]"
 		exec ln -f $inputs [lindex $target 0]
 		make-shlib-symlinks {*}$target
 	} -vars libname [lindex $names 0] -alias $alias
@@ -308,7 +302,7 @@ proc PublishBin {args} {
 
 
 	foreach {dest src} [expand-filespec $destdir $args 0] {
-		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $dest} -alias <bin>[file tail $dest]
+		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $target} -alias <bin>[file tail $dest]
 	}
 }
 
@@ -595,7 +589,7 @@ proc UseLibs {args} {
 proc IncludePaths {args} {
 	show-this-rule
 	foreach dir $args {
-		foreach prefix [list [local-dir] [top-src-dir]] {
+		foreach prefix [list [local-dir] [build-dir]] {
 			set dir [file-join $prefix $dir]
 			if {$dir ni [get-define INCPATHS]} {
 				define-append INCPATHS $dir
@@ -637,21 +631,30 @@ proc Load {args} {
 	show-this-rule
 
 	getopt {--nocare --config filename} args
+
 	# XXX: Should we allow loading an out-of-tree file?
-	set f [locate-files [make-local $filename]]
-	puts "Load: locate-files [make-local $filename] => $f"
+
+	if {[is-target? $filename]} {
+		set f [file-build $filename]
+		#puts "Load: $filename is a target => $f"
+	} elseif {[file exists $filename]} {
+		#puts "Load: $filename is source"
+		set f $filename
+		puts "$f is not a target"
+		lappend result $f
+	} else {
+		build-error [warning-location "Error: $filename does not exist and is not a target"]
+		tmake-exit 1
+	}
+
 	if {[file exists $f]} {
 		if {$config} {
-			puts "Load (config) $f"
 			load-config-file $f
 		} else {
-			puts "Load (spec) $f"
 			source $f
 		}
 		# If we find the file, we now care about it
 		set nocare 0
-	} else {
-		puts "Warning: $f does not exist"
 	}
 	lappend ::tmake(projfiles) $filename $nocare
 }
@@ -767,9 +770,7 @@ proc hard-link {args} {
 	# Want to depend on the existence of the dir, not the time
 	target $dest -inputs $source -do {
 		file delete $target
-		puts "in [pwd]: exec ln inputs=$inputs target=$target"
 		exec ln $inputs $target
-		puts exists=[file exists $target]
 	} {*}$args
 	add-clean [make-local clean] $dest
 	add-clean [make-local distclean] $dest
@@ -916,8 +917,9 @@ proc find-project-bin {bin args} {
 		if {$opts(-chdir)} {
 			return [list $localbin ./$bin]
 		} else {
-			# Use ./ if local-dir is "."
-			return [list $localbin [local-dir]/$bin]
+			# Note: Use [build-dir] here rather than [file-build] to retain ./
+			#       if building in-tree
+			return [list $localbin [build-dir]/$localbin]
 		}
 	}
 

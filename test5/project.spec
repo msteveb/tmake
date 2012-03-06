@@ -1,9 +1,9 @@
-Load settings.conf
-
 Depends settings.conf -do {
-        user-error "Run ./configure first"
+        user-error "No $target: Run ./configure first"
 }
 DistClean settings.conf
+
+Load settings.conf
 
 ifconfig CONFIGURED
 

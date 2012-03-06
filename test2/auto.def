@@ -374,8 +374,10 @@ define JIM_TCL_EXTENSIONS $extmodtcl
 define JIM_MOD_EXTENSIONS $extmod
 define EXTRA_OBJS $extra_objs
 
-make-config-header jim-config.h -auto {HAVE_LONG_LONG* JIM_UTF8} -none *
-make-config-header jimautoconf.h -auto {jim_ext_* TCL_PLATFORM_* TCL_LIBRARY USE_* JIM_*}
+set objdir [get-define TOPBUILDDIR objdir]
+
+make-config-header $objdir/jim-config.h -auto {HAVE_LONG_LONG* JIM_UTF8} -none *
+make-config-header $objdir/jimautoconf.h -auto {jim_ext_* TCL_PLATFORM_* TCL_LIBRARY USE_* JIM_*}
 #make-template Makefile.in
 
-make-tmake-settings settings.conf *
+make-tmake-settings $objdir/settings.conf *

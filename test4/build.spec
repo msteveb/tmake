@@ -10,12 +10,14 @@ CFlags -DHAVE_AUTOCONFIG_H $EXTRA_CFLAGS
 LinkFlags $EXTRA_LDFLAGS
 UseSystemLibs $LIBS
 
+if 0 {
 # XXX: Simple host executable for now
 proc HostExecutable {target args} {
 	target [make-local $target] -inputs {*}[make-local {*}$args] -do {
 		run $CC_FOR_BUILD -o $target $inputs
 	}
 	Clean $target
+}
 }
 
 HostExecutable translate translate.c
@@ -39,6 +41,10 @@ Generate page_index.h mkindex [suffix .c $src] {
 	run $script $inputs >$target
 }
 
+# makeheaders is messy because it tries to do so much.
+# a simpler approach would be to have a tool which generated a single header from
+# a single source file.
+
 set gen_headers {}
 set headers {}
 set header_deps {}
@@ -46,15 +52,14 @@ foreach b "$src main" {
 	Generate ${b}_.c translate $b.c {
 		run $script $inputs >$target
 	}
-	lappend gen_headers ${b}_.c:include/$b.h
+	lappend gen_headers [file-build ${b}_.c]:[file-build include/$b.h]
 	lappend headers include/$b.h
 	lappend header_deps ${b}_.c
 }
 
 # Note: make-local-src is needed here because these filenames are not passed as inputs or dependencies,
 #       and nor are they targets, so tmake doesn't know that they are in the source tree.
-lappend gen_headers {*}[make-local-src sqlite3.h th.h]
-lappend gen_headers include/VERSION.h
+lappend gen_headers sqlite3.h th.h [file-build include/VERSION.h]
 lappend header_deps sqlite3.h th.h include/VERSION.h
 
 Generate $headers makeheaders $header_deps {

@@ -1,11 +1,11 @@
 # Minimal autosetup
-Load settings.conf
-
-define? AUTOREMAKE [file-src configure] --conf=[file-src auto.def]
+define? AUTOREMAKE configure
 
 Depends settings.conf auto.def -do {
 	note "Configure"
-	run [set AUTOREMAKE] >config.out
-} -onerror {puts [readfile config.out]}
+	run [set AUTOREMAKE] >$build/config.out
+} -onerror {puts [readfile $build/config.out]}
 Clean config.out config.log
 DistClean settings.conf
+
+Load settings.conf

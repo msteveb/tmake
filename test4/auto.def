@@ -177,7 +177,9 @@ if {![cc-check-functions getpassphrase]} {
     cc-check-function-in-lib getpass bsd
 }
 
-#make-template Makefile.in
-make-config-header autoconfig.h -auto {USE_* FOSSIL_*}
+set objdir [get-define TOPBUILDDIR objdir]
 
-make-tmake-settings settings.conf {[A-Z]*}
+#make-template Makefile.in
+make-config-header $objdir/autoconfig.h -auto {USE_* FOSSIL_*}
+
+make-tmake-settings $objdir/settings.conf {[A-Z]*}
