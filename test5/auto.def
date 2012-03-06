@@ -9,4 +9,6 @@ options {
 
 cc-check-tools ar ranlib
 
-make-tmake-settings [get-define TOPBUILDDIR objdir]/settings.conf *
+set objdir [get-env BUILDDIR objdir]
+
+make-tmake-settings $objdir/settings.conf *

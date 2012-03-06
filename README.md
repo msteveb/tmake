@@ -57,6 +57,10 @@ Slows down with a large project
 
 No support for non-unix platforms, e.g. msvc
 
+Changing --build means that all orphans are forgotten since
+the cached targets only include the path relative to $BUILDDIR.
+
+
 Simple things are simple
 ------------------------
 
@@ -202,6 +206,16 @@ Explain the '-key values...' structure of arguments to 'target'.
 	Similar to -vars, except that the value of the variable is taken from current value
 	of the global variable (define)
 
+Environment Variables
+---------------------
+
+$TOPSRCDIR   - absolute path to the top of the source tree (where project.spec lives)
+$TOPBUILDDIR - absolute path to the top of the build tree (by default, $TOPSRCDIR/objdir)
+$BUILDDIR    - relative build directory, specified by --build (by default, objdir)
+
+setenv
+getenv
+
 Variables available during parsing
 ----------------------------------
 
@@ -213,6 +227,7 @@ $target  - The target(s) of the rule
 $inputs  - Any files mentioned with -inputs
 $depends - Any files mentioned with -depends, plus any mentioned with -inputs
 $local   - The (relative) directory associated with the rule
+$build   - The (relative) build directory associated with the rule - outputs should go here
 
 In addition, any variables defined with 'define' (including variants) are available.
 
@@ -407,6 +422,8 @@ Integration with autosetup
 settings.conf
 tmake.tcl
 jimsh0
+--build
+$BUILDDIR
 
 Integration with kconfig or similar
 -----------------------------------
@@ -419,7 +436,9 @@ The idea of Install and 'make install' where a target tree/filesystem is created
 
 Out-of-tree Builds
 ------------------
-Discuss builddir, srcdir, -C, -P, --build and implications
+Discuss builddir, srcdir, --build, -chdir and implications
+In particular, note that rules run from $TOPSRCDIR and should
+create targets under $build
 
 make wrapper
 ------------

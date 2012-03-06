@@ -177,7 +177,7 @@ if {![cc-check-functions getpassphrase]} {
     cc-check-function-in-lib getpass bsd
 }
 
-set objdir [get-define TOPBUILDDIR objdir]
+set objdir [get-env BUILDDIR objdir]
 
 #make-template Makefile.in
 make-config-header $objdir/autoconfig.h -auto {USE_* FOSSIL_*}

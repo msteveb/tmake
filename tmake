@@ -307,9 +307,11 @@ proc make {argv} {
 	# which want to be able to find things
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
+	set ::env(BUILDDIR) $tmake(build)
 
 	define TOPSRCDIR $tmake(topsrcdir)
 	define TOPBUILDDIR $tmake(topbuilddir)
+	define BUILDDIR $tmake(build)
 
 	if {$tmake(showcache)} {
 		show-cache
@@ -376,7 +378,6 @@ proc make {argv} {
 	if {[llength $tmake(cmdline)]} {
 		foreach arg $tmake(cmdline) {
 			if {[regexp {//(.*)} $arg -> realtarget] || [regexp {^/(.*)} $arg -> realtarget]} {
-				puts "$arg => $realtarget"
 				lappend targets $realtarget
 			} else {
 				lappend targets [file-join $tmake(subdir) $arg]
@@ -582,11 +583,7 @@ proc local-prefix {} {
 }
 
 proc local-src-prefix {} {
-	if {$::tmake(topsrcdir) eq "."} {
-		return $::tmake(prefix)
-	} else {
-		return $::tmake(topsrcdir)/$::tmake(prefix)
-	}
+	return $::tmake(topsrcdir)/$::tmake(prefix)
 }
 
 proc local-dir {} {
@@ -715,9 +712,15 @@ proc file-src-relative {srcpath {builddir {}}} {
 	if {$builddir eq ""} {
 		set builddir [local-dir]
 	}
-	set src [file join $::tmake(topsrcdir) $srcpath]
-	set build [file join $::tmake(topbuilddir) $builddir]
-	relative-path $src $build
+	set there [file join $::tmake(topsrcdir) $srcpath]
+	set here [file join $::tmake(topbuilddir) $builddir]
+	#puts "file-src-relative:"
+	#puts "   srcpath=$srcpath"
+	#puts "  builddir=$builddir"
+	#puts "     there=$there"
+	#puts "      here=$here"
+	#puts " -> [relative-path $there $here]"
+	relative-path $there $here
 }
 
 # Read in the given spec file in the given directory (relative to topdir)

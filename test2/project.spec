@@ -7,7 +7,7 @@
 # an unnecessary build immediately after ./configure due to a different path
 Depends {settings.conf jimautoconf.h jim-config.h} auto.def -do {
 	note Configure
-	run [set AUTOREMAKE] >$build/config.out
+	run [set AUTOREMAKE] BUILDDIR=$BUILDDIR >$build/config.out
 }
 Clean config.out
 

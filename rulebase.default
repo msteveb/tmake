@@ -145,7 +145,10 @@ proc BuildSpecEpilog {} {
 		}
 
 		# Arrange to delete this (source) Makefile on distclean
-		DistClean --src $makefile
+		DistClean --src $tmake(localmakefile)
+
+		# And ensure that even directories with no targets are removed
+		Clean __dummy__
 	}
 }
 

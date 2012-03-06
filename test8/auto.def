@@ -6,7 +6,7 @@ use cc cc-shared tmake
 options {
 }
 
-set objdir [get-define TOPBUILDDIR objdir]
+set objdir [get-env BUILDDIR objdir]
 
 make-tmake-settings $objdir/settings.conf {[A-Z]*}
 

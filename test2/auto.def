@@ -374,7 +374,7 @@ define JIM_TCL_EXTENSIONS $extmodtcl
 define JIM_MOD_EXTENSIONS $extmod
 define EXTRA_OBJS $extra_objs
 
-set objdir [get-define TOPBUILDDIR objdir]
+set objdir [get-env BUILDDIR objdir]
 
 make-config-header $objdir/jim-config.h -auto {HAVE_LONG_LONG* JIM_UTF8} -none *
 make-config-header $objdir/jimautoconf.h -auto {jim_ext_* TCL_PLATFORM_* TCL_LIBRARY USE_* JIM_*}
