@@ -699,6 +699,9 @@ proc file-build-relative {buildpath {srcdir {}}} {
 	if {$srcdir eq ""} {
 		set srcdir [local-dir]
 	}
+	if {$srcdir eq $buildpath} {
+		return .
+	}
 	set build [file join $::tmake(topbuilddir) $buildpath]
 	set src [file join $::tmake(topsrcdir) $srcdir]
 	relative-path $build $src
