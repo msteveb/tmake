@@ -55,7 +55,18 @@ proc Glob {args} {
 
 	getopt {--warn --dirs --all --recursive --exclude:: args} args
 
-	set args [make-local-src {*}[join $args]]
+	# Any args which are already absolute paths shouldn't have make-local-src applied
+	set args [join $args]
+
+	set patterns {}
+	set pwd [pwd]
+	foreach pattern $args {
+		if {[file join $pwd $pattern] eq $pattern} {
+			dev-error "Error: Glob $pattern is not a (source) relative path. Try \[glob\]"
+		}
+	}
+	set patterns [make-local-src {*}$args]
+
 	if {$dirs} {
 		set type exists
 	} else {
@@ -63,16 +74,16 @@ proc Glob {args} {
 	}
 
 	if {$recursive} {
-		set paths [glob-recursive $args $type $exclude]
+		set paths [glob-recursive $patterns $type $exclude]
 	} else {
-		set paths [glob-nonrecursive $args $all $type $exclude]
+		set paths [glob-nonrecursive $patterns $all $type $exclude]
 	}
 
 	if {[llength $paths]} {
 		set paths [make-unlocal-src {*}$paths]
 	} else {
 		if {$warn} {
-			user-notice "Warning: No matches for Glob $args"
+			user-notice "Warning: No matches for Glob $patterns"
 		}
 	}
 
