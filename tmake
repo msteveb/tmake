@@ -665,8 +665,18 @@ proc SubDirs {args} {
 	lappend ::tmake(subdirs) {*}$args
 }
 
-proc file-build {path} {
-	file-join $::tmake(build) $path
+proc file-build {paths} {
+	set result {}
+	foreach path $paths {
+		#puts "$::tmake(build) + $path => [file-join $::tmake(build) $path]"
+		if {[string match <* $path]} {
+			# Special <lib>, <bin>, etc. are already build paths
+			lappend result $path
+		} else {
+			lappend result [file-join $::tmake(build) $path]
+		}
+	}
+	return $result
 }
 
 proc build-prefix {} {
@@ -1663,12 +1673,14 @@ proc locate-files {files} {
 	foreach f $files {
 		if {[is-target? $f]} {
 			#puts "$f is a target => [file-build $f]"
+			# If the target is a full path, keep it
 			lappend result [file-build $f]
 		} else {
 			#puts "$f is not a target"
 			lappend result $f
 		}
 	}
+	#puts "locate-files $files => $result"
 	return $result
 }
 
@@ -1683,7 +1695,7 @@ proc set-global {name value} {
 # Returns a dictionary with the bound and rule-specific variables
 proc make-var-dict {info} {
 	set vardict [dict get $info vars]
-	dict set vardict target [prefix [build-prefix] [dict get $info target]]
+	dict set vardict target [file-build [dict get $info target]]
 	dict set vardict local [dict get $info local]
 	dict set vardict build [file-build [dict get $info local]]
 	dict set vardict depends [locate-files [dict get $info depends]]
@@ -1750,9 +1762,8 @@ proc calc-dyndeps {vardict target} {
 }
 
 proc file-exists-all {list missingname} {
-	set prefix [build-prefix]
 	foreach f $list {
-		if {![file exists $prefix$f]} {
+		if {![file exists [file-build $f]]} {
 			upvar $missingname missing
 			set missing $f
 			return 0
