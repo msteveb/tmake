@@ -274,6 +274,15 @@ proc make {argv} {
 		}
 	}
 
+	# Find the current dir relative to topsrcdir
+	set tmake(subdir) [relative-path [pwd] $tmake(topsrcdir)]
+
+	# Builds run from topsrcdir
+	cd $tmake(topsrcdir)
+
+	# Full path
+	set tmake(topsrcdir) [pwd]
+
 	# By default, the build directory is 'objdir', but this
 	# can be changed with --build, either on the command line or from tmake.opt
 	# XXX: Currently tmake.opt overrides the command line because it it parsed later.
@@ -284,30 +293,23 @@ proc make {argv} {
 		dputs m "Got --build=$tmake(build)"
 	}
 
-	set tmake(topbuilddir) [file-join $tmake(topsrcdir) $tmake(build)]
+	# Create the build dir now
+	file mkdir $tmake(build)
 
-	# Find the current dir relative to topsrcdir
-	set tmake(subdir) [relative-path [pwd] $tmake(topsrcdir)]
+	set tmake(topbuilddir) [file-normalize $tmake(build)]
 
-	# May as well create the build dir now
-	file mkdir $tmake(topbuilddir)
-
-	cd $tmake(topbuilddir)
-	if {[pwd] ne $tmake(initialdir)} {
+	if {$tmake(topsrcdir) ne $tmake(initialdir)} {
 		# emulate make for vim quickerr
-		pputs [colout green "tmake: Entering directory `$tmake(topbuilddir)'"]
+		pputs [colout green "tmake: Entering directory `$tmake(topsrcdir)'"]
 	}
-
-	# Now make topsrcdir releative
-	set tmake(topsrcdir) [relative-path $tmake(topsrcdir)]
 
 	# Make these available in the environment for the benefit of generator programs and scripts
 	# which want to be able to find things
 	set ::env(TOPSRCDIR) $tmake(topsrcdir)
 	set ::env(TOPBUILDDIR) $tmake(topbuilddir)
 
-	# Full path to the top of the build 
 	define TOPBUILDDIR $tmake(topbuilddir)
+	define TOPSRCDIR $tmake(topbuilddir)
 
 	if {$tmake(showcache)} {
 		show-cache
@@ -324,7 +326,7 @@ proc make {argv} {
 	# Project or rulebase can override this
 	alias delete-orphan-files file delete
 
-	set rulebase [file-src rulebase.spec]
+	set rulebase rulebase.spec
 	if {![file exists $rulebase]} {
 		set rulebase $tmake(dir)/rulebase.default
 	}
@@ -512,7 +514,7 @@ proc write-cache {} {
 proc load-build-description {loadcache} {
 	global tmake tmakecache
 
-	lassign [invoke-spec-file [file-src project.spec]] rc msg opts
+	lassign [invoke-spec-file project.spec] rc msg opts
 	if {$rc == 20} {
 		return
 	}
@@ -663,25 +665,29 @@ proc SubDirs {args} {
 	lappend ::tmake(subdirs) {*}$args
 }
 
-proc file-src {path} {
-	file-join $::tmake(topsrcdir) $path
+proc file-build {path} {
+	file-join $::tmake(build) $path
 }
 
-proc file-src-exists {path} {
-	file exists [file-src $path]
+proc build-prefix {} {
+	make-prefix $::tmake(build)
 }
 
-# If $builddir is a dir from the top of the build tree,
+proc file-build-exists {path} {
+	file exists [file-build $path]
+}
+
+# If $srcdir is a dir from the top of the source tree,
 # (defaults to [local-dir])
-# return a relative path to $srcpath from the src tree.
+# return a relative path to $buildpath from the build tree.
 #
-proc file-src-relative {srcpath {builddir {}}} {
-	if {$builddir eq ""} {
-		set builddir [local-dir]
+proc file-build-relative {buildpath {srcdir {}}} {
+	if {$srcdir eq ""} {
+		set srcdir [local-dir]
 	}
-	set src [file join $::tmake(topsrcdir) $srcpath]
-	set build [file join $::tmake(topbuilddir) $builddir]
-	relative-path $src $build
+	set build [file join $::tmake(topbuilddir) $buildpath]
+	set src [file join $::tmake(topsrcdir) $srcdir]
+	relative-path $build $src
 }
 
 # Read in the given spec file in the given directory (relative to topdir)
@@ -693,9 +699,8 @@ proc process-build-spec-file {dir {optional 0}} {
 
 	set tmake(localdir) $dir
 	set tmake(prefix) [make-prefix $dir]
-	set srcdir [file-src $dir]
 
-	set path [file-join $srcdir build.spec]
+	set path [file-join $dir build.spec]
 
 	if {![file exists $path]} {
 		# The top level build.spec is optional
@@ -737,8 +742,8 @@ proc process-build-spec-file {dir {optional 0}} {
 
 	# Normally we search for dirs containing build.spec
 	if {$tmake(autosubdirs)} {
-		foreach d [readdir $srcdir] {
-			if {[file exists $srcdir/$d/build.spec] && $d ni $subdirs} {
+		foreach d [readdir $dir] {
+			if {[file exists $dir/$d/build.spec] && $d ni $subdirs} {
 				lappend subdirs [file-join $dir $d]
 			}
 		}
@@ -1570,9 +1575,9 @@ proc parse-rule {target arglist} {
 
 proc file-real-mtime {filename} {
 	if {[is-target? $filename]} {
-		file mtime [map-alias $filename]
+		file mtime [file-build [map-alias $filename]]
 	} else {
-		file mtime [file-src $filename]
+		file mtime $filename
 	}
 }
 
@@ -1653,9 +1658,11 @@ proc locate-files {files} {
 	set result {}
 	foreach f $files {
 		if {[is-target? $f]} {
-			lappend result $f
+			puts "$f is a target => [file-build $f]"
+			lappend result [file-build $f]
 		} else {
-			lappend result [file-src $f]
+			puts "$f is not a target"
+			lappend result $f
 		}
 	}
 	return $result
@@ -1672,8 +1679,9 @@ proc set-global {name value} {
 # Returns a dictionary with the bound and rule-specific variables
 proc make-var-dict {info} {
 	set vardict [dict get $info vars]
-	dict set vardict target [dict get $info target]
+	dict set vardict target [prefix [build-prefix] [dict get $info target]]
 	dict set vardict local [dict get $info local]
+	dict set vardict build [file-build [dict get $info local]]
 	dict set vardict depends [locate-files [dict get $info depends]]
 	dict set vardict inputs [locate-files [dict get $info inputs]]
 	#parray vardict
@@ -1696,6 +1704,8 @@ proc note {type args} {
 proc run {args} {
 	set cmdline [join $args]
 	set cmd [lindex $cmdline 0]
+	puts "run: do we need to convert $cmd to a path from [pwd]?"
+	# Is cmd a 
 	if {![string match */* $cmd] && [file isfile $cmd]} {
 		set cmdline ./$cmdline
 	}
@@ -1797,7 +1807,7 @@ proc build {target} {
 			set ret [dict get $tmake(targetstatus) $target]
 		} else {
 			dputs-G "build $target"
-			if {[file-src-exists $target]} {
+			if {[file exists $target]} {
 				dputs-n "$target is not a target, but exists"
 				set ret 0
 			} else {
@@ -2026,18 +2036,21 @@ proc build {target} {
 			# Create all the target directories as required
 			# XXX: Probably should make this more efficient
 			foreach i $ruletarget {
-				dputs m "mkdir [file dirname $i]"
-				file mkdir [file dirname $i]
+				set targetdir [file-build [file dirname $i]]
+				dputs m "mkdir $targetdir"
+				file mkdir $targetdir
 			}
 			foreach do $t(do) {
 				if {$t(chdir)} {
-					cd [file dirname [lindex $ruletarget 0]]
+					set targetdir [file-build [file dirname [lindex $ruletarget 0]]]
+					dputs m "cd $targetdir"
+					cd $targetdir
 				}
 				set oldenv [env-save]
 				lassign [run-do $vardict $do] rc msg opts
 				env-restore $oldenv
 				# Always restore the current dir afterwards
-				cd $tmake(topbuilddir)
+				cd $tmake(topsrcdir)
 				if {$rc} {
 					# XXX: Check for signal?
 					if {$t(nofail)} {
@@ -2058,6 +2071,7 @@ proc build {target} {
 
 		# Always delete $t(clean) files after the rule has run
 		if {[llength $t(clean)]} {
+			dputs m "file delete $t(clean)"
 			file delete {*}$t(clean)
 		}
 
@@ -2065,10 +2079,10 @@ proc build {target} {
 		if {$rc == 0 && !$t(phony) && !$tmake(norun) && ![is-cleaning?]} {
 			set now [clock seconds]
 			foreach f $ruletarget {
-				if {![file exists $f]} {
+				if {![file exists [file-build $f]]} {
 					# XXX: Should onerror run here if --quickstop is set?
 					# XXX: Should the cache still be updated?
-					build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f"
+					build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f ([file-build $f])"
 					# Use break to indicate that we have already output the message
 					set rc 3
 				} elseif {!$t(nocache)} {
@@ -2133,7 +2147,7 @@ proc build {target} {
 
 proc header-scan-regexp {suffix regex filename} {
 	if {![file exists $filename]} {
-		set filename [file-src $filename]
+		set filename [file-build $filename]
 		if {![file exists $filename]} {
 			# Might be a target which failed to build. This will be handled later
 			dputs-D "header-scan-regexp $filename => <does not exist>"
@@ -2163,16 +2177,22 @@ proc header-scan-regexp {suffix regex filename} {
 proc find-file-on-path {filename path} {
 	set f [file-join $path $filename]
 
+	puts "find-file-on-path $filename + $path => $f"
+
 	set result {}
 	if {[is-target? $f]} {
+		puts "  => $f is a target"
 		dputs-D "$f is a target, so building first"
 		# Even if it fails to build, it is needed
 		if {[build $f] >= 0} {
 			set result [list target $f]
 		}
 	} else {
-		if {[file-src-exists $f]} {
+		if {[file exists $f]} {
+			puts "  => $f exists"
 			set result [list source $f]
+		} else {
+			puts "  => $f does not exist"
 		}
 	}
 	return $result
@@ -2239,9 +2259,9 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	global tmake tmakecache
 
 	if {[is-target? $filename]} {
-		set filepath $filename
+		set filepath [file-build $filename]
 	} else {
-		set filepath [file-src $filename]
+		set filepath $filename
 	}
 	if {![file exists $filepath]} {
 		dputs-D "header-scan-regexp-recursive, $filepath does not exist"

@@ -209,6 +209,10 @@ proc Executable {args} {
 	}
 }
 
+proc publish-path {dir} {
+	file-build [file-join [get-define PUBLISH] $dir]
+}
+
 proc publish-dir {dir} {
 	file-join [get-define PUBLISH] $dir
 }
@@ -224,15 +228,21 @@ proc publish-one-file {dest src} {
 
 proc make-shlib-symlinks {first args} {
 	foreach alias $args {
+		puts "make-shlib-symlinks: exec ln -s -f [file tail $first] $alias"
 		exec ln -s -f [file tail $first] $alias
 	}
 }
 
 proc publish-shared-lib {names source alias} {
-	set published [prefix [publish-prefix lib] $names]
+	puts "names=$names"
+	set published [prefix [publish-prefix lib] {*}$names]
+
+	puts "publish-shared-lib: published=$published, source=$source"
 
 	target $published -inputs $source -msg {note Publish lib/$libname} -do {
 		file delete {*}$target
+		puts "target=$target"
+		puts "exec ln -f inputs=$inputs target0=[lindex $target 0]"
 		exec ln -f $inputs [lindex $target 0]
 		make-shlib-symlinks {*}$target
 	} -vars libname [lindex $names 0] -alias $alias
@@ -574,7 +584,7 @@ proc Linker {linker} {
 proc UseLibs {args} {
 	# Create/append to PROJLIBS (the link line)
 	if {[get-define PROJLIBS] eq ""} {
-		define PROJLIBS "-L[publish-dir lib]"
+		define PROJLIBS "-L[publish-path lib]"
 	}
 	define-append PROJLIBS [prefix -l $args]
 
@@ -628,17 +638,20 @@ proc Load {args} {
 
 	getopt {--nocare --config filename} args
 	# XXX: Should we allow loading an out-of-tree file?
-	set filename [make-local $filename]
-	if {[file exists $filename]} {
+	set f [locate-files [make-local $filename]]
+	puts "Load: locate-files [make-local $filename] => $f"
+	if {[file exists $f]} {
 		if {$config} {
-			#puts "Load (config) $filename"
-			load-config-file $filename
+			puts "Load (config) $f"
+			load-config-file $f
 		} else {
-			#puts "Load (spec) $filename"
-			source $filename
+			puts "Load (spec) $f"
+			source $f
 		}
 		# If we find the file, we now care about it
 		set nocare 0
+	} else {
+		puts "Warning: $f does not exist"
 	}
 	lappend ::tmake(projfiles) $filename $nocare
 }
@@ -697,9 +710,9 @@ proc Test {args} {
 
 		# In this case, the command is a script - find it
 		if {$chdir} {
-			set scriptpath [file-src-relative $localcommand]
+			set scriptpath [file-build-relative $localcommand]
 		} else {
-			set scriptpath [file-src $localcommand]
+			set scriptpath $localcommand
 		}
 		lappend vars testcommand [list $filename $scriptpath {*}$args]
 
@@ -717,9 +730,9 @@ proc Test {args} {
 
 	# set up srcpath to allow the test command/script to find resources
 	if {$chdir} {
-		lappend vars srcpath [file-src-relative [local-dir]]
+		lappend vars srcpath [file-build-relative [local-dir]]
 	} else {
-		lappend vars srcpath [file-src [local-dir]]
+		lappend vars srcpath [local-dir]
 	}
 
 	target [make-local $testid] -phony -depends $deps -vars {*}$vars {*}$opts -do {
@@ -754,7 +767,9 @@ proc hard-link {args} {
 	# Want to depend on the existence of the dir, not the time
 	target $dest -inputs $source -do {
 		file delete $target
+		puts "in [pwd]: exec ln inputs=$inputs target=$target"
 		exec ln $inputs $target
+		puts exists=[file exists $target]
 	} {*}$args
 	add-clean [make-local clean] $dest
 	add-clean [make-local distclean] $dest
@@ -886,7 +901,7 @@ proc add-clean {type filelist} {
 	# This could be done with Depends or target, but it is much
 	# faster to simply append to the rule variable directly
 	#Depends [make-local $type] -vars cleanfiles [join $args]
-	target-add-var $type cleanfiles $filelist
+	target-add-var $type cleanfiles [prefix [build-prefix] $filelist]
 }
 
 # Returns a list of {dependency filename}
@@ -911,19 +926,19 @@ proc find-project-bin {bin args} {
 		set publishbin [publish-prefix bin]$basename
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
-			return [list $bin [file-src-relative $publishbin]]
+			return [list $bin [file-build-relative $publishbin]]
 		} else {
-			return [list $bin $publishbin]
+			return [list $bin [file-build $publishbin]]
 		}
 	}
 
-	if {[file-src-exists $localbin]} {
+	if {[file exists $localbin]} {
 		dputxs m {[find-source-location]: find-project-bin: $localbin exists as source}
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
-			return [list $localbin [file-src-relative $localbin]]
+			return [list $localbin [make-local $localbin]]
 		} else {
-			return [list $localbin [file-src $localbin]]
+			return [list $localbin $localbin]
 		}
 	}
 
@@ -997,11 +1012,12 @@ proc HostExecutable {target args} {
 
 proc add-publish-include {} {
 	# Can't use IncludePaths here because we only want build paths
-	set dir [get-define PUBLISH]/include
+	set dir [publish-dir include]
+	set path [publish-path include]
 	if {$dir ni [get-define INCPATHS]} {
 		define-append INCPATHS $dir
-		CFlags [prefix -I $dir]
-		C++Flags [prefix -I $dir]
+		CFlags [prefix -I $path]
+		C++Flags [prefix -I $path]
 	}
 }
 
