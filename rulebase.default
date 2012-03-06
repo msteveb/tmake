@@ -926,7 +926,7 @@ proc find-project-bin {bin args} {
 		dputxs m {[find-source-location]: find-project-bin: $localbin exists as source}
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
-			return [list $localbin [make-local $localbin]]
+			return [list $localbin [file-src-relative $localbin]]
 		} else {
 			return [list $localbin $localbin]
 		}
@@ -943,18 +943,21 @@ proc find-project-bin {bin args} {
 
 proc Generate {args} {
 	# XXX: Would be nice if script and inputs were optional
-	getopt {--interp: target script inputs rules args} args
+	getopt {--interp: --chdir target script inputs rules args} args
 
 	set localtarget [make-local {*}$target]
 
 	set opts {}
 	if {[info exists interp]} {
-		lassign [find-project-bin $interp] dep filename
+		lassign [find-project-bin $interp -chdir $chdir] dep filename
 		lappend opts -depends $dep -vars interp $filename
 	}
 	if {$script ne ""} {
-		lassign [find-project-bin $script] dep filename
+		lassign [find-project-bin $script -chdir $chdir] dep filename
 		lappend opts -depends $dep -vars script $filename
+	}
+	if {$chdir} {
+		lappend args -chdir
 	}
 	target $localtarget -inputs {*}[make-local {*}$inputs] {*}$opts -do $rules -msg {note Generate $target} {*}$args
 	Clean $target
