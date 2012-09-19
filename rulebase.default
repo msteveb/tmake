@@ -67,8 +67,8 @@ array set ::tmakedrb {
 define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 proc ObjectRule.c {obj src} {
-	# Capture the current value of C_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note Cc $target} -getvars C_FLAGS INCPATHS -do {
+	# Capture the current value of CC, C_FLAGS and INCPATHS
+	target $obj -inputs $src -msg {note Cc $target} -getvars CC C_FLAGS INCPATHS -do {
 		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 	} -dyndep {
 		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
