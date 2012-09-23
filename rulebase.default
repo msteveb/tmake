@@ -76,8 +76,8 @@ proc ObjectRule.c {obj src} {
 }
 
 proc ObjectRule.cpp {obj src} {
-	# Capture the current value of CXX_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note C++ $target} -getvars CXX_FLAGS INCPATHS -do {
+	# Capture the current value of CXX, CXX_FLAGS and INCPATHS
+	target $obj -inputs $src -msg {note C++ $target} -getvars CXX CXX_FLAGS INCPATHS -do {
 		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
 	} -dyndep {
 		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
@@ -467,9 +467,6 @@ proc SharedLib {args} {
 	if {[info exists install]} {
 		set flags bin
 		if {$strip} {
-			if {![define-exists STRIPLIB]} {
-				dev-error "No \$STRIPLIB defined for this platform"
-			}
 			lappend flags striplib
 		}
 
@@ -775,8 +772,8 @@ proc install-file {target source flags} {
 	vputs "Copy $source $target"
 	file copy -force $source $target
 	if {"bin" in $flags} { chmodx-file $target }
-	if {"strip" in $flags} { strip-file $target }
-	if {"striplib" in $flags} { striplib-file $target }
+	if {"strip" in $flags} { strip-file [get-define STRIPFLAGS {}] $target }
+	if {"striplib" in $flags} { strip-file [get-define STRIPLIBFLAGS {}] $target }
 }
 
 proc chmodx-file {target} {
@@ -784,14 +781,9 @@ proc chmodx-file {target} {
 	exec chmod +x $target
 }
 
-proc strip-file {target} {
+proc strip-file {flags target} {
 	vputs "Strip $target"
-	exec [get-define STRIP true] $target
-}
-
-proc striplib-file {target} {
-	vputs "StripLib $target"
-	exec [get-define STRIPLIB false] $target
+	exec {*}[get-define STRIP true] {*}$flags $target
 }
 
 proc InstallFile {dest src {flags {}}} {

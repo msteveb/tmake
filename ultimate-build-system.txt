@@ -426,6 +426,8 @@ Good cross compiling support
 ----------------------------
 jam and waf have poor support for cross compilation.
 
+(See for example: https://groups.google.com/d/msg/waf-users/0CDcr17paRs/4IbKoOUkqk4J)
+
 tmake cross compilation supports requires autosetup
 
     =========================================
