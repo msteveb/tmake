@@ -2105,7 +2105,7 @@ proc build {target} {
 		}
 
 		# Always delete $t(clean) files after the rule has run
-		if {[llength $t(clean)]} {
+		if {[llength $t(clean)] && !$tmake(norun)} {
 			dputs m "file delete $t(clean)"
 			file delete {*}$t(clean)
 		}
