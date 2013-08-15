@@ -176,7 +176,7 @@ proc make-parse-options {argv {type tmake}} {
 					tmake_install autosetup
 				}
 				--verbose - -v {
-					set tmake(verbose) 1
+					incr tmake(verbose)
 				}
 				--init {
 					set tmake(init) 1
@@ -1731,7 +1731,7 @@ proc set-target-result {target result} {
 }
 
 proc note {type args} {
-	if {$::tmake(verbose) == 0} {
+	if {$::tmake(verbose) != 1} {
 		pputs "    [pad $type 12] [join $args]"
 	}
 }
