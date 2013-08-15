@@ -523,7 +523,8 @@ proc cctest {args} {
 	writefile $src $lines\n
 
 	set ok 1
-	if {[catch {exec-with-stderr {*}$cmdline} result errinfo]} {
+	set err [catch {exec-with-stderr {*}$cmdline} result errinfo]
+	if {$err || [string length $result]} {
 		configlog "Failed: [join $cmdline]"
 		configlog $result
 		configlog "============"
