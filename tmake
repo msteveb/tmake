@@ -471,9 +471,11 @@ proc add-build-targets {args} {
 }
 
 proc load-cache {} {
-	if {[file exists .makecache]} {
+	global tmake
+
+	if {[file exists $tmake(topbuilddir)/.makecache]} {
 		global tmake tmakecache
-		lassign [time {source .makecache}] us
+		lassign [time {source $tmake(topbuilddir)/.makecache}] us
 		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
 		if {$tmakecache(version) != $tmake(cacheversion)} {
 			user-notice ".makecache is out-of-date -- ignoring"
@@ -500,7 +502,7 @@ proc write-cache {} {
 		set tmakecache(version) $tmake(cacheversion)
 		unset tmakecache(writecache)
 		lassign [time {
-			set f [open .makecache w]
+			set f [open $tmake(topbuilddir)/.makecache w]
 			foreach i [array names tmakecache] {
 				puts $f [list set tmakecache($i) $tmakecache($i)]
 			}
