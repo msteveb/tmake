@@ -58,7 +58,7 @@ automake:
 Examples - what is wrong with this?
 -----------------------------------
 
-cmake is incredibly verbose an unwieldy for simple tasks such as adding a generator
+cmake is incredibly verbose and unwieldy for simple tasks such as adding a generator
 
 From http://www.cmake.org/Wiki/CMake:How_To_Process_Lots_Of_Input_Files
 
@@ -211,7 +211,7 @@ Reliable
 --------
 As a developer, I want the build system to just "do the right thing".
 This means that if I build 'a' which links against library 'libx.a' in another directory,
-which is build from 'x.c' which includes 'xgen.h' which is generated from 'gen'
+which is built from 'x.c' which includes 'xgen.h' which is generated from 'gen'
 which is built from 'gen.c', then I want 'a' to be rebuilt when 'gen.c' changes.
 I don't want to have to 'make clean' manually.
 I don't want to have to remember to rebuild 'gen' manually, or 'x.h'
@@ -308,7 +308,7 @@ tmake also considers other factors when determining if a target is out-of-date.
 Build descriptions easy to write and easy to understand
 -------------------------------------------------------
 It should be possible for a developer unfamiliar with the project
-or build tool at a build description and have a reasonable idea
+or build tool to look at a build description and have a reasonable idea
 of what is going on. This is quite subjective, however plain make clearly passes:
 
 XXX: come back to this
@@ -327,8 +327,6 @@ Compare:
     =========================================
 
     === cmake ===============================
-    CFlags -DTEST
-    Executable a a.c b.c [Glob test*.c]
     cmake_minimum_required (VERSION 2.6)
     project (a)
 
@@ -376,7 +374,7 @@ enough for some tasks. Try implementing shared libraries in Jam.
 Unobtrusive
 -----------
 The build sytem is a means to an end. This means that during the normal
-edit/build/test cycle the build system the build system should be unobtrusive.
+edit/build/test cycle, the build system should be unobtrusive.
 
 Generally this means being able to type:
 
@@ -406,7 +404,7 @@ Include or support a configuration system (user + environment)
 --------------------------------------------------------------
 automake depends on autoconf, which works but is cumbersome (10,000 line configure scripts, m4 macros).
 
-waf and cmake have their own build-in configuration systems, which is good.
+waf and cmake have their own built-in configuration systems, which is good.
 
 jam has no configuration system.
 
@@ -444,7 +442,6 @@ automake relies on gcc to do a good job
 
 Ability to find out why things happen, or not
 ---------------------------------------------
-
 When things go wrong...
 
 waf seems to have good debugging facilities
@@ -466,7 +463,7 @@ which led to the target being rebuilt.
     Built 4 target(s) in 0.47 seconds
     =========================================
 
-It is also possible to display the rules associate with targets
+It is also possible to display the rules associated with targets
 which are built, including the original source location(s) where
 those rules were defined.
 
@@ -540,7 +537,7 @@ awkward for a large project. Often a better alternative is to search for a speci
 Can't build x.o? Why not?
 
     =========================================
-    $ make O=--find=x.o
+    $ tmake --find=x.o
     -- sub/x.o ---------------------------------------------------
     @../sub/build.spec:4
     sub/x.o: sub/x.c
@@ -562,9 +559,9 @@ Ahh, because x.o is 'sub/x.o'
 The following additional debug "channels" are available
 
     =========================================
-    $ make O=-d?
+    $ tmake -d?
     Different debugging can be enabled with -d...
-    The different debuggin categories are as follows:
+    The different debugging categories are as follows:
 
             *       Enable all debug
             ?       Display help for debug types
@@ -585,5 +582,5 @@ The following additional debug "channels" are available
     =========================================
 
 The most useful are generally 'tmake -db' to see why targets were built,
-'tmake -dn' to see why targets were *not* built, and 'tmake -dd' to example
+'tmake -dn' to see why targets were *not* built, and 'tmake -dd' to examine
 dynamic dependencies.
