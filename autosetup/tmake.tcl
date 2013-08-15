@@ -11,9 +11,7 @@
 
 use system
 
-module-options {
-	objdir:dir	=> {Automatically set --build=dir for tmake}
-}
+module-options {}
 
 define CONFIGURED
 
@@ -26,7 +24,6 @@ define CONFIGURED
 ## define ABC {3 monkeys}
 #
 # If the file would be unchanged, it is not written.
-#
 proc make-tmake-settings {file args} {
 	file mkdir [file dirname $file]
 	set lines {}
