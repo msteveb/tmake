@@ -116,7 +116,7 @@ proc cc-check-includes {args} {
 		set with {}
 		if {[dict exists $::autosetup(cc-include-deps) $each]} {
 			set deps [dict keys [dict get $::autosetup(cc-include-deps) $each]]
-			msg-quiet cc-check-includes $deps
+			msg-quiet cc-check-includes {*}$deps
 			foreach i $deps {
 				if {[have-feature $i]} {
 					lappend with $i
@@ -133,12 +133,14 @@ proc cc-check-includes {args} {
 	}
 }
 
-# @cc-include-needs include required
+# @cc-include-needs include required ...
 #
 # Ensures that when checking for 'include', a check is first
-# made for 'required', and if found, it is #included
-proc cc-include-needs {file depfile} {
-	dict set ::autosetup(cc-include-deps) $file $depfile 1
+# made for each 'required' file, and if found, it is #included
+proc cc-include-needs {file args} {
+	foreach depfile $args {
+		dict set ::autosetup(cc-include-deps) $file $depfile 1
+	}
 }
 
 # @cc-check-types type ...
@@ -499,14 +501,8 @@ proc cctest {args} {
 		set tmp conftest__.o
 		lappend cmdline -c
 	}
-	lappend cmdline {*}$opts(-cflags)
+	lappend cmdline {*}$opts(-cflags) {*}[get-define cc-default-debug ""]
 
-	switch -glob -- [get-define host] {
-		*-*-darwin* {
-			# Don't generate .dSYM directories
-			lappend cmdline -gstabs
-		}
-	}
 	lappend cmdline $src -o $tmp {*}$opts(-libs)
 
 	# At this point we have the complete command line and the
@@ -597,7 +593,7 @@ proc make-config-header {file args} {
 				continue
 			}
 			-str {
-				set value \"$value\"
+				set value \"[string map [list \\ \\\\ \" \\\"] $value]\"
 			}
 			-auto {
 				# Automatically determine the type
@@ -606,7 +602,7 @@ proc make-config-header {file args} {
 					continue
 				}
 				if {![string is integer -strict $value]} {
-					set value \"$value\"
+					set value \"[string map [list \\ \\\\ \" \\\"] $value]\"
 				}
 			}
 			"" {
@@ -685,6 +681,16 @@ if {[get-define CXX] ne "false"} {
 	msg-result "C++ compiler...[get-define CCACHE] [get-define CXX] [get-define CXXFLAGS]"
 }
 msg-result "Build C compiler...[get-define CC_FOR_BUILD]"
+
+# On Darwin, we prefer to use -g0 to avoid creating .dSYM directories
+# but some compilers may not support it, so test here.
+switch -glob -- [get-define host] {
+	*-*-darwin* {
+		if {[cctest -cflags {-g0}]} {
+			define cc-default-debug -g0
+		}
+	}
+}
 
 if {![cc-check-includes stdlib.h]} {
 	user-error "Compiler does not work. See config.log"
