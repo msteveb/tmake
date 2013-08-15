@@ -698,13 +698,13 @@ Experiences with porting projects to tmake
 polarssl
 ~~~~~~~~
 Project has plain Makefile and cmake support.
-Currently configuration is done my manually modifing Makefile and
+Currently configuration is done by manually modifing Makefile and
 include/polarssl/config.h
 
 - Install autosetup and tmake
 - Create basic auto.def to allow configuration of some options and checking
   some basic compiler settings. Most settings are still hard-coded here.
-- Creates settings.conf and include/polarssl/autoconf.h
+- Create settings.conf and include/polarssl/autoconf.h
 - Modify include/polarssl/config.h to include autoconf.h (to avoid overwriting current version)
 - Currently tmake only supports building polarssl as a static lib
 - Created polarsslwrap based on axtlswrap
@@ -714,7 +714,7 @@ include/polarssl/config.h
 
 => Need support for shared lib
 => polarsslwrap does not work on Windows because of the lack of fork, exec, poll
-=> Need add all possible options to auto.def, including dependencies
+=> Need to add all possible options to auto.def, including dependencies
 
 Build times?
 
