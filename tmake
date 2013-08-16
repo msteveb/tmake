@@ -49,6 +49,8 @@ set tmake(fixedvars) {}
 set tmake(installed) 0
 set tmake(cleaning) 0
 set tmake(quiet) 0
+set tmake(ignoreforce) 0
+set tmake(force) 0
 set tmake(init) 0
 set tmake(showcache) 0
 set tmake(depfindcache) {}
@@ -156,6 +158,9 @@ proc make-parse-options {argv {type tmake}} {
 				}
 				--build {
 					set tmake(build) $value
+				}
+				--force {
+					incr tmake(force)
 				}
 				--targets {
 					set tmake(listtargets) $value
@@ -407,7 +412,9 @@ proc make {argv} {
 			# Try to build all Load targets
 			# If any files specified to Load are targets,
 			# build them before anything else
+			# Note that these targets ignore --force
 			set reload 0
+			set tmake(ignoreforce) 1
 			foreach {t nocare} $tmake(projfiles) {
 				if {$nocare && ![is-target? $t]} {
 					dputs-n "Load --nocare $t, not a target"
@@ -426,6 +433,7 @@ proc make {argv} {
 					set reload 1
 				}
 			}
+			set tmake(ignoreforce) 0
 
 			if {$reload} {
 				# Restore the state
@@ -2058,6 +2066,11 @@ proc build {target} {
 				dputs-n "Commands for $ruletarget are unchanged"
 			}
 		}
+	}
+
+	if {$result == 0 && $tmake(force) && !$tmake(ignoreforce)} {
+		lappend reason force
+		set result 1
 	}
 
 	if {$result > 0 && [llength $t(do)]} {

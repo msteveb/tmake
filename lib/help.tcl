@@ -18,6 +18,7 @@ proc show-help {argv} {
    -v|--verbose          Force V=1 mode when building to show commands executed
    -n|--dry-run          Show commands which would have been run
    -N                    Like -n, but don't show detailed commands
+   --force               Treat all targets to be built as out-of-date
    -t|--time             Show build time even if nothing was run
    -q|--quickstop        Stop on the first build error
    -Q|--quiet            Don't show the build time
