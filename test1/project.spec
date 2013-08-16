@@ -16,6 +16,9 @@ Load settings.conf
 define? AUTOREMAKE configure TOPBUILDDIR=$TOPBUILDDIR --conf=auto.def
 
 use util
-Phony blah -do {
+Phony showvars -do {
 	dump-vars
 }
+
+CFlags -Werror
+

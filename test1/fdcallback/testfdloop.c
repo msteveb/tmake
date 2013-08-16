@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 
 #include "timerqueue.h"
 #include "fdcallback.h"
