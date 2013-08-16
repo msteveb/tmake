@@ -207,6 +207,17 @@ automake
 Explain how to do automake-like things.
 Also migration from automake
 
+Cross Compilation
+-----------------
+Support for host vs target rules, defines and targets
+is weak. Consider making two entire sets of everything, or
+add the notion of a "context" that includes all of these things.
+
+Installation
+------------
+It is useful to be able to install different classes of things.
+install-docs, install-bin, install-dev, install-runtime, etc.
+
 tmake TODO
 ----------
 * Does it make sense to support "IncludePaths /abc" to add paths
