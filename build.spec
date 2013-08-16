@@ -1,5 +1,7 @@
 AutoSubDirs off
 
+# Should pass on some options such as --force
+
 foreach dir [Glob --dirs {test[0-9]}] {
 	Phony all-$dir -do "run tmake -C $dir"
 	Depends all all-$dir
