@@ -30,7 +30,7 @@ proc show-help {argv} {
    --find=<target>       Search for all rules that contain given substring as a target
    --delta               Show times as delta times rather than absolute times
    --build=<objdir>      Specify the directory for build results (default: objdir)
-   --targets[=1]         List all known targets. If a parameter is given, include the rule location.
+   --targets[=all]       List all non-phony targets. If a parameter is given, include all targets and the rule location.
    --install             Install tmake to the current directory (as autosetup/tmake)
    --init                Run only the parsing phase??
    --version             Show the tmake version
