@@ -398,11 +398,6 @@ proc make {argv} {
 
 		set tmake(addtargets) {}
 
-		# Reset the status of every rule to "unknown"
-		foreach ruletarget [dict keys $tmake(rules)] {
-			set-rule-status $ruletarget unknown
-		}
-
 		# XXX: Rules should be marked -cleaning to identify those
 		# which don't need to force projfiles to be loaded
 		# target must be a single cleaning target
@@ -462,6 +457,14 @@ proc make {argv} {
 				build-error "Error: Don't know how to build $target"
 			}
 			break
+		}
+
+		if {$tmake(cleaning)} {
+			# Reset the status of every rule to "unknown" after cleaning
+			set tmake(cleaning) 0
+			foreach ruletarget [dict keys $tmake(rules)] {
+				set-rule-status $ruletarget unknown
+			}
 		}
 
 		# Add any new targets to the target list
@@ -2069,6 +2072,7 @@ proc build {target} {
 	}
 
 	if {$result == 0 && $tmake(force) && !$tmake(ignoreforce)} {
+		dputs b "Rebuilding $target because of --force"
 		lappend reason force
 		set result 1
 	}
