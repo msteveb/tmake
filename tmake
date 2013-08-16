@@ -1115,6 +1115,16 @@ proc show-all-targets {detailed} {
 	}
 }
 
+proc num-nonphony-targets {} {
+	set n 0
+	foreach i [dict keys $::tmake(targets)] {
+		if {![dict get [get-target-rule $i] phony]} {
+			incr n
+		}
+	}
+	return $n
+}
+
 # ==================================================================
 # Variable Handling
 # ==================================================================
@@ -2393,7 +2403,7 @@ if {[catch {make $argv} msg]} {
 if {$tmake(numtargets) || $tmake(showtime)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
 	if {!$tmake(quiet)} {
-		pputs [colout cyan "Built $tmake(numtargets) of [dict size $tmake(targets)] target(s) in [format %.2f $elapsed] seconds"]
+		pputs [colout cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"]
 	}
 }
 if {$tmake(exitcode)} {
