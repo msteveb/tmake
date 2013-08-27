@@ -113,7 +113,7 @@ proc make-parse-options {argv {type tmake}} {
 		if {[regexp {^(-+[^=]*)(=)?(.*)?} $arg -> option equals value]} {
 			if {$option eq "--mflags"} {
 				# The only thing we care about from mflags is -n
-				if {[string match *n* $value]} {
+				if {[regexp {^-[^ ]*n} $value]} {
 					set tmake(norun) 1
 				}
 				continue
