@@ -455,7 +455,7 @@ proc make {argv} {
 			# Discard orphans before building any non-cleaning target
 			set orphans [get-orphan-targets]
 			if {[llength $orphans]} {
-				delete-orphan-files {*}$orphans
+				delete-orphan-files {*}[file-build $orphans]
 				note Clean removing [llength $orphans] orphan target(s)
 				dputs C $orphans
 				discard-orphan-targets
