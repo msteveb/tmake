@@ -1045,6 +1045,8 @@ Phony test
 Depends clean clean-orphans
 Depends distclean clean-orphans
 
+DistClean .makecache
+
 # Invoked manually
 Phony clean-orphans -do {
 	clean-files [get-orphan-targets] "orphan targets"

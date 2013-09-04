@@ -2439,7 +2439,7 @@ if {[catch {make $argv} msg]} {
 	set tmake(exitcode) 1
 }
 
-if {$tmake(numtargets) || $tmake(showtime)} {
+if {$tmake(numtargets) || $tmake(showtime) || $tmake(verbose)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
 	if {!$tmake(quiet)} {
 		pputs [colout cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"]
