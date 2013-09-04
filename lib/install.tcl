@@ -31,13 +31,14 @@ proc tmake_install {dir} {
 				puts $f [readfile $file]
 			}
 			foreach m $modules {
-				puts $f "if {\[info procs init-$m\] ne {}} {init-$m}"
+				puts $f "if {\[exists -proc init-$m\]} {init-$m}"
 			}
+			# Embed the default rulebase
+			puts $f "set tmake(defaultrulebase) {[readfile $::tmake(dir)/rulebase.default]}"
 		}
 		close $in
 		close $f
 		exec chmod +x tmake
-		writefile rulebase.default [readfile $::tmake(dir)/rulebase.default]\n
 	} error]} {
 		user-error "Failed to install tmake: $error"
 	}

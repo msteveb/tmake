@@ -160,6 +160,15 @@ proc make-parse-options {argv {type tmake}} {
 				--force {
 					incr tmake(force)
 				}
+				--rulebase {
+					incr tmake(force)
+					if {$tmake(installed)} {
+						puts $tmake(defaultrulebase)
+					} else {
+						puts [readfile $tmake(dir)/rulebase.default]
+					}
+					exit 0
+				}
 				--targets {
 					set tmake(listtargets) $value
 				}
@@ -331,11 +340,16 @@ proc make {argv} {
 	# Project or rulebase can override this
 	alias delete-orphan-files file delete
 
-	set rulebase rulebase.spec
-	if {![file exists $rulebase]} {
-		set rulebase $tmake(dir)/rulebase.default
+	if {[file exists rulebase.spec]} {
+		lassign [invoke-spec-file $rulebase] rc msg opts
+		dputs T "Parsed rulebase.spec"
+	} elseif {$tmake(installed)} {
+		lassign [invoke-spec-file rulebase.builtin $tmake(defaultrulebase)] rc msg opts
+		dputs T "Parsed builtin rulebase"
+	} else {
+		lassign [invoke-spec-file $tmake(dir)/rulebase.default] rc msg opts
+		dputs T "Parsed $tmake(dir)/rulebase.default"
 	}
-	lassign [invoke-spec-file $rulebase] rc msg opts
 	if {$rc != 0 && $rc != 2} {
 		return -code $rc {*}$opts $msg
 	}
@@ -531,7 +545,7 @@ proc load-build-description {loadcache} {
 		return
 	}
 	if {$rc != 0 && $rc != 2} {
-		return -code $rc {*}$opts $msg 
+		return -code $rc {*}$opts $msg
 	}
 
 	dputs T "Parsed project.spec"
@@ -643,11 +657,12 @@ proc make-local-src {args} {
 	prefix [local-src-prefix] $args
 }
 
-proc invoke-spec-file {filename} {
+proc invoke-spec-file {filename args} {
 	lappend ::tmake(specfiles) $filename
+
 	# Spec files are loaded at frame level #1, in the scope of run-do
 	# 'define' relies on this
-	set result [uplevel #0 [list run-do {} [list source $filename]]]
+	set result [uplevel #0 [list run-do {} [list source-eval $filename {*}$args]]]
 
 	if {[check-signal]} {
 		tmake-exit 1
@@ -1277,17 +1292,22 @@ proc merge-vars {dict1 dict2} {
 # File Utilities
 # ==================================================================
 
-# @readfile filename ?default=""?
+# @readfile filename ?default?
 #
 # Return the contents of the file, without the trailing newline.
 # If the doesn't exist or can't be read, returns $default.
+# If no default is given, it is an error. 
 #
-proc readfile {filename {default_value ""}} {
-	set result $default_value
-	catch {
+proc readfile {filename args} {
+	try {
 		set f [open $filename]
 		set result [read -nonewline $f]
 		close $f
+	} on error {msg opts} {
+		if {[llength $args] != 1} {
+			return -code error $msg
+		}
+		lassign $args result
 	}
 	return $result
 }

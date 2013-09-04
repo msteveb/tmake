@@ -4,7 +4,6 @@
 # Module containing misc procs useful to modules
 # Largely for platform compatibility
 
-set tmakecompat(istcl) [info exists ::tcl_library]
 set tmakecompat(iswin) [string equal windows $tcl_platform(platform)]
 
 if {$tmakecompat(iswin)} {
@@ -30,104 +29,55 @@ if {$tmakecompat(iswin)} {
 	}
 }
 
-if {$tmakecompat(istcl)} {
-	proc env-save {} {
-		array get ::env
+if {$tmakecompat(iswin)} {
+	# On Windows, backslash convert all environment variables
+	# (Assume that Tcl does this for us)
+	proc getenv {name args} {
+		string map {\\ /} [env $name {*}$args]
 	}
-	proc env-restore {newenv} {
-		array unset ::env *
-		array set ::env $newenv
-	}
-	proc alias {new old args} {
-		interp alias {} $new {} $old {*}$args
-	}
-	alias array-set array set
-	# Simple single-list lmap with no support for break or continue
-	proc lmap {var list script} {
-		set result {}
-		upvar $var i
-		foreach i $list {
-			lappend result [uplevel 1 $script]
-		}
-		return $result
-	}
-	alias lunique lsort -unique
 	proc exec-save-stderr {args} {
-		set rc [catch {exec >@stdout {*}$args} msg opts]
-		if {$rc == 0} {
-			return $msg
+		# If the command is a shell script, we need to manually implement #!/bin/sh
+		# by running "sh script ..."
+		set scriptargs [lassign $args script]
+		if {[file exists $script]} {
+			set f [open $script]
+			if {[gets $f buf] > 0} {
+				if {[regexp {^#!([^ ]*)(.*)$} $buf -> cmd cmdargs]} {
+					set args [list [file tail $cmd] {*}$cmdargs {*}$args]
+				}
+			}
+			close $f
 		}
-		if {$rc == 1 && [dict get $opts -errorcode] eq "NONE"} {
-			# Just stderr
-			return $msg
-		}
-		return -code $rc $msg
-	}
-	proc readdir {dir} {
-		glob -nocomplain -directory $dir -tails *
-	}
-	proc isatty? {channel} {
-		# XXX: Does this work reliably on all (non-windows) platforms?
-		dict exists [fconfigure $channel] -xchar
-	}
-	if {![info exists tcl_platform(pathSeparator)]} {
-		if {$tmakecompat(iswin)} {
-			set tcl_platform(pathSeparator) {;}
-		} else {
-			set tcl_platform(pathSeparator) :
-		}
+		exec >@stdout {*}$args
 	}
 } else {
-	if {$tmakecompat(iswin)} {
-		# On Windows, backslash convert all environment variables
-		# (Assume that Tcl does this for us)
-		proc getenv {name args} {
-			string map {\\ /} [env $name {*}$args]
-		}
-		proc exec-save-stderr {args} {
-			# If the command is a shell script, we need to manually implement #!/bin/sh
-			# by running "sh script ..."
-			set scriptargs [lassign $args script]
-			if {[file exists $script]} {
-				set f [open $script]
-				if {[gets $f buf] > 0} {
-					if {[regexp {^#!([^ ]*)(.*)$} $buf -> cmd cmdargs]} {
-						set args [list [file tail $cmd] {*}$cmdargs {*}$args]
-					}
-				}
-				close $f
-			}
-			exec >@stdout {*}$args
-		}
-	} else {
-		# Jim on unix is simple
-		alias getenv env
-		proc exec-save-stderr {args} {
-			exec >@stdout {*}$args
-		}
+	# Jim on unix is simple
+	alias getenv env
+	proc exec-save-stderr {args} {
+		exec >@stdout {*}$args
 	}
-	proc env-save {} {
-		return $::env
+}
+proc env-save {} {
+	return $::env
+}
+alias array-set set
+proc env-restore {newenv} {
+	set ::env $newenv
+}
+proc lunique {list} {
+	set a {}
+	foreach i $list {
+		set a($i) 1
 	}
-	alias array-set set
-	proc env-restore {newenv} {
-		set ::env $newenv
+	lsort [dict keys $a]
+}
+proc isatty? {channel} {
+	set tty 0
+	catch {
+		# isatty is a recent addition to Jim Tcl
+		set tty [$channel isatty]
 	}
-	proc lunique {list} {
-		set a {}
-		foreach i $list {
-			set a($i) 1
-		}
-		lsort [dict keys $a]
-	}
-	proc isatty? {channel} {
-		set tty 0
-		catch {
-			# isatty is a recent addition to Jim Tcl
-			set tty [$channel isatty]
-		}
-		return $tty
-	}
+	return $tty
 }
 
 proc getenv {name args} {
@@ -138,7 +88,7 @@ proc getenv {name args} {
 	} else {
 		return -code error "environment variable \"$name\" does not exist"
 	}
-	if {$::tmakecompat(iswin) && !$::tmakecompat(istcl)} {
+	if {$::tmakecompat(iswin)} {
 		# On Windows, backslash convert all environment variables
 		# (Assume that Tcl does this for us)
 		set value [string map {\\ /} $value]
@@ -150,27 +100,24 @@ proc setenv {name value} {
 	set ::env($name) $value
 }
 
-if {!$tmakecompat(istcl)} {
-	# Jim Tcl can't normalize a non-existent path
-	proc file-normalize {path} {
-		if {$path eq ""} {
-			return ""
-		}
-		if {[catch {file normalize $path} result]} {
-			set oldpwd [pwd]
-			if {[file isdir $path]} {
-				cd $path
-				set result [pwd]
-			} else {
-				cd [file dirname $path]
-				set result [file join [pwd] [file tail $path]]
-			}
-			cd $oldpwd
-		}
-		return $result
+
+# Jim Tcl can't normalize a non-existent path
+proc file-normalize {path} {
+	if {$path eq ""} {
+		return ""
 	}
-} else {
-	alias file-normalize file normalize
+	if {[catch {file normalize $path} result]} {
+		set oldpwd [pwd]
+		if {[file isdir $path]} {
+			cd $path
+			set result [pwd]
+		} else {
+			cd [file dirname $path]
+			set result [file join [pwd] [file tail $path]]
+		}
+		cd $oldpwd
+	}
+	return $result
 }
 
 proc file-join {dir path} {
@@ -283,11 +230,7 @@ proc warning-location {msg {pattern *.spec}} {
 proc find-source-location {{pattern *.spec}} {
 	# Search back through the stack for the first location in a .spec file
 	for {set i 1} {$i < [info level]} {incr i} {
-		if {$::tmakecompat(istcl)} {
-			array set info [info frame -$i]
-		} else {
-			lassign [info frame -$i] info(caller) info(file) info(line)
-		}
+		lassign [info frame -$i] info(caller) info(file) info(line)
 		if {[string match $pattern $info(file)]} {
 			return [relative-path $info(file)]:$info(line)
 		}
@@ -300,71 +243,62 @@ proc find-source-location {{pattern *.spec}} {
 # (unless --debug is enabled)
 #
 proc error-stacktrace {msg} {
-	if {$::tmakecompat(istcl)} {
-		if {![info exists ::errorInfo]} {
-			return $msg
-		}
-		if {[regexp {file "([^ ]*)" line ([0-9]*)} $::errorInfo dummy file line]} {
-			return "[relative-path $file]:$line $msg\n$::errorInfo"
-		}
-		return $::errorInfo
-	} else {
-		# Prepend a live stacktrace to the error stacktrace, omitting the current level
-		set stacktrace [concat [info stacktrace] [lrange [stacktrace] 3 end]]
+	# Prepend a live stacktrace to the error stacktrace, omitting the current level
+	set stacktrace [concat [info stacktrace] [lrange [stacktrace] 3 end]]
 
-		if {!$::tmake(debug)} {
-			# Only keep levels from *.spec files or with no file
-			set newstacktrace {}
-			foreach {p f l} $stacktrace {
-				if {![string match "*.spec" $f] || $f eq ""} {
-					#puts "Skipping $p $f:$l"
-					continue
-				}
-				lappend newstacktrace $p $f $l
-			}
-			set stacktrace $newstacktrace
-		}
-
-		# Convert filenames to relative paths
+	if {!$::tmake(debug)} {
+		# Only keep levels from *.spec files or with no file
 		set newstacktrace {}
 		foreach {p f l} $stacktrace {
-			lappend newstacktrace $p [relative-path $f] $l
+			if {![string match "*.spec" $f] || $f eq ""} {
+				#puts "Skipping $p $f:$l"
+				continue
+			}
+			lappend newstacktrace $p $f $l
 		}
-		lassign $newstacktrace p f l
-		if {$f ne ""} {
-			set prefix "$f:$l: "
-			set newstacktrace [lrange $newstacktrace 3 end]
-		} else {
-			set prefix ""
-		}
-
-		return "${prefix}Error: $msg\n[stackdump $newstacktrace]"
+		set stacktrace $newstacktrace
 	}
+
+	# Convert filenames to relative paths
+	set newstacktrace {}
+	foreach {p f l} $stacktrace {
+		lappend newstacktrace $p [relative-path $f] $l
+	}
+	lassign $newstacktrace p f l
+	if {$f ne ""} {
+		set prefix "$f:$l: "
+		set newstacktrace [lrange $newstacktrace 3 end]
+	} else {
+		set prefix ""
+	}
+
+	return "${prefix}Error: $msg\n[stackdump $newstacktrace]"
 }
 
-if {[catch {clock millis}]} {
-	proc clock-millis {} {
-		expr {[clock seconds] * 1000.0}
+# Do we have the two-argument [source]?
+if {[catch {source filename {}}]} {
+	proc source-eval {filename args} {
+		if {[llength $args]} {
+			tailcall eval {*}$args
+		} else {
+			tailcall source $filename
+		}
 	}
 } else {
-	alias clock-millis clock millis
+	alias source-eval source
 }
 
-if {[info commands signal] ne ""} {
-	signal ignore SIGINT SIGTERM
-	proc check-signal {{clear 0}} {
-		if {$clear} {
-			set clear -clear
-		} else {
-			set clear ""
-		}
-		if {[signal check {*}$clear] ne ""} {
-			return 1
-		}
-		return 0
+alias clock-millis clock millis
+
+signal ignore SIGINT SIGTERM
+proc check-signal {{clear 0}} {
+	if {$clear} {
+		set clear -clear
+	} else {
+		set clear ""
 	}
-} else {
-	proc check-signal {{clear 0}} {
-		return 0
+	if {[signal check {*}$clear] ne ""} {
+		return 1
 	}
+	return 0
 }

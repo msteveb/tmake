@@ -32,9 +32,10 @@ proc show-help {argv} {
    --delta               Show times as delta times rather than absolute times
    --build=<objdir>      Specify the directory for build results (default: objdir)
    --targets[=all]       List all non-phony targets. If a parameter is given, include all targets and the rule location.
-   --install             Install tmake to the current directory (as autosetup/tmake)
+   --install=<dir>       Install tmake to the given directory
    --init                Run only the parsing phase??
    --version             Show the tmake version
+   --rulebase            Output the builtin rulebase
    --genie               Create sample project.spec and build.spec files
 }
 	puts [show-version]
