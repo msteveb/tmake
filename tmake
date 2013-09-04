@@ -1760,6 +1760,7 @@ proc set-global {name value} {
 proc make-var-dict {info} {
 	set vardict [dict get $info vars]
 	dict set vardict target [file-build [dict get $info target]]
+	dict set vardict targetname [dict get $info target]
 	dict set vardict local [dict get $info local]
 	dict set vardict build [file-build [dict get $info local]]
 	dict set vardict depends [locate-files [dict get $info depends]]

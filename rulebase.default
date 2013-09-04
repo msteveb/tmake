@@ -68,7 +68,7 @@ define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 proc ObjectRule.c {obj src} {
 	# Capture the current value of CC, C_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note Cc $target} -getvars CC C_FLAGS INCPATHS -do {
+	target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
 		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 	} -dyndep {
 		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
@@ -77,7 +77,7 @@ proc ObjectRule.c {obj src} {
 
 proc ObjectRule.cpp {obj src} {
 	# Capture the current value of CXX, CXX_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note C++ $target} -getvars CXX CXX_FLAGS INCPATHS -do {
+	target $obj -inputs $src -msg {note C++ $targetname} -getvars CXX CXX_FLAGS INCPATHS -do {
 		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
 	} -dyndep {
 		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
@@ -176,7 +176,7 @@ proc Executable {args} {
 	define? CCLD [get-define CC]
 
 	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
-	target $localtargetexe -inputs {*}$objects [get-define LOCAL_LIBS] -depends [get-define PROJDEPS] -msg {note Link $target} -do {
+	target $localtargetexe -inputs {*}$objects [get-define LOCAL_LIBS] -depends [get-define PROJDEPS] -msg {note Link $targetname} -do {
 		run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
 	} -getvars CCLD LD_FLAGS PROJLIBS SYSLIBS {*}[target-alias $target $targetexe]
 	Clean $targetexe
@@ -353,7 +353,7 @@ proc ArchiveLib {args} {
 	set libalias <lib>$basename
 
 	set locallibname [make-local $libname]
-	target $locallibname -inputs {*}$objects -msg {note Ar $target} -do {
+	target $locallibname -inputs {*}$objects -msg {note Ar $targetname} -do {
 		file delete $target
 		run $AR $ARFLAGS $target {*}[expand-objects $inputs]
 		run $RANLIB $target
@@ -438,7 +438,7 @@ proc SharedLib {args} {
 	#      Is it necessary to separate these two?
 	#      Also, is LinkFlags/LD_FLAGS also required?
 
-	target $locallibname -inputs {*}$objects -depends [get-define PROJDEPS] -msg {note SharedLib $target} -do {
+	target $locallibname -inputs {*}$objects -depends [get-define PROJDEPS] -msg {note SharedLib $targetname} -do {
 		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
 	} -getvars CCLD PROJLIBS SYSLIBS -vars setsoname $setsoname
 	Clean $locallibname
@@ -492,7 +492,7 @@ proc SharedObject {args} {
 
 	set localtarget [make-local $target]
 
-	target $localtarget -inputs {*}[Objects $srcs] -depends [get-define PROJDEPS] -msg {note SharedObject $target} -do {
+	target $localtarget -inputs {*}[Objects $srcs] -depends [get-define PROJDEPS] -msg {note SharedObject $targetname} -do {
 		run $CCLD $SHOBJ_LDFLAGS -o $target {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
 	} -getvars CCLD PROJLIBS SYSLIBS
 	Clean $target
@@ -970,7 +970,7 @@ proc Generate {args} {
 	if {$chdir} {
 		lappend args -chdir
 	}
-	target $localtarget -inputs {*}[make-local {*}$inputs] {*}$opts -do $rules -msg {note Generate $target} {*}$args
+	target $localtarget -inputs {*}[make-local {*}$inputs] {*}$opts -do $rules -msg {note Generate $targetname} {*}$args
 	Clean $target
 }
 
@@ -1002,7 +1002,7 @@ proc HostExecutable {target args} {
 	set localtargetexe $localtarget[get-define HOST_EXEEXT]
 	set targetexe $target[get-define HOST_EXEEXT]
 
-	target $localtargetexe -inputs {*}[make-local {*}$args] -msg {note HostExecutable $target} -getvars HOST_CFLAGS -do {
+	target $localtargetexe -inputs {*}[make-local {*}$args] -msg {note HostExecutable $targetname} -getvars HOST_CFLAGS -do {
 		run $CC_FOR_BUILD $HOST_CFLAGS -o $target $inputs
 	} -dyndep {
 		header-scan-regexp-recursive $local "" $CHDRPATTERN
