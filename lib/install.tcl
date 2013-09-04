@@ -4,6 +4,9 @@
 # Module which can install tmake
 
 proc tmake_install {dir} {
+	if {$dir eq ""} {
+		user-error "Usage: tmake --install=<dir>"
+	}
 	if {[catch {
 		file mkdir $dir
 
@@ -11,7 +14,7 @@ proc tmake_install {dir} {
 
 		set f [open tmake w]
 
-		# First the main script, but only up until "CUT HERE"
+		# Write the main script, but only up until "CUT HERE"
 		set in [open $::tmake(dir)/tmake]
 		while {[gets $in buf] >= 0} {
 			if {$buf ne "##-- CUT HERE --##"} {
@@ -33,10 +36,8 @@ proc tmake_install {dir} {
 		}
 		close $in
 		close $f
+		exec chmod +x tmake
 		writefile rulebase.default [readfile $::tmake(dir)/rulebase.default]\n
-		writefile find-tclsh [readfile $::tmake(dir)/find-tclsh]\n
-		writefile test-tclsh [readfile $::tmake(dir)/test-tclsh]\n
-		exec chmod 755 tmake find-tclsh test-tclsh
 	} error]} {
 		user-error "Failed to install tmake: $error"
 	}
