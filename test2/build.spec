@@ -71,9 +71,7 @@ Test --interp=jimsh regtest.tcl
 Generate Tcl.html make-index jim_tcl.txt {
 	run $tclsh $script $inputs | asciidoc -o $target -d manpage -
 }
-Install $prefix/docs Tcl.html
-Install / README
-
+Install $prefix/docs Tcl.html README.jim=README
 Phony docs Tcl.html
 
 DistClean jim-config.h jimautoconf.h config.log settings.conf
