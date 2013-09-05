@@ -233,7 +233,7 @@ proc publish-prefix {dir} {
 
 proc publish-one-file {dest src} {
 	#puts "publish-one-file: dest=$dest, src=$src, realdest=[publish-dir $dest]"
-	hard-link [publish-dir $dest] $src -vars dest $dest -msg {note Publish $target}
+	hard-link [publish-dir $dest] $src -vars dest $dest -msg {note Publish $targetname}
 }
 
 proc make-shlib-symlinks {first args} {
@@ -245,7 +245,7 @@ proc make-shlib-symlinks {first args} {
 proc publish-shared-lib {names source alias} {
 	set published [prefix [publish-prefix lib] {*}$names]
 
-	target $published -inputs $source -msg {note Publish [lindex $target 0]} -do {
+	target $published -inputs $source -msg {note Publish [lindex $targetname 0]} -do {
 		file delete {*}$target
 		exec ln -f $inputs [lindex $target 0]
 		make-shlib-symlinks {*}$target
@@ -318,14 +318,14 @@ proc PublishBin {args} {
 
 
 	foreach {dest src} [expand-filespec $destdir $args 0] {
-		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $target} -alias <bin>[file tail $dest]
+		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $targetname} -alias <bin>[file tail $dest]
 	}
 }
 
 proc publish-lib {libname alias} {
 	show-this-rule
 
-	hard-link [publish-prefix lib]$libname [make-local $libname] -vars dest lib/$libname -msg {note Publish $target} -alias $alias
+	hard-link [publish-prefix lib]$libname [make-local $libname] -vars dest lib/$libname -msg {note Publish $targetname} -alias $alias
 }
 
 
