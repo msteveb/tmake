@@ -58,6 +58,7 @@ define PUBLISH publish
 
 define PROJLIBS ""
 define SYSLIBS ""
+define HOST_SYSLIBS ""
 
 # Default header pattern for C and C++ dynamic dependencies
 #
@@ -638,7 +639,7 @@ proc load-config-file {filename} {
 			} elseif {[string match {"*"} $value]} {
 				set value [lindex $value 0]
 			}
-			#puts "define $name $value"
+			dputs c "define $name $value"
 			define $name $value
 		} else {
 			user-notice [colerr purple "$filename:$n: Warning: Failed to parse $line"]
@@ -1026,6 +1027,10 @@ proc DefaultTarget {name} {
 
 # XXX: Only useful for simple cases of building a host executable from C sources
 # 
+proc HostLibs {args} {
+	define-append HOST_SYSLIBS {*}$args
+}
+
 proc HostExecutable {target args} {
 	set localtarget [make-local $target]
 
@@ -1033,8 +1038,8 @@ proc HostExecutable {target args} {
 	set localtargetexe $localtarget[get-define HOST_EXEEXT]
 	set targetexe $target[get-define HOST_EXEEXT]
 
-	target $localtargetexe -inputs {*}[make-local {*}$args] -msg {note HostExecutable $targetname} -getvars HOST_CFLAGS -do {
-		run $CC_FOR_BUILD $HOST_CFLAGS -o $target $inputs
+	target $localtargetexe -inputs {*}[make-local {*}$args] -msg {note HostExecutable $targetname} -getvars HOST_CFLAGS HOST_SYSLIBS -do {
+		run $CC_FOR_BUILD $HOST_CFLAGS -o $target $inputs $HOST_SYSLIBS
 	} -dyndep {
 		header-scan-regexp-recursive $local "" $CHDRPATTERN
 	} {*}[target-alias $target $targetexe]

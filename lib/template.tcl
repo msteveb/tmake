@@ -4,12 +4,12 @@
 # Module which provides creation of a file from a template with substitution
 # XXX: Should this be in the default rulebase instead?
 
-proc apply-template {infile outfile mapping} {
+proc apply-template {infile outfile mapping target} {
 	set mapped [string map $mapping [readfile $infile]]
 	set unmapped [regexp -all -inline {@[A-Za-z0-9_]+@} $mapped]
 	if {[llength $unmapped]} {
 		set unmapped [string map {@ ""} [lunique $unmapped]]
-		user-notice [make-source-location $outfile "" ": Warning: $outfile has unmapped variables: $unmapped"]
+		user-notice [colerr purple [make-source-location $target "" ": Warning: $target has unmapped variables: $unmapped"]]
 	}
 	writefile $outfile $mapped\n
 }
@@ -47,7 +47,7 @@ proc Template {args} {
 		}
 	}
 	target [make-local $target] -inputs [make-local $src] -vars mapping $mapping -msg {note Template $target} -do {
-		apply-template $inputs $target $mapping
+		apply-template $inputs $target $mapping $targetname
 	}
 	Clean $target
 }
