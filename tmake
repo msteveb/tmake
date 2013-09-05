@@ -162,10 +162,11 @@ proc make-parse-options {argv {type tmake}} {
 				}
 				--rulebase {
 					incr tmake(force)
-					if {$tmake(installed)} {
-						puts $tmake(defaultrulebase)
+					set rulebase [get-rulebase]
+					if {[llength $rulebase] > 1} {
+						puts [lindex $rulebase 1]
 					} else {
-						puts [readfile $tmake(dir)/rulebase.default]
+						puts [readfile [lindex $rulebase 0]]
 					}
 					exit 0
 				}
@@ -345,16 +346,10 @@ proc make {argv} {
 	# Project or rulebase can override this
 	alias delete-orphan-files file delete
 
-	if {[file exists rulebase.spec]} {
-		lassign [invoke-spec-file rulebase.spec] rc msg opts
-		dputs T "Parsed rulebase.spec"
-	} elseif {$tmake(installed)} {
-		lassign [invoke-spec-file rulebase.builtin $tmake(defaultrulebase)] rc msg opts
-		dputs T "Parsed builtin rulebase"
-	} else {
-		lassign [invoke-spec-file $tmake(dir)/rulebase.default] rc msg opts
-		dputs T "Parsed $tmake(dir)/rulebase.default"
-	}
+	set rulebase [get-rulebase]
+
+	lassign [invoke-spec-file {*}$rulebase] rc msg opts
+	dputs T "Parsed [lindex $rulebase 0]"
 
 	if {$rc != 0 && $rc != 2} {
 		return -code $rc {*}$opts $msg
@@ -492,6 +487,17 @@ proc make {argv} {
 				set targets [linsert $targets 0 $new]
 			}
 		}
+	}
+}
+
+proc get-rulebase {} {
+	global tmake
+	if {[file exists rulebase.spec]} {
+		return rulebase.spec
+	} elseif {$tmake(installed)} {
+		return [list rulebase.builtin $tmake(defaultrulebase)]
+	} else {
+		return [list $tmake(dir)/rulebase.default]
 	}
 }
 

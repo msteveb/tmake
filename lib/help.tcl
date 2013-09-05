@@ -96,8 +96,13 @@ proc output-help-block {type lines} {
 
 # Generate a command reference from inline documentation
 proc show-command-reference {} {
-    lappend files $::tmake(exe) $::tmake(rulebase)
+    lappend files $::tmake(exe)
     lappend files {*}[lsort [glob -nocomplain $::tmake(dir)/lib/*.tcl]]
+
+    set rulebase [get-rulebase]
+    if {[llength $rulebase] == 1} {
+        lappend files [lindex $rulebase 0]
+    }
 
     section "Core Commands"
     set type p
@@ -105,55 +110,64 @@ proc show-command-reference {} {
     set cmd {}
 
     foreach file $files {
-        set f [open $file]
-        while {![eof $f]} {
-            set line [gets $f]
+        show-command-reference-blob [file rootname [file tail $file]] [readfile $file]
+    }
+    if {[llength $rulebase] > 1} {
+        show-command-reference-blob {*}$rulebase
+    }
+    exit 0
+}
 
+proc show-command-reference-blob {name text} {
+    set searching 1
+    set lines {}
+    set type p
+
+    foreach line [split $text \n] {
+        if {$searching} {
             # Find lines starting with "# @*" and continuing through the remaining comment lines
             if {![regexp {^# @(.*)} $line -> cmd]} {
                 continue
             }
+            set searching 0
 
             # Synopsis or command?
             if {$cmd eq "synopsis:"} {
-                section "Module: [file rootname [file tail $file]]"
+                section "Module: $name"
             } else {
                 subsection $cmd
             }
 
             set lines {}
             set type p
-
-            # Now the description
-            while {![eof $f]} {
-                set line [gets $f]
-
-                if {![regexp {^#(#)? ?(.*)} $line -> hash cmd]} {
-                    break
-                }
-                if {$hash eq "#"} {
-                    set t code
-                } elseif {[regexp {^- (.*)} $cmd -> cmd]} {
-                    set t list
-                } else {
-                    set t p
-                }
-
-                #puts "hash=$hash, oldhash=$oldhash, lines=[llength $lines], cmd=$cmd"
-
-                if {$t ne $type || $cmd eq ""} {
-                    # Finish the current block
-                    output-help-block $type $lines
-                    set lines {}
-                    set type $t
-                }
-                if {$cmd ne ""} {
-                    lappend lines $cmd
-                }
-            }
-
-            output-help-block $type $lines
+            continue
         }
-        close $f
+
+        # Now the description
+        if {![regexp {^#(#)? ?(.*)} $line -> hash cmd]} {
+            set searching 1
+            continue
+        }
+        if {$hash eq "#"} {
+            set t code
+        } elseif {[regexp {^- (.*)} $cmd -> cmd]} {
+            set t list
+        } else {
+            set t p
+        }
+
+        #puts "hash=$hash, oldhash=$oldhash, lines=[llength $lines], cmd=$cmd"
+
+        if {$t ne $type || $cmd eq ""} {
+            # Finish the current block
+            output-help-block $type $lines
+            set lines {}
+            set type $t
+        }
+        if {$cmd ne ""} {
+            lappend lines $cmd
+        }
     }
+
+    output-help-block $type $lines
 }
