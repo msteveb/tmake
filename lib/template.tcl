@@ -46,7 +46,7 @@ proc Template {args} {
 			lappend mapping @$var@ [get-define $var]
 		}
 	}
-	target [make-local $target] -inputs [make-local $src] -vars mapping $mapping -msg {note Template $target} -do {
+	target [make-local $target] -inputs [make-local $src] -vars mapping $mapping -msg {note Template $targetname} -do {
 		apply-template $inputs $target $mapping $targetname
 	}
 	Clean $target
