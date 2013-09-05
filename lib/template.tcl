@@ -41,7 +41,7 @@ proc Template {args} {
 			lappend mapping @$name@ $value
 		} else {
 			if {![define-exists $var]} {
-				user-notice [warning-location "Warning: mapping undefined variable $var" build.spec]
+				user-notice [warning-location "Warning: $target maps undefined variable $var" build.spec]
 			}
 			lappend mapping @$var@ [get-define $var]
 		}

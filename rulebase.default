@@ -645,6 +645,9 @@ proc load-config-file {filename} {
 			user-notice [colerr purple "$filename:$n: Warning: Failed to parse $line"]
 		}
 	}
+	if {$n == 0} {
+		user-notice [colerr purple "Warning: $filename contains no configuration"]
+	}
 }
 
 proc Load {args} {
@@ -656,20 +659,22 @@ proc Load {args} {
 
 	if {[is-target? $filename]} {
 		set f [file-build $filename]
-		#puts "Load: $filename is a target => $f"
+		dputs m "Load: $filename is a target => $f"
 	} elseif {[file exists $filename]} {
-		#puts "Load: $filename is source"
+		dputs m "Load: $filename is source"
 		set f $filename
 		lappend result $f
 	} elseif {![is-cleaning?] && !$nocare} {
-		build-error [warning-location "Error: $filename does not exist and is not a target"]
+		build-error [warning-location "Error: Load $filename does not exist and is not a target"]
 		tmake-exit 1
 	}
 
 	if {[info exists f] && [file exists $f]} {
 		if {$config} {
+			dputs m "load-config-file $f"
 			load-config-file $f
 		} else {
+			dputs m "source $f"
 			source $f
 		}
 		# If we find the file, we now care about it
@@ -946,42 +951,40 @@ proc find-project-bin {bin args} {
 	if {[is-target? $localbin]} {
 		dputxs m {[find-source-location]: find-project-bin: $localbin is a local target}
 		if {$opts(-chdir)} {
-			return [list $localbin ./$bin]
+			set result [list $localbin ./$bin]
 		} else {
 			# Note: Use [build-dir] here rather than [file-build] to retain ./
 			#       if building in-tree
-			return [list $localbin [build-dir]/$localbin]
+			set result [list $localbin [build-dir]/$localbin]
 		}
-	}
-
-	if {[regexp {^<bin>(.*)} $bin -> basename]} {
+	} elseif {[regexp {^<bin>(.*)} $bin -> basename]} {
 		dputxs m {[find-source-location]: find-project-bin: $bin is a publish target}
 		set publishbin [publish-prefix bin]$basename
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
-			return [list $bin [file-build-relative $publishbin]]
+			#puts "localbin=$localbin, file-build-relative $publishbin => [file-build-relative $publishbin]"
+			#puts "localbin=$localbin, file-build $publishbin => [file-build $publishbin]"
+			set result [list $bin ./$publishbin]
 		} else {
-			return [list $bin [file-build $publishbin]]
+			set result [list $bin [file-build $publishbin]]
 		}
-	}
-
-	if {[file exists $localbin]} {
+	} elseif {[file exists $localbin]} {
 		dputxs m {[find-source-location]: find-project-bin: $localbin exists as source}
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
-			return [list $localbin [file-src-relative $localbin]]
+			set result [list $localbin [file-src-relative $localbin]]
 		} else {
-			return [list $localbin $localbin]
+			set result [list $localbin $localbin]
 		}
-	}
-
-	if {$opts(-optional)} {
+	} elseif {$opts(-optional)} {
 		dputxs m {[find-source-location]: find-project-bin: $bin is assumed to be external}
-		return [list "" $bin]
+		set result [list "" $bin]
+	} else {
+		# Not found
+		dev-error "$bin is neither a local nor a published (<bin>) target"
 	}
-
-	# Not found
-	dev-error "$bin is neither a local nor a published (<bin>) target"
+	dputxs m {[find-source-location]: find-project-bin returning $result}
+	return $result
 }
 
 proc Generate {args} {

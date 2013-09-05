@@ -1307,7 +1307,7 @@ proc merge-vars {dict1 dict2} {
 # @readfile filename ?default?
 #
 # Return the contents of the file, without the trailing newline.
-# If the doesn't exist or can't be read, returns $default.
+# If the file doesn't exist or can't be read, returns $default.
 # If no default is given, it is an error. 
 #
 proc readfile {filename args} {
