@@ -690,6 +690,7 @@ proc UseSystemLibs {args} {
 proc PublishIncludes {args} {
 	show-this-rule
 	getopt {--keepdir args} args
+	set args [join $args]
 
 	foreach {dest src} [expand-filespec include $args $keepdir] {
 		publish-one-file $dest $src
@@ -849,6 +850,7 @@ proc Install {args} {
 	show-this-rule
 
 	getopt {--bin --strip --keepdir destdir args} args
+	set args [join $args]
 	set flags {}
 	if {$bin} {
 		lappend flags bin
