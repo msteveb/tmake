@@ -33,6 +33,7 @@ is addressed, except performance.
 TODO Items
 ----------
 - Documentation, especially basic --help documentation, and developer docs (e.g. known rules)
+- 'tmake --rules' would be very handy
 - tmake-genie?
 - Address known issues below, if possible
 - Do we need a -vars variant which completely replaces the var?
@@ -45,8 +46,13 @@ Known Issues
 Under Tcl, it is not possible to interrupt ^C, so that make cache
 is not saved if the build is interrupted. Should the cache be saved periodically?
 The same is true when running the non-msys jimsh under the msys shell. 
+- Could package require TclX (but that doesn't seem to be available for Tcl 8.5 on ubuntu)
 
 Passing options to tmake via make O=... is a bit awkward.
+
+The pure scripting option is nice, but I think we really have to create an executable
+which embeds Jim Tcl. That way we can speed up some processing which is currently
+too slow in Tcl.
 
 Installing tmake in the path is not a perfect alternative for
 the make wrappers since:
@@ -500,12 +506,21 @@ Dynamic dependencies:
 Reliability
 -----------
 
-* Various things are cached to ensure that targets are rebuilt when 
+* Various things are cached to ensure that targets are rebuilt when required.
+
+Note that currently we only cache the script which generates targets, not
+how that script resolves (to either Tcl commands or external commands).
+We *could* have 'run' follow the PATH and record details of commands actually
+run in case those external programs change.
+This might be overkill...
 
 Parallel Builds
 ---------------
 tmake does not currently support parallel builds, but this is an implentation detail.
 With some (much!) restructuring, parallel builds should be possible.
+
+The primary issue here is that we need to be able to run each parallel command in the background
+and collect it's outputs and result when done. In Jim Tcl the only way to do this is either [exec ... &] and os.wait, or os.fork
 
 More about cached state
 -----------------------
@@ -706,13 +721,14 @@ include/polarssl/config.h
   some basic compiler settings. Most settings are still hard-coded here.
 - Create settings.conf and include/polarssl/autoconf.h
 - Modify include/polarssl/config.h to include autoconf.h (to avoid overwriting current version)
-- Currently tmake only supports building polarssl as a static lib
+- Currently tmake only supports building polarssl as a static lib (now fixed)
 - Created polarsslwrap based on axtlswrap
 - Test directory uses code generation. scripts/generate\_code.pl was hard to work with
   because it wanted to generate output in the current dir.
   I changed it slightly to take the full path to the target on the command line.
 
 => Need support for shared lib
+   - Now done
 => polarsslwrap does not work on Windows because of the lack of fork, exec, poll
 => Need to add all possible options to auto.def, including dependencies
 
@@ -725,9 +741,7 @@ Was waf, now cmake
 - Converted autoconfig + user config from cmake to auto.def
 
 - Required addition of building libraries from libraries
-- Required addition of GlobRecursive
-  - Might be nice to have --exclude or something similar
-  - Can GlobRecursive become Glob --recursive?
+- Required addition of GlobRecursive (now Glob --recursive --exclude=...)
 - Added Template support as tmake module for .pc (pkg-config)
 - tests-clar/clar was awkward since it wouldn't generate sources out-of-tree.
   Needed to manually move them to the build tree. (Alternatively, could have modified clar).

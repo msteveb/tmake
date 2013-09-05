@@ -3,6 +3,16 @@
 #
 # They can be replaced if necessary
 
+# @synopsis:
+#
+# rulebase.default is the default tmake rulebase...
+#
+# The following environment variables are used if set:
+#
+## CC       - C compiler
+## CXX      - C++ compiler
+## ...
+
 use getopt glob
 
 # ==================================================================
@@ -66,6 +76,12 @@ array set ::tmakedrb {
 
 define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
+# @ObjectRule.<ext> object source
+#
+# Rule for creating 'object' from source file 'source' with the
+# extentions 'ext'.
+#
+# Allows ...
 proc ObjectRule.c {obj src} {
 	# Capture the current value of CC, C_FLAGS and INCPATHS
 	target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
@@ -162,6 +178,9 @@ proc target-alias {target targetexe} {
 	}
 }
 
+# @Executable --test --nobuild --publish --strip --install=<dir> target sources ...
+#
+# Allows ...
 proc Executable {args} {
 	show-this-rule
 	getopt {--test --nobuild --publish --strip --install: target args} args
@@ -277,6 +296,12 @@ proc expand-filespec {dir filelist keepdir} {
 	return $result
 }
 
+# @PublishBin --script name ...
+#
+# Publishes one or more executables (either binaries or scripts)
+# Unless --script is specified, the executable extension (e.g. .exe) is used.
+#
+# Note that 'name' can be 'target=src' to rename a file when published.
 proc PublishBin {args} {
 	show-this-rule
 
@@ -303,6 +328,12 @@ proc publish-lib {libname alias} {
 }
 
 
+# @Publish --keepdir name ...
+#
+# Publishes one or more files
+# (Note re bin, lib)
+#
+# Note that 'name' can be 'target=src' to rename a file when published.
 proc Publish {args} {
 	show-this-rule
 	getopt {--keepdir dir args} args

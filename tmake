@@ -203,6 +203,11 @@ proc make-parse-options {argv {type tmake}} {
 					show-help $argv
 					exit 0
 				}
+				--ref {
+					use help
+					show-reference
+					exit 0
+				}
 				--genie {
 					use genie
 					tmake-genie $argv
@@ -341,7 +346,7 @@ proc make {argv} {
 	alias delete-orphan-files file delete
 
 	if {[file exists rulebase.spec]} {
-		lassign [invoke-spec-file $rulebase] rc msg opts
+		lassign [invoke-spec-file rulebase.spec] rc msg opts
 		dputs T "Parsed rulebase.spec"
 	} elseif {$tmake(installed)} {
 		lassign [invoke-spec-file rulebase.builtin $tmake(defaultrulebase)] rc msg opts
@@ -350,6 +355,7 @@ proc make {argv} {
 		lassign [invoke-spec-file $tmake(dir)/rulebase.default] rc msg opts
 		dputs T "Parsed $tmake(dir)/rulebase.default"
 	}
+
 	if {$rc != 0 && $rc != 2} {
 		return -code $rc {*}$opts $msg
 	}
