@@ -4,14 +4,76 @@
 # Module which provides creation of a file from a template with substitution
 # XXX: Should this be in the default rulebase instead?
 
+# @apply-template infile outfile mapping targetname
+#
+# Reads the input file $infile and writes the output file $outfile.
+#
+# $mapping is a mapping per [string map]
+#
+# $targetname is the name of the output file for warning reporting purposes.
+#
+# Conditional sections may be specified as follows:
+## @if name == value
+## lines
+## @else
+## lines
+## @endif
+#
+# Where 'name' is a defined variable name and @else is optional.
+# If the expression does not match, all lines through '@endif' are ignored.
+#
+# The alternative forms may also be used:
+## @if name
+## @if name != value
+#
+# Where the first form is true if the variable is defined, but not empty or 0
+#
+# Currently these expressions can't be nested.
+#
 proc apply-template {infile outfile mapping target} {
 	set mapped [string map $mapping [readfile $infile]]
+
+
+	set result {}
+	foreach line [split [readfile $infile] \n] {
+		if {[info exists cond]} {
+			set l [string trimright $line]
+			if {$l eq "@endif"} {
+				unset cond
+				continue
+			}
+			if {$l eq "@else"} {
+				set cond [expr {!$cond}]
+				continue
+			}
+			if {$cond} {
+				lappend result $line
+			}
+			continue
+		}
+		if {[regexp {^@if\s+(\w+)(.*)} $line -> name expression]} {
+			lassign $expression equal value
+			set varval [get-define $name ""]
+			if {$equal eq ""} {
+				set cond [expr {$varval ni {"" 0}}]
+			} else {
+				set cond [expr {$varval eq $value}]
+				if {$equal ne "=="} {
+					set cond [expr {!$cond}]
+				}
+			}
+			continue
+		}
+		lappend result $line
+	}
+	set mapped [string map $mapping [join $result \n]]\n
+	# Check for any unmapped variables
 	set unmapped [regexp -all -inline {@[A-Za-z0-9_]+@} $mapped]
 	if {[llength $unmapped]} {
 		set unmapped [string map {@ ""} [lunique $unmapped]]
 		user-notice [colerr purple [make-source-location $target "" ": Warning: $target has unmapped variables: $unmapped"]]
 	}
-	writefile $outfile $mapped\n
+	writefile $outfile $mapped
 }
 
 # Note that it is possible to omit any mapping, in
