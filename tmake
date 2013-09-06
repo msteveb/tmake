@@ -318,7 +318,7 @@ proc make {argv} {
 
 	if {$tmake(topsrcdir) ne $tmake(initialdir)} {
 		# emulate make for vim quickerr
-		pputs [colout green "tmake: Entering directory `$tmake(topsrcdir)'"]
+		pputs green "tmake: Entering directory `$tmake(topsrcdir)'"
 	}
 
 	# Make these available in the environment for the benefit of generator programs and scripts
@@ -513,7 +513,7 @@ proc load-cache {} {
 		lassign [time {source $tmake(topbuilddir)/.makecache}] us
 		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
 		if {$tmakecache(version) != $tmake(cacheversion)} {
-			user-notice ".makecache is out-of-date -- ignoring"
+			user-notice cyan ".makecache is out-of-date -- ignoring"
 			array-set tmakecache $tmake(emptycache)
 			# But overwrite the cache next time around
 			set tmakecache(writecache) 1
@@ -583,7 +583,7 @@ proc load-build-description {loadcache} {
 			foreach dep [get-rule-attr $ruletarget depends] {
 				if {[is-target? $dep]} {
 					if {[dict get [get-target-rule $dep] phony]} {
-						user-notice "Non phony target $ruletarget @[make-source-location $ruletarget] depends on phony $dep"
+						user-notice purple "Non phony target $ruletarget @[make-source-location $ruletarget] depends on phony $dep"
 						tmake-exit 1
 					}
 				}
@@ -908,8 +908,8 @@ proc use {args} {
 # Indicate incorrect usage to the user
 # exits with a non-zero return code.
 #
-proc user-error {msg} {
-	puts stderr [colerr lred "Error: $msg"]
+proc user-error {{col lred} msg} {
+	puts stderr [colerr $col "Error: $msg"]
 	puts stderr "Try: 'tmake --help' for options"
 	tmake-exit 1
 }
@@ -917,22 +917,27 @@ proc user-error {msg} {
 # @build-error msg
 #
 # Indicate that something failed to build and set exitcode=1
-proc build-error {msg} {
+proc build-error {{col lred} msg} {
 	dputs b "BUILD ERROR: $msg"
-	puts stderr [colerr lred $msg]
+	puts stderr [colerr $col $msg]
 	set ::tmake(exitcode) 1
 }
+
 # @user-notice msg
 #
-# Output the given message to stderr.
+# Output the given message to stderr, possibly with the given colour.
 #
-proc user-notice {msg} {
-	puts stderr $msg
+proc user-notice {{col {}} msg} {
+	if {$col eq {}} {
+		puts stderr $msg
+	} else {
+		puts stderr [colerr $col $msg]
+	}
 }
 
 # Incorrect usage in the build.spec file. Identify the location.
 proc dev-error {msg} {
-	puts stderr [colerr lred [error-location "Error: $msg"]]
+	user-notice lred [error-location "Error: $msg"]
 	tmake-exit 1
 }
 
@@ -947,12 +952,16 @@ proc tmake-exit {code} {
 #
 proc vputs {msg} {
 	if {$::tmake(verbose)} {
-		pputs [colout cyan $msg]
+		pputs cyan $msg
 	}
 }
 
-proc pputs {msg} {
-	puts $msg
+proc pputs {{col {}} msg} {
+	if {$col eq {}} {
+		puts $msg
+	} else {
+		puts [colout $col $msg]
+	}
 	flush stdout
 }
 
@@ -1111,7 +1120,7 @@ proc show-cache {} {
 	global tmake
 
 	if {![file exists $tmake(topbuilddir)/.makecache]} {
-		user-notice [colerr purple "No .makecache"]
+		user-notice purple "No .makecache"
 		return
 	}
 	source $tmake(topbuilddir)/.makecache
@@ -1489,7 +1498,7 @@ proc target {ruletarget args} {
 
 	if {[llength $info(do)] && [llength $orig(do)]} {
 		#dev-error "$ruletarget already has '-do' @$orig(source)"
-		user-notice [colerr purple [warning-location "Warning: $ruletarget already has '-do' @$orig(source)"]]
+		user-notice purple [warning-location "Warning: $ruletarget already has '-do' @$orig(source)"]
 		set info(do) {}
 	}
 	if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
@@ -1852,7 +1861,7 @@ proc file-exists-all {list missingname} {
 # Unfortunately subst doesn't respect braces, so it is possible
 # for subst to fail on something which isn't supposed to be interepreted
 # by Tcl. So subst, and if that fails, return the script unchanged.
-proc subst-do {__vardict __script} {
+proc subst-do {__target __vardict __script} {
 	# No substitution required?
 	if {[string first {$} $__script] < 0} {
 		return $__script
@@ -1866,7 +1875,13 @@ proc subst-do {__vardict __script} {
 		set $__n [dict get $__vardict $__n]
 	}
 	# Note: It is an error if the subst fails
-	return [subst -nob -noc $__script]
+	set rc [catch {subst -nob -noc $__script} result opts]
+	if {$rc} {
+		# subst failed, most likely because a variable was referenced that didn't exist.
+		user-notice lred "[make-source-location $__target "" ": "]$result while building $__target"
+		tmake-exit 1
+	}
+	return $result
 }
 
 proc run-do {__vardict __script} {
@@ -2050,7 +2065,7 @@ proc build {target} {
 	}
 
 	if {$tmake(quickstop) && $tmake(exitcode)} {
-		user-notice [colerr lred "*** Error: Targets failed to build"]
+		user-notice lred "*** Error: Targets failed to build"
 		tmake-exit $tmake(exitcode)
 	}
 
@@ -2083,7 +2098,7 @@ proc build {target} {
 				set result 1
 			}
 		} else {
-			set do [subst-do $vardict $t(do)]
+			set do [subst-do $ruletarget $vardict $t(do)]
 			set prevdo [dict get $tmakecache(cmd) $ruletarget]
 			if {$do ne $prevdo} {
 				dputs {b B} "Commands for $ruletarget have changed, so forcing rebuild"
@@ -2127,7 +2142,7 @@ proc build {target} {
 		if {$tmake(norun)} {
 			foreach do $t(do) {
 				if {$tmake(norun) == 1} {
-					show-rule-commands [subst-do $vardict $do]
+					show-rule-commands [subst-do $ruletarget $vardict $do]
 				}
 			}
 			set rc 0
@@ -2153,7 +2168,7 @@ proc build {target} {
 				if {$rc} {
 					# XXX: Check for signal?
 					if {$t(nofail)} {
-						user-notice [colerr cyan "\[ignored\] $msg"]
+						user-notice cyan "\[ignored\] $msg"
 						set rc 0
 					} else {
 						break
@@ -2193,7 +2208,7 @@ proc build {target} {
 				}
 			}
 			# Save the commands in the command cache and the list of dyndeps
-			dict set tmakecache(cmd) $ruletarget [subst-do $vardict $t(do)]
+			dict set tmakecache(cmd) $ruletarget [subst-do $ruletarget $vardict $t(do)]
 			dict set tmakecache(deps) $ruletarget [lsort $dyndeps]
 			mark-cache-dirty "Targets built"
 		}
@@ -2217,7 +2232,7 @@ proc build {target} {
 		}
 
 		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
-			user-notice [colerr lred "*** Error: Targets failed to build"]
+			user-notice lred "*** Error: Targets failed to build"
 			tmake-exit $tmake(exitcode)
 		}
 	}
@@ -2448,18 +2463,18 @@ proc colerr {colour string} {
 # ==================================================================
 
 if {[catch {make $argv} msg]} {
-	user-notice [colerr lred [error-stacktrace $msg]]
+	user-notice lred [error-stacktrace $msg]
 	set tmake(exitcode) 1
 }
 
 if {$tmake(numtargets) || $tmake(showtime) || $tmake(verbose)} {
 	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
 	if {!$tmake(quiet)} {
-		pputs [colout cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"]
+		pputs cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"
 	}
 }
 if {$tmake(exitcode)} {
-	user-notice [colerr lred "*** Error: Targets failed to build"]
+	user-notice lred "*** Error: Targets failed to build"
 }
 
 tmake-exit $tmake(exitcode)

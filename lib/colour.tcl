@@ -39,6 +39,7 @@ proc colstr {colour string} {
 	return [dict get $::tmake(ansicodes) $colour]$string[dict get $::tmake(ansicodes) none]
 }
 
+# Return a coloured message destined for stdout
 proc colout {colour string} {
 	if {$::tmake(colout)} {
 		return [colstr $colour $string]
@@ -46,6 +47,7 @@ proc colout {colour string} {
 	return $string
 }
 
+# Return a coloured message destined for stderr
 proc colerr {colour string} {
 	if {$::tmake(colerr)} {
 		return [colstr $colour $string]

@@ -71,7 +71,7 @@ proc apply-template {infile outfile mapping target} {
 	set unmapped [regexp -all -inline {@[A-Za-z0-9_]+@} $mapped]
 	if {[llength $unmapped]} {
 		set unmapped [string map {@ ""} [lunique $unmapped]]
-		user-notice [colerr purple [make-source-location $target "" ": Warning: $target has unmapped variables: $unmapped"]]
+		user-notice purple [make-source-location $target "" ": Warning: $target has unmapped variables: $unmapped"]
 	}
 	writefile $outfile $mapped
 }
@@ -89,7 +89,7 @@ proc Template {args} {
 	if {[llength $args] == 0} {
 		# This is more of a hint than a warning
 		if {!$nowarn} {
-			user-notice [warning-location "Warning: Template $target with no variables, mapping all variables"]
+			user-notice purple [warning-location "Warning: Template $target with no variables, mapping all variables"]
 		}
 		set args [lsort [dict keys $::tmake(defines)]]
 	}
@@ -103,7 +103,7 @@ proc Template {args} {
 			lappend mapping @$name@ $value
 		} else {
 			if {![define-exists $var]} {
-				user-notice [warning-location "Warning: $target maps undefined variable $var" build.spec]
+				user-notice purple [warning-location "Warning: $target maps undefined variable $var" build.spec]
 			}
 			lappend mapping @$var@ [get-define $var]
 		}

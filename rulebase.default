@@ -340,10 +340,10 @@ proc Publish {args} {
 	getopt {--keepdir dir args} args
 
 	if {$dir eq "bin"} {
-		user-notice [colerr purple [warning-location "Warning: Use PublishBin to publish binaries"]]
+		user-notice purple [warning-location "Warning: Use PublishBin to publish binaries"]
 	}
 	if {$dir eq "lib" && [string match lib* $args]} {
-		user-notice [colerr purple [warning-location "Warning: Use Lib --publish to publish libraries"]]
+		user-notice purple [warning-location "Warning: Use Lib --publish to publish libraries"]
 	}
 
 	foreach {dest src} [expand-filespec $dir $args $keepdir] {
@@ -642,11 +642,11 @@ proc load-config-file {filename} {
 			dputs c "define $name $value"
 			define $name $value
 		} else {
-			user-notice [colerr purple "$filename:$n: Warning: Failed to parse $line"]
+			user-notice purple "$filename:$n: Warning: Failed to parse $line"
 		}
 	}
 	if {$n == 0} {
-		user-notice [colerr purple "Warning: $filename contains no configuration"]
+		user-notice purple "Warning: $filename contains no configuration"
 	}
 }
 
@@ -832,7 +832,7 @@ proc InstallFile {dest src {flags {}}} {
 	set destfile [get-define DESTDIR]$dest
 
 	if {[is-target? $destfile]} {
-		user-notice [colerr purple [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]]
+		user-notice purple [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
 		return
 	}
 	target $destfile -nocache -inputs $src -vars dest $dest flags $flags -msg {note Install $dest} -do {

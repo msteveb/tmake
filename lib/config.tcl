@@ -31,9 +31,6 @@ proc do_ifconfig {name expr exprargs} {
 }
 
 proc is-defined? {name} {
-#	if {![string match CONFIG* $name] && ![string match HAVE* $name]} {
-#		user-notice [colerr purple [warning-location "Warning: missing CONFIG or HAVE prefix: ifconfig $name"]]
-#	}
 	if {[get-define $name] ni {"" 0}} {
 		return 1
 	}
