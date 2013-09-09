@@ -739,8 +739,8 @@ proc file-build-relative {buildpath {srcdir {}}} {
 	}
 	set build [file join $::tmake(topbuilddir) $buildpath]
 	set src [file join $::tmake(topsrcdir) $srcdir]
-	# Note that the build path needs to exist for relative-path to work on all platforms
-	file mkdir [file dirname $build]
+	# Note that the source path needs to exist for relative-path to work on all platforms
+	file mkdir [file dirname $src]
 	relative-path $build $src
 }
 
@@ -760,8 +760,8 @@ proc file-src-relative {srcpath {builddir {}}} {
 	#puts "     there=$there"
 	#puts "      here=$here"
 	#puts " -> [relative-path $there $here]"
-	# Note that the target path needs to exist for relative-path to work on all platforms
-	file mkdir [file dirname $there]
+	# Note that the source path needs to exist for relative-path to work on all platforms
+	file mkdir [file dirname $here]
 	relative-path $there $here
 }
 
