@@ -1095,9 +1095,9 @@ proc show-rule {target} {
 			}
 		}
 		if {[llength $flags]} {
-			append target " \[$flags\]"
+			set flags " \[$flags\]"
 		}
-		puts "$t(target): $t(depends)"
+		puts "$t(target)$flags: $t(depends)"
 		if {[llength $lines]} {
 			puts [join $lines \n]
 		}
@@ -1189,7 +1189,7 @@ proc define {name args} {
 		} else {
 			set value 1
 		}
-		#dputs v "define $name $value"
+		#dputs c "define $name $value"
 		dict set ::tmake(defines) $name $value
 		# Ensure that the value is visibile the current spec file
 		uplevel #1 [list set $name $value]
