@@ -1,6 +1,6 @@
 #!/usr/bin/env jimsh
 
-array set colours {
+set colours {
 	none "\x1b\[0m"
 	black "\x1b\[30m"
 	red "\x1b\[31m"

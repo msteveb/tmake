@@ -55,7 +55,7 @@ set tmake(depfindcache) {}
 set tmake(addtargets) {}
 set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0 writecache 0}
 
-array set tmakecache $tmake(emptycache)
+set tmakecache $tmake(emptycache)
 
 set tmake(defaulttarget) all
 set tmake(loadedprojectspec) 0
@@ -267,7 +267,7 @@ proc make {argv} {
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
-	set tmake(start) [clock-millis]
+	set tmake(start) [clock millis]
 	set tmake(prevtime) $tmake(start)
 	set tmake(cmdline) {}
 	set tmake(initialdir) [pwd]
@@ -360,7 +360,7 @@ proc make {argv} {
 	# Save the global state in case we need to reload
 	# At this stage it includes defaults, options and the rulebase
 
-	set tmake_save [array get tmake]
+	set tmake_save $tmake
 
 	load-build-description 1
 
@@ -446,7 +446,7 @@ proc make {argv} {
 			if {$reload} {
 				# Restore the state
 				unset tmake
-				array-set tmake $tmake_save
+				set tmake $tmake_save
 
 				load-build-description 0
 
@@ -514,7 +514,7 @@ proc load-cache {} {
 		dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
 		if {$tmakecache(version) != $tmake(cacheversion)} {
 			user-notice cyan ".makecache is out-of-date -- ignoring"
-			array-set tmakecache $tmake(emptycache)
+			set tmakecache $tmake(emptycache)
 			# But overwrite the cache next time around
 			set tmakecache(writecache) 1
 		}
@@ -538,7 +538,7 @@ proc write-cache {} {
 		unset tmakecache(writecache)
 		lassign [time {
 			set f [open $tmake(topbuilddir)/.makecache w]
-			foreach i [array names tmakecache] {
+			foreach i [dict keys $tmakecache] {
 				puts $f [list set tmakecache($i) $tmakecache($i)]
 			}
 			close $f
@@ -996,7 +996,7 @@ proc dputxs {types msg {indent 1}} {
 proc dbg-msg-indent {{autoindent 1}} {
 	global tmake
 
-	set now [clock-millis]
+	set now [clock millis]
 	if {$tmake(showdelta)} {
 		set time [expr {$now - $tmake(prevtime)}]
 		set tmake(prevtime) $now
@@ -1047,11 +1047,11 @@ proc show-rule {target} {
 		set ruletarget $target
 	}
 	if {[is-rule? $ruletarget]} {
-		array-set t [get-rule $ruletarget]
+		set t [get-rule $ruletarget]
 		set flags {}
 		set lines {}
 		puts [pad "-- $ruletarget " 60 -]--
-		foreach n [lsort [array names t]] {
+		foreach n [lsort [dict keys $t]] {
 			set v $t($n)
 			switch -- $n {
 				do - depends - inputs - building - msg - target {}
@@ -1300,11 +1300,11 @@ proc merge-vars {dict1 dict2} {
 		if {[dict size $dict1] == 0} {
 			return $dict2
 		}
-		array-set d1 $dict1
+		set d1 $dict1
 		foreach {n v} $dict2 {
 			append-with-space d1($n) $v
 		}
-		return [array get d1]
+		return $d1
 	}
 	return $dict1
 }
@@ -1455,14 +1455,14 @@ proc target {ruletarget args} {
 	# If the rule aready exists, we are updating
 	if {[is-rule? $ruletarget]} {
 		# Use take-rule here for efficiency
-		array-set orig [take-rule $ruletarget]
+		set orig [take-rule $ruletarget]
 	} elseif {[is-target? $ruletarget]} {
 		# Can't update a rule via the invidual target
 		set source [dict get [get-target-rule $ruletarget] source]
 		dev-error "Multiple-target rule for $ruletarget was already specified at [make-source-location $source @]"
 	}
 
-	array-set info [parse-rule $ruletarget $args]
+	set info [parse-rule $ruletarget $args]
 
 	#dputs p "target $ruletarget @ $info(source)"
 
@@ -1487,7 +1487,7 @@ proc target {ruletarget args} {
 
 	if {![info exists orig]} {
 		# Now create/update the rule
-		update-rule [array get info]
+		update-rule $info
 		return
 	}
 
@@ -1531,7 +1531,7 @@ proc target {ruletarget args} {
 		set orig(inputs) $info(inputs)
 		set orig(msg) $info(msg)
 	}
-	update-rule [array get orig]
+	update-rule $orig
 }
 
 # Adds the list elements to the target-specific variable.
@@ -1585,7 +1585,7 @@ proc parse-rule-args {arglistname optname} {
 # Returns a dictionary (list) representing the parsed target rule
 #
 proc parse-rule {target arglist} {
-	array-set info {
+	set info {
 		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
 		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
 	}
@@ -1665,7 +1665,7 @@ proc parse-rule {target arglist} {
 		dev-error "Rule for $target has '-msg' but no '-do'"
 	}
 
-	array get info
+	return $info
 }
 
 # ==================================================================
@@ -1828,7 +1828,7 @@ proc run {args} {
 }
 
 proc calc-dyndeps {vardict target} {
-	array-set t [get-rule $target]
+	set t [get-rule $target]
 	#puts "=============="
 	#parray t
 
@@ -1958,7 +1958,7 @@ proc build {target} {
 	set oldcurrent $tmake(current)
 	lappend tmake(current) $target
 
-	array-set t [get-rule $ruletarget]
+	set t [get-rule $ruletarget]
 
 	set reason {}
 	if {$t(phony)} {
@@ -2010,7 +2010,7 @@ proc build {target} {
 		}
 	}
 
-	set vardict [make-var-dict [array get t]]
+	set vardict [make-var-dict $t]
 
 	if {$result >= 0} {
 		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
@@ -2418,8 +2418,8 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 
 	# Recursively scan files
 	unset -nocomplain deps results
-	array set deps {}
-	array set results {}
+	set deps {}
+	set results {}
 	set scanned($filename) 1
 	set toscan [header-scan-regexp $suffix $regex $filepath]
 	while {[llength $toscan]} {
@@ -2441,8 +2441,8 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	#puts "---- $filename ----"
 	#parray results
 	# memoize the result
-	set headers [array names deps]
-	dict set tmakecache(headerscan) $filename [list $stamp $headers [array get results]]
+	set headers [dict keys $deps]
+	dict set tmakecache(headerscan) $filename [list $stamp $headers $results]
 	mark-cache-dirty "New header scan"
 	return $headers
 }
@@ -2468,7 +2468,7 @@ if {[catch {make $argv} msg]} {
 }
 
 if {$tmake(numtargets) || $tmake(showtime) || $tmake(verbose)} {
-	set elapsed [expr {([clock-millis] - $tmake(start)) / 1000.0}]
+	set elapsed [expr {([clock millis] - $tmake(start)) / 1000.0}]
 	if {!$tmake(quiet)} {
 		pputs cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"
 	}

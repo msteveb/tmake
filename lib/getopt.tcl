@@ -93,7 +93,7 @@ proc getopt {optdef argvname} {
 			lappend nargv $arg
 		}
 	}
-	foreach i [array names boolopts] {
+	foreach i [dict keys $boolopts] {
 		uplevel 1 set $i $boolopts($i)
 	}
 	if {!$haveargs && [llength $nargv] > [llength $named]} {

@@ -7,11 +7,7 @@
 proc dump-vars {{maxlength 50}} {
 	set vars [uplevel 1 info vars]
 	foreach v [lsort $vars] {
-		if {[catch {
-			set value [uplevel 1 [list set $v]]
-		}]} {
-			set value [uplevel 1 [list array get $v]]
-		}
+		set value [uplevel 1 [list set $v]]
 		set value [string map [list \\ \\\\ \n \\n] $value]
 		if {[string length $value] > $maxlength} {
 			set value [string range $value 0 $maxlength]...

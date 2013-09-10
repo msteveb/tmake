@@ -19,22 +19,6 @@ if {$tmakecompat(iswin)} {
 		}
 		return 0
 	}
-} else {
-	# unix separates $PATH with colons and has and executable bit
-	proc split-path {} {
-		split [getenv PATH .] :
-	}
-	proc file-isexec {exec} {
-		file executable $exec
-	}
-}
-
-if {$tmakecompat(iswin)} {
-	# On Windows, backslash convert all environment variables
-	# (Assume that Tcl does this for us)
-	proc getenv {name args} {
-		string map {\\ /} [env $name {*}$args]
-	}
 	proc exec-save-stderr {args} {
 		# If the command is a shell script, we need to manually implement #!/bin/sh
 		# by running "sh script ..."
@@ -51,19 +35,18 @@ if {$tmakecompat(iswin)} {
 		exec >@stdout {*}$args
 	}
 } else {
-	# Jim on unix is simple
-	alias getenv env
+	# unix separates $PATH with colons and has and executable bit
+	proc split-path {} {
+		split [getenv PATH .] :
+	}
+	proc file-isexec {exec} {
+		file executable $exec
+	}
 	proc exec-save-stderr {args} {
 		exec >@stdout {*}$args
 	}
 }
-proc env-save {} {
-	return $::env
-}
-alias array-set set
-proc env-restore {newenv} {
-	set ::env $newenv
-}
+
 proc lunique {list} {
 	set a {}
 	foreach i $list {
@@ -71,6 +54,7 @@ proc lunique {list} {
 	}
 	lsort [dict keys $a]
 }
+
 proc isatty? {channel} {
 	set tty 0
 	catch {
@@ -78,6 +62,14 @@ proc isatty? {channel} {
 		set tty [$channel isatty]
 	}
 	return $tty
+}
+
+proc env-save {} {
+	return $::env
+}
+
+proc env-restore {newenv} {
+	set ::env $newenv
 }
 
 proc getenv {name args} {
@@ -90,7 +82,6 @@ proc getenv {name args} {
 	}
 	if {$::tmakecompat(iswin)} {
 		# On Windows, backslash convert all environment variables
-		# (Assume that Tcl does this for us)
 		set value [string map {\\ /} $value]
 	}
 	return $value
@@ -134,27 +125,6 @@ proc file-join {dir path} {
 #
 # Directory/path handling
 #
-
-proc realdir {dir} {
-	set oldpwd [pwd]
-	cd $dir
-	set pwd [pwd]
-	cd $oldpwd
-	return $pwd
-}
-
-# Follow symlinks until we get to something which is not a symlink
-proc realpath {path} {
-	while {1} {
-		if {[catch {
-			set path [file link $path]
-		}]} {
-			# Not a link
-			break
-		}
-	}
-	return $path
-}
 
 # Convert absolute path, $path into a path relative
 # to the given directory (or the current dir, if not given).
@@ -279,22 +249,6 @@ proc error-stacktrace {msg} {
 	return "${prefix}Error: $msg\n[stackdump $newstacktrace]"
 }
 
-# Do we have the two-argument [source]?
-if {[catch {source filename {}}]} {
-	proc source-eval {filename args} {
-		if {[llength $args]} {
-			tailcall eval {*}$args
-		} else {
-			tailcall source $filename
-		}
-	}
-} else {
-	alias source-eval source
-}
-
-alias clock-millis clock millis
-
-signal ignore SIGINT SIGTERM
 proc check-signal {{clear 0}} {
 	if {$clear} {
 		set clear -clear
@@ -305,4 +259,22 @@ proc check-signal {{clear 0}} {
 		return 1
 	}
 	return 0
+}
+
+proc init-compat {} {
+	# Check these signals with check-signal
+	signal ignore SIGINT SIGTERM
+
+	# Do we have the two-argument [source]?
+	if {[catch {source filename {}}]} {
+		proc source-eval {filename args} {
+			if {[llength $args]} {
+				tailcall eval {*}$args
+			} else {
+				tailcall source $filename
+			}
+		}
+	} else {
+		alias source-eval source
+	}
 }
