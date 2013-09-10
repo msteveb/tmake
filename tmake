@@ -379,9 +379,11 @@ proc make {argv} {
 	}
 	if {[info exists tmake(findtarget)]} {
 		if {[is-target? $tmake(findtarget)]} {
+			dputs r "find: Found exact match for $tmake(findtarget)"
 			show-rule $tmake(findtarget)
 			tmake-exit 0
 		}
+		dputs r "find: Showing all targets that match *$tmake(findtarget)*"
 		foreach target [dict keys $tmake(targets)] {
 			if {[string match *$tmake(findtarget)* $target]} {
 				show-rule $target
@@ -1555,20 +1557,20 @@ proc target-add-var {ruletarget varname list} {
 	dict set ::tmake(rules) $ruletarget vars $varname $vars
 }
 
-proc parse-rule-args {arglistname optname} {
-	upvar $arglistname arglist
-	upvar $optname opt
+proc parse-rule-args {&arglist &opt} {
 	set arglist [lassign $arglist opt]
 
 	if {![string match -* $opt]} {
 		dev-error "Unexpected parameter for rule: $opt"
 	}
-	set opt [string range $opt 1 end]
-	if {$opt eq "vars"} {
+	if {$opt eq "-vars"} {
 		set incr 2
 	} else {
 		set incr 1
 	}
+
+	# Remove the leading dash
+	set opt [string range $opt 1 end]
 
 	for {set i 0} {$i < [llength $arglist]} {incr i $incr} {
 		if {[string match -* [lindex $arglist $i]]} {
@@ -1600,6 +1602,7 @@ proc parse-rule {target arglist} {
 	set info(target) $target
 
 	# Parse an option followed by multiple non-options
+	set opt ""
 	while {[llength $arglist]} {
 		set optargs [parse-rule-args arglist opt]
 		switch -exact -- $opt {
@@ -1858,9 +1861,8 @@ proc file-exists-all {list missingname} {
 	return 1
 }
 
-# Unfortunately subst doesn't respect braces, so it is possible
-# for subst to fail on something which isn't supposed to be interepreted
-# by Tcl. So subst, and if that fails, return the script unchanged.
+# Run [subst] on the given '-do' script to replace variables.
+# This is used to determine if the commands have changed for the target.
 proc subst-do {__target __vardict __script} {
 	# No substitution required?
 	if {[string first {$} $__script] < 0} {
@@ -1875,15 +1877,19 @@ proc subst-do {__target __vardict __script} {
 		set $__n [dict get $__vardict $__n]
 	}
 	# Note: It is an error if the subst fails
+	unset __vardict __n
 	set rc [catch {subst -nob -noc $__script} result opts]
 	if {$rc} {
-		# subst failed, most likely because a variable was referenced that didn't exist.
+		# subst failed -- most likely because a variable was referenced that didn't exist.
 		user-notice lred "[make-source-location $__target "" ": "]$result while building $__target"
 		tmake-exit 1
 	}
 	return $result
 }
 
+# Set up the defines and local vars and evaluate the script
+# Returns a list of {ret msg opts} from catch
+#
 proc run-do {__vardict __script} {
 	# Create local vars based on $::tmake(defines) and $__vardict
 	# Could use 'dict with $dict {}' here, but this is slow for Jim Tcl
@@ -2134,9 +2140,13 @@ proc build {target} {
 	if {$result > 0 && [llength $t(do)]} {
 		#puts "Running rules for $ruletarget"
 		dputs b "Building [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget "with rule @"]"
-		run-do $vardict $t(msg)
+		lassign [run-do $vardict $t(msg)] rc msg opts
+		if {$rc != 0} {
+			build-error [error-stacktrace $msg]
+		}
 
 		if {[dict get $tmake(debugtypes) r]} {
+			dputs r "Rule for $ruletarget"
 			show-rule $ruletarget
 		}
 		if {$tmake(norun)} {
