@@ -188,12 +188,12 @@ proc target-alias {target targetexe} {
 }
 
 rule Executable {args} {
-Executable --test --nobuild --publish --strip --install=<dir> target sources...
+Executable --test --chdir --nobuild --publish --strip --install=<dir> target sources...
 
 ...
 } {
 	show-this-rule
-	getopt {--test --nobuild --publish --strip --install: target args} args
+	getopt {--test --chdir --nobuild --publish --strip --install: target args} args
 
 	set localtarget [make-local $target]
 	set targetexe $target[get-define EXEEXT]
@@ -222,7 +222,11 @@ Executable --test --nobuild --publish --strip --install=<dir> target sources...
 		InstallFile [file-join $install $targetexe] $localtargetexe $flags
 	}
 	if {$test} {
-		Test --chdir $target
+		if {$chdir} {
+			Test --chdir $target
+		} else {
+			Test $target
+		}
 	} elseif {!$nobuild} {
 		Phony all $localtargetexe
 	}
