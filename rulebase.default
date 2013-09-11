@@ -83,7 +83,11 @@ define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 # extentions 'ext'.
 #
 # Allows ...
-proc ObjectRule.c {obj src} {
+rule ObjectRule.c {obj src} {
+ObjectRule.c object source
+
+Generates an object file from a C source file
+} {
 	# Capture the current value of CC, C_FLAGS and INCPATHS
 	target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
 		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
@@ -92,7 +96,11 @@ proc ObjectRule.c {obj src} {
 	}
 }
 
-proc ObjectRule.cpp {obj src} {
+rule ObjectRule.cpp {obj src} {
+ObjectRule.cpp object source
+
+Generates an object file from a C++ source file
+} {
 	# Capture the current value of CXX, CXX_FLAGS and INCPATHS
 	target $obj -inputs $src -msg {note C++ $targetname} -getvars CXX CXX_FLAGS INCPATHS -do {
 		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
@@ -179,10 +187,11 @@ proc target-alias {target targetexe} {
 	}
 }
 
-# @Executable --test --nobuild --publish --strip --install=<dir> target sources ...
-#
-# Allows ...
-proc Executable {args} {
+rule Executable {args} {
+Executable --test --nobuild --publish --strip --install=<dir> target sources...
+
+...
+} {
 	show-this-rule
 	getopt {--test --nobuild --publish --strip --install: target args} args
 
@@ -297,13 +306,15 @@ proc expand-filespec {dir filelist keepdir} {
 	return $result
 }
 
-# @PublishBin --script name ...
-#
-# Publishes one or more executables (either binaries or scripts)
-# Unless --script is specified, the executable extension (e.g. .exe) is used.
-#
-# Note that 'name' can be 'target=src' to rename a file when published.
-proc PublishBin {args} {
+rule PublishBin {args} {
+PublishBin ?--script? name ...
+
+Publishes one or more executables (either binaries or scripts)
+Unless --script is specified, the executable extension (e.g. .exe) is used.
+
+Note that 'name' can be 'target=src' to rename a file when published.
+ObjectRule.cpp object source
+} {
 	show-this-rule
 
 	getopt {--script args} args
@@ -329,13 +340,14 @@ proc publish-lib {libname alias} {
 }
 
 
-# @Publish --keepdir name ...
-#
-# Publishes one or more files
-# (Note re bin, lib)
-#
-# Note that 'name' can be 'target=src' to rename a file when published.
-proc Publish {args} {
+rule Publish {args} {
+Publish ?--keepdir? dir name...
+
+Publishes one or more files
+(Note re bin, lib)
+
+Note that 'name' can be 'target=src' to rename a file when published.
+} {
 	show-this-rule
 	getopt {--keepdir dir args} args
 
@@ -374,7 +386,11 @@ proc expand-objects {objs} {
 	return $result
 }
 
-proc ArchiveLib {args} {
+rule ArchiveLib {args} {
+ArchiveLib ?--publish? ?--install=<dir>? basename sources...
+
+Creates an archive library from the given sources
+} {
 	show-this-rule
 	getopt {--publish --install: basename args} args
 
@@ -407,7 +423,11 @@ proc ArchiveLib {args} {
 	}
 }
 
-proc SharedLib {args} {
+rule SharedLib {args} {
+SharedLib ?--publish? ?--strip? ?--version=<vers>? ?--install=<dir> basename source...
+
+Creates a shared library ...
+} {
 	show-this-rule
 	getopt {--publish --strip --version: --install: basename args} args
 
@@ -510,7 +530,10 @@ proc SharedLib {args} {
 alias Lib ArchiveLib
 
 # Build a dynamically loadable shared object from objects
-proc SharedObject {args} {
+rule SharedObject {args} {
+SharedObject ?--install=<dir> basename sources...
+
+} {
 	show-this-rule
 
 	getopt {--install: target args} args
@@ -535,12 +558,15 @@ proc SharedObject {args} {
 	}
 }
 
-# Create an object file from each source file
-# Uses $OBJSRULES(.ext) to determine the build rule
-# Returns a list of objects
-# Accepts object files (.o) in addition to source files
-# and simply returns them
-proc Objects {args} {
+rule Objects {args} {
+Objects source...
+
+Create an object file from each source file
+Uses $OBJSRULES(.ext) to determine the build rule
+Returns a list of objects
+Accepts object files (.o) in addition to source files
+and simply returns them
+} {
 	show-this-rule
 	set args [join $args]
 	set objs {}
@@ -554,7 +580,9 @@ proc Objects {args} {
 	return $objs
 }
 
-proc Object {target src} {
+rule Object {target src} {
+Object obj src
+} {
 	show-this-rule
 	set ext [file ext $src]
 	set obj [make-local $target]
