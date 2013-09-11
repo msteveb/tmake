@@ -1948,7 +1948,7 @@ proc enter-new-dir {dirname ruletarget} {
 	global tmake
 	if {$tmake(lastchdir) ne $dirname} {
 		# emulate make for vim quickerr
-		pputs green "tmake: Entering directory `$dirname' -- building $ruletarget"
+		pputs green "tmake: Entering directory `$dirname'"
 		set tmake(lastchdir) $dirname
 	}
 }
