@@ -283,6 +283,7 @@ proc make {argv} {
 	set tmake(prevtime) $tmake(start)
 	set tmake(cmdline) {}
 	set tmake(initialdir) [pwd]
+	set tmake(lastchdir) $tmake(initialdir)
 
 	make-parse-options $argv
 
@@ -328,9 +329,11 @@ proc make {argv} {
 
 	set tmake(topbuilddir) [file-normalize $tmake(build)]
 
+	if 0 {
 	if {$tmake(topsrcdir) ne $tmake(initialdir)} {
 		# emulate make for vim quickerr
 		pputs green "tmake: Entering directory `$tmake(topsrcdir)'"
+	}
 	}
 
 	# Make these available in the environment for the benefit of generator programs and scripts
@@ -1941,6 +1944,15 @@ proc run-do {__vardict __script} {
 	list [catch $__script msg opts] $msg $opts
 }
 
+proc enter-new-dir {dirname ruletarget} {
+	global tmake
+	if {$tmake(lastchdir) ne $dirname} {
+		# emulate make for vim quickerr
+		pputs green "tmake: Entering directory `$dirname' -- building $ruletarget"
+		set tmake(lastchdir) $dirname
+	}
+}
+
 # ==================================================================
 # build
 #
@@ -2187,11 +2199,17 @@ proc build {target} {
 			dputs r "Rule for $ruletarget"
 			show-rule $ruletarget
 		}
+
+		if {$t(chdir)} {
+			set targetdir [file-build [file dirname [lindex $ruletarget 0]]]
+			enter-new-dir [file-normalize $targetdir] $ruletarget
+		} else {
+			enter-new-dir $tmake(topsrcdir) $ruletarget
+		}
+
 		if {$tmake(norun)} {
 			foreach do $t(do) {
-				if {$tmake(norun) == 1} {
-					show-rule-commands [subst-do $ruletarget $vardict $do]
-				}
+				show-rule-commands [subst-do $ruletarget $vardict $do]
 			}
 			set rc 0
 		} else {
@@ -2204,7 +2222,6 @@ proc build {target} {
 			}
 			foreach do $t(do) {
 				if {$t(chdir)} {
-					set targetdir [file-build [file dirname [lindex $ruletarget 0]]]
 					dputs m "cd $targetdir"
 					cd $targetdir
 				}
