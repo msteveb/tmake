@@ -13,7 +13,7 @@ proc do_ifconfig {name expr exprargs} {
 		return
 	}
 
-	case [llength $exprargs] {
+	switch -exact [llength $exprargs] {
 		1 {
 			# ifconfig expr {code}
 			do_if_else 3 $expr [lindex $exprargs 0] ""
