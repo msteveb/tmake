@@ -160,7 +160,11 @@ proc realpath {path} {
 # to the given directory (or the current dir, if not given).
 #
 proc relative-path {path {pwd {}}} {
-	set path [file-normalize $path]
+	if {![file exists $path]} {
+		stderr puts "Warning: $path does not exist. May not be canonical"
+	} else {
+		set path [file-normalize $path]
+	}
 	if {$pwd eq ""} {
 		set pwd [pwd]
 	} else {
