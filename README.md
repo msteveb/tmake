@@ -129,9 +129,9 @@ Explain the '-key values...' structure of arguments to 'target'.
 	Note: I have never used this
 
 -chdir
-	Normally all commands are run from the top level build directory.
-	If -chdir is given, commands for this target are run from the local build subdirectory
-	instead. This is most often used for unit tests or generators which make assumptions
+	Normally all commands are run from the top level *source* directory.
+	If -chdir is given, commands for this target are run from the top level *build* directory
+	(objdir) instead. This is most often used for unit tests or generators which make assumptions
 	about the current directory. It should be avoided where possible.
 
 -nocache
@@ -211,6 +211,38 @@ Explain the '-key values...' structure of arguments to 'target'.
 -getvars name ...
 	Similar to -vars, except that the value of the variable is taken from current value
 	of the global variable (define)
+
+On Directories
+--------------
+
+Normally everything is relative to the top level source directory.
+So to compile dir/a.c to produce objdir/dir/a.o, a command such as the following
+is run from the top level source directory.
+
+  cc -c dir/a.c -o objdir/dir/a.o
+
+Normally this works well, but some tasks, especially tests and generator commands
+may expect to find support files locally, or find output files in the local source
+or target directory. tmake supports this as follows:
+
+1. 'target -chdir' causes the task '-do' to be run from the top build directory.
+
+The following are all implemented in rulebase.default
+
+2. Test targets set the $SRCDIR environment variable to point to the local source dir.
+
+   Consider the following two tasks in local subdir, "dir":
+
+   Test test1
+   Test --chdir test2
+
+   In the first case, $SRCDIR will be "dir", while in the second it will be "../dir"
+   If the test program/script needs to reference support input files in can find them relative to $SRCDIR.
+
+3. Similarly, 'Generate' is given the '--chdir' flag, it creates a 'target -chdir' rule and also
+   uses this directory specification to find the script or interpreter.
+
+4. Note that 'Executable --test' alwasy specifies 'Test --chdir'
 
 Environment Variables
 ---------------------
