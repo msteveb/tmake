@@ -103,6 +103,7 @@ proc file-normalize {path} {
 			cd $path
 			set result [pwd]
 		} else {
+			file mkdir [file dirname $path]
 			cd [file dirname $path]
 			set result [file join [pwd] [file tail $path]]
 		}
