@@ -783,11 +783,7 @@ proc Test {args} {
 		lassign [find-project-bin $interp -chdir $chdir -optional 1] dep filename
 
 		# In this case, the command is a script - find it
-		if {$chdir} {
-			set scriptpath [file-build-relative $localcommand]
-		} else {
-			set scriptpath $localcommand
-		}
+		lassign [find-project-bin $command -chdir $chdir -optional 0] cmddep scriptpath
 		lappend vars testcommand [list $filename $scriptpath {*}$args]
 
 		if {$dep ne ""} {
