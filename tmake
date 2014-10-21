@@ -2201,8 +2201,9 @@ proc build {target} {
 		}
 
 		if {$t(chdir)} {
-			set targetdir [file-build [file dirname [lindex $ruletarget 0]]]
-			enter-new-dir [file-normalize $targetdir] $ruletarget
+			# Note that -chdir uses the *first* target to determine the directory
+			set chdir [file-build [file dirname [lindex $ruletarget 0]]]
+			enter-new-dir [file-normalize $chdir] $ruletarget
 		} else {
 			enter-new-dir $tmake(topsrcdir) $ruletarget
 		}
@@ -2220,16 +2221,15 @@ proc build {target} {
 				dputs m "mkdir $targetdir"
 				file mkdir $targetdir
 			}
+			# If necessary, chdir now
+			if {$t(chdir)} {
+				dputs m "cd $chdir"
+				cd $chdir
+			}
 			foreach do $t(do) {
-				if {$t(chdir)} {
-					dputs m "cd $targetdir"
-					cd $targetdir
-				}
 				set oldenv [env-save]
 				lassign [run-do $vardict $do] rc msg opts
 				env-restore $oldenv
-				# Always restore the current dir afterwards
-				cd $tmake(topsrcdir)
 				if {$rc} {
 					# XXX: Check for signal?
 					if {$t(nofail)} {
@@ -2240,6 +2240,8 @@ proc build {target} {
 					}
 				}
 			}
+			# Always restore the current dir afterwards
+			cd $tmake(topsrcdir)
 		}
 
 		if {[check-signal 1]} {
