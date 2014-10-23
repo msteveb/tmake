@@ -750,6 +750,7 @@ proc get-test-id {} {
 proc run-test-command {testcommand} {
 	setup-test-env
 	setenv SRCDIR [uplevel 1 set SRCDIR]
+	setenv TOPBUILDDIR [uplevel 1 set TOPBUILDDIR]
 	incr ::tmakedrb(testruncount)
 	run $testcommand
 	incr ::tmakedrb(testpasscount)
