@@ -97,6 +97,9 @@ proc file-normalize {path} {
 	if {$path eq ""} {
 		return ""
 	}
+	while {[file type $path] eq "link"} {
+		set path [file readlink $path]
+	}
 	if {[catch {file normalize $path} result]} {
 		set oldpwd [pwd]
 		if {[file isdir $path]} {

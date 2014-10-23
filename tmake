@@ -271,7 +271,11 @@ proc make {argv} {
 
 	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
 	if {!$tmake(installed)} {
-		set tmake(dir) [file dirname $::argv0]
+		set argv0 $::argv0
+		while {[file type $argv0] eq "link"} {
+			set argv0 [file readlink $argv0]
+		}
+		set tmake(dir) [file dirname $argv0]
 		use compat
 	}
 
@@ -1265,6 +1269,10 @@ proc get-define {name {default ""}} {
 	} else {
 		return $default
 	}
+}
+
+proc get-all-defines {} {
+	return $::tmake(defines)
 }
 
 proc define-exists {name} {
@@ -2530,7 +2538,11 @@ proc colerr {colour string} {
 # ==================================================================
 
 if {[catch {make $argv} msg]} {
-	user-notice lred [error-stacktrace $msg]
+	if {[exists -command error-stacktrace]} {
+		user-notice lred [error-stacktrace $msg]
+	} else {
+		user-notice lred $msg
+	}
 	set tmake(exitcode) 1
 }
 
