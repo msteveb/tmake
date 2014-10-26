@@ -97,7 +97,7 @@ proc file-normalize {path} {
 	if {$path eq ""} {
 		return ""
 	}
-	while {[file type $path] eq "link"} {
+	while {[file exists $path] && [file type $path] eq "link"} {
 		set path [file readlink $path]
 	}
 	if {[catch {file normalize $path} result]} {
