@@ -22,7 +22,7 @@ proc tmake-genie {argv} {
 	set libsrc {}
 
 	foreach i $src {
-		if {[regexp {main[ \t]*\(} [readfile $i]} {
+		if {[regexp {main[ \t]*\(} [readfile $i]]} {
 			# Has main(), so must be executable source or test source
 			if {[string match {*[tT]est*} $i]} {
 				lappend testsrc $i
