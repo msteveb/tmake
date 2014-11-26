@@ -50,6 +50,7 @@ set tmake(quiet) 0
 set tmake(ignoreforce) 0
 set tmake(force) 0
 set tmake(init) 0
+set tmake(usepager) 1
 set tmake(showcache) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
@@ -219,6 +220,14 @@ proc make-parse-options {argv {type tmake}} {
 				--ref {
 					use help
 					show-reference
+					exit 0
+				}
+				--nopager {
+					set tmake(usepager) 0
+				}
+				--rules {
+					use help
+					show-rules
 					exit 0
 				}
 				--genie {
