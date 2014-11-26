@@ -71,7 +71,6 @@ set tmake(numtargets) 0
 set tmake(subdirs) {}
 set tmake(prefix) ""
 set tmake(localdir) .
-set tmake(localmakefile) Makefile
 
 if {$tmake(debug)} {
 	dict set tmake(debugtypes) A 1
