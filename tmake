@@ -7,7 +7,7 @@
 # Initialiation
 # ==================================================================
 
-set tmake(version) {0.4 (23-Oct-2014)}
+set tmake(version) {0.5 (27-Nov-2014)}
 set tmake(cacheversion) 3
 set tmake(debug) 0
 

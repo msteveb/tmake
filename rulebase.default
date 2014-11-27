@@ -86,7 +86,7 @@ For rules that set variables/flags, those definitions apply to rules later in th
 For example, when setting C_FLAGS with CFlags, those flags are used by subsequent
 Object and Executable rules, but not earlier rules.
 
-(Note: When Scope is implemented, it will allow explicitly limiting the scope of these definitions)
+Note: Scope can be used to limit the lifetime of definitions.
 
 The following global phony targets are created:
 
