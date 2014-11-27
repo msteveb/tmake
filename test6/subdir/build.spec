@@ -7,7 +7,7 @@ LinkFlags -g
 
 IncludePaths include
 
-Executable blah blah.c
+Executable --install=/bin blah blah.c
 Generate {blah.c include/blah.h} make-two {} {
 	note "MakeTwo $target"
 	writefile tempfile.dat "This is a temp file"

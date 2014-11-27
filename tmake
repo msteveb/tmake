@@ -541,8 +541,19 @@ proc get-rulebase {} {
 	}
 }
 
+# Add the given targets to the list of targets that need to be built
 proc add-build-targets {args} {
-	lappend ::tmake(addtargets) {*}$args
+	global tmake
+	lappend tmake(addtargets) {*}$args
+}
+
+# @set-default-target target
+#
+# Sets the default target, when tmake is invoked with no options.
+# The default is 'all'
+proc set-default-target {target} {
+	global tmake
+	set tmake(defaulttarget) $target
 }
 
 proc load-cache {} {
@@ -1529,6 +1540,11 @@ proc rule-overview {text} {
 	lappend tmake(commands-overview) [list [info source $text] $text]
 }
 
+proc add-deferred-action {action} {
+	global tmake
+	lappend tmake(deferred) $action
+}
+
 # This is the only way to create a rule
 #
 # Parses the arguments and adds them to the rule base
@@ -1570,7 +1586,7 @@ proc target {ruletarget args} {
 	if {![info exists orig]} {
 		# Now create/update the rule
 		update-rule $info
-		return
+		return $ruletarget
 	}
 
 	# There is already a rule for this target, so attempt
@@ -1614,6 +1630,9 @@ proc target {ruletarget args} {
 		set orig(msg) $info(msg)
 	}
 	update-rule $orig
+
+	# Return the rule target for composability
+	return $ruletarget
 }
 
 # Adds the list elements to the target-specific variable.

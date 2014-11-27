@@ -88,6 +88,28 @@ Object and Executable rules, but not earlier rules.
 
 (Note: When Scope is implemented, it will allow explicitly limiting the scope of these definitions)
 
+The following global phony targets are created:
+
+  all:       Builds the 'all' targets from all subdirectories
+  test:      Runs the 'test' targets from all subdirectories
+  clean:     Runs the 'clean' targets from all subdirectories
+  distclean: Runs the 'distclean' targets from all subdirectories
+  install:   Runs all install rules
+  uninstall: Runs all uninstall rules
+
+  Note that these global targets can be accessed from within a subdirectory
+  by using a / prefix. e.g. /all
+
+The following per-directory phony targets are created:
+  all:       Builds executables and shared objects in the current directory
+             (or libraries if there are no executables or shared objects)
+  test:      Runs all tests in the current directory
+  clean:     Removes all build products, including Clean targets, in the current directory
+  distclean: Runs 'clean', removes DistClean targets in the current directory,
+             and cleans all orphan objects
+  install:   A convenience alias for /install
+  uninstall: A convenience alias for /uninstall
+
 Note that by default, Lib is an alias for ArchiveLib. This can be changed with:
   alias Lib SharedLib
 }
@@ -155,6 +177,9 @@ proc BuildSpecProlog {} {
 		clean-target [make-local clean] Clean
 		clean-target [make-local distclean] DistClean
 	}
+
+	# XXX: Is there ever a reason to *not* include the current directory?
+	IncludePaths .
 }
 
 proc BuildSpecEpilog {} {
@@ -476,6 +501,80 @@ proc strip-file {flags target} {
 	exec {*}[get-define STRIP true] {*}$flags $target
 }
 
+# @remove-empty-directories filename-list
+#
+# Considers the set of directories containing each filename in the list.
+# Removes any of those directories that are empty.
+proc remove-empty-directories {files} {
+	set dirs {}
+	foreach file $files {
+		while {1} {
+			set dirname [file dirname $file]
+			if {$dirname eq $file || $dirname eq "."} {
+				break
+			}
+			dict set dirs [file dirname $file] 1
+			set file $dirname
+		}
+	}
+	if {[dict size $dirs]} {
+		# Sort in reverse order so that abc/def/ghi is removed before abc/def
+		#dputs m "file delete {*}[lsort -decreasing [dict keys $dirs]]"
+		foreach dir [lsort -decreasing [dict keys $dirs]] {
+			catch { file delete $dir }
+		}
+	}
+}
+
+# @clean-files filename-list ?msg?
+#
+# Helper to clean files (and any empty directories)
+#
+# Removes the list of files, and then any directories that contain those
+# files which have become empty.
+#
+# If $msg is provided, it is printed via 'note', otherwise a default
+# message is printed.
+proc clean-files {files {msg {}}} {
+	if {[llength $files]} {
+		vputs "rm $files"
+		if {$msg ne ""} {
+			note "Clean [llength $files] $msg"
+		}
+		file delete {*}$files
+		# Also need to remove any empty directories
+		remove-empty-directories $files
+	}
+}
+
+# @clean-target type msg
+#
+# Create the phony clean target of the given type and message.
+# The created target invokes clean-files
+#
+# Additional files can be added to the target with 'add-clean'
+#
+proc clean-target {type msg} {
+	target $type -phony -nofail -vars cleanfiles {} -msg "note $msg [local-dir]" -do {
+		clean-files $cleanfiles
+	}
+}
+
+# @add-clean type filename-list
+#
+# Adds the given files to the list to be removed for the given type (target)
+#
+proc add-clean {type filelist} {
+	# This could be done with Depends or target, but it is much
+	# faster to simply append to the rule variable directly
+	target-add-var $type cleanfiles [file-build $filelist]
+}
+
+add-deferred-action {
+	# Need to add $PUBLISH/include to the include paths
+	IncludePaths --build [publish-dir include]
+}
+
 # ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================
@@ -740,10 +839,21 @@ XXX
 # If desired, this can be aliased to SharedLib in project.spec
 alias Lib ArchiveLib
 
-# Build a dynamically loadable shared object from objects
 rule SharedObject {args} {
-SharedObject ?--install=<dir> basename sources...
+SharedObject ?--install=<dir>? target sources...
 
+Builds a dynamically loadable shared object from the given sources.
+For each source, the appropriate ObjectRule is used to generate the object file,
+and these files are linked (along with any libraries) to create the loadable object.
+
+Imported variables: CCLD (from Linker), SHOBJ_LDFLAGS (must be set appropriately),
+                    PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
+Used variables: LDFLAGS, SHOBJ_CFLAGS (must be set appropriately)
+
+Note that sources are marked to be built with SHOBJ_CFLAGS via ObjectCFlags.
+
+The following options are supported:
+  --install=<dir>     Install the shared object to the given directory (see InstallFile)
 } {
 	show-this-rule
 
@@ -888,19 +998,40 @@ XXX
 }
 
 rule IncludePaths {args} {
-IncludePaths ...
+IncludePaths ?--build? ?--source? paths...
 
 XXX
 } {
 	show-this-rule
+
+	getopt {--build --source args} args
+
+	if {!$build && !$source} {
+		# No options means both
+		incr build
+		incr source
+	}
+
+	set srcdir [local-dir]
+	set builddir [file-build [local-dir]]
+
 	foreach dir $args {
-		foreach prefix [list [local-dir] [build-dir]] {
-			set dir [file-join $prefix $dir]
-			if {$dir ni [get-define INCPATHS]} {
-				define-append INCPATHS $dir
-				CFlags [prefix -I $dir]
-				C++Flags [prefix -I $dir]
-			}
+		set srcpath [file-join $srcdir $dir]
+		set buildpath [file-join $builddir $dir]
+
+		if {$srcpath in [get-define INCPATHS]} {
+			dputs m "IncludePaths: Ignoring duplicate $srcpath"
+			# Already have this one added, so ignore it
+			continue
+		}
+		define-append INCPATHS $srcpath
+		if {$source} {
+			CFlags [prefix -I $srcpath]
+			C++Flags [prefix -I $srcpath]
+		}
+		if {$build} {
+			CFlags [prefix -I $buildpath]
+			C++Flags [prefix -I $buildpath]
 		}
 	}
 }
@@ -1041,6 +1172,10 @@ XXX
 }
 
 rule InstallFile {dest src {flags {}}} {
+InstallFile dest src ?flags?
+
+XXX Installs the 
+} {
 	show-this-rule
 
 	#puts "InstallFile $dest $src"
@@ -1063,6 +1198,18 @@ rule InstallFile {dest src {flags {}}} {
 }
 
 rule Install {args} {
+Install ?--bin? ?--strip? ?--keepdir? destdir file-spec...
+
+A convenience wrapper around InstallFile to allow multiple files to be installed at once.
+See InstallFile for more details.
+
+The following arguments are supported:
+  --bin               Adds 'bin' to the InstallFile flags
+  --strip             Adds 'strip' to the InstallFile flags
+  --keepdir           Passes --keepdir to InstallFile
+  destdir             Installs to the given directory
+  file-spec...        A file specification for files to be installed. See 'File specifications' above.
+} {
 	show-this-rule
 
 	getopt {--bin --strip --keepdir destdir args} args
@@ -1081,48 +1228,6 @@ rule Install {args} {
 		InstallFile $dest $src $flags
 	}
 	return $srcs
-}
-
-proc remove-empty-directories {files} {
-	set dirs {}
-	foreach file $files {
-		while {1} {
-			set dirname [file dirname $file]
-			if {$dirname eq $file || $dirname eq "."} {
-				break
-			}
-			dict set dirs [file dirname $file] 1
-			set file $dirname
-		}
-	}
-	if {[dict size $dirs]} {
-		# Sort in reverse order so that abc/def/ghi is removed before abc/def
-		#dputs m "file delete {*}[lsort -decreasing [dict keys $dirs]]"
-		foreach dir [lsort -decreasing [dict keys $dirs]] {
-			catch { file delete $dir }
-		}
-	}
-}
-
-# Helper to clean files (and any empty directories)
-proc clean-files {files {msg {}}} {
-	if {[llength $files]} {
-		vputs "rm $files"
-		if {$msg ne ""} {
-			note "Clean [llength $files] $msg"
-		}
-		file delete {*}$files
-		# Also need to remove any empty directories
-		remove-empty-directories $files
-	}
-}
-
-# This creates the clean target of the given type, e.g. clean, distclean
-#
-proc clean-target {type msg} {
-	target $type -phony -nofail -vars cleanfiles {} -msg "note $msg [local-dir]" -do {
-		clean-files $cleanfiles
-	}
 }
 
 rule Clean {args} {
@@ -1148,15 +1253,6 @@ rule DistClean {args} {
 	} else {
 		add-clean [make-local distclean] [make-local {*}$args]
 	}
-}
-
-# This adds files to be cleaned for the given type
-#
-proc add-clean {type filelist} {
-	# This could be done with Depends or target, but it is much
-	# faster to simply append to the rule variable directly
-	#Depends [make-local $type] -vars cleanfiles [file-build $filelist]
-	target-add-var $type cleanfiles [file-build $filelist]
 }
 
 # Returns a list of {dependency filename}
@@ -1206,6 +1302,40 @@ proc find-project-bin {bin args} {
 }
 
 rule Generate {args} {
+Generate ?--interp=<interp>? ?--chdir? target generator inputs rules target-args...
+
+A general purpose rule to create a target via a generator (program or script).
+The arguments are as follows:
+  --interp   Optional built or external program required to run the generator. Available as $interp
+  --chdir    If specified, the generator runs from the local directory
+  target     The target to generator. May be a list of one or more targets. Available as $target
+  generator  The generator program or script. May be a local built target, a published built target
+             (in which case the <bin> prefix is used), or empty for none. Available as $script
+  inputs     Local files that are inputs to the generator. Available as $inputs
+  rules      A -do script that generates the target
+  target-args  Additional arguments to 'target'
+
+The following is an example of a local, built generator.
+
+  Executable mkindex mkindex.c
+  Generate page_index.h mkindex *.c {
+    run $script $inputs >$target
+  }
+
+If 'mkindex' were created in another directory and published with 'Executable --publish'
+or 'PublishBin', we would use the following:
+
+  Generate page_index.h <bin>mkindex *.c {
+    run $script $inputs >$target
+  }
+
+If 'mkindex.rb' were a script that used a locally built version of 'ruby' to run, we would use:
+
+  Generate --interp=<bin>ruby page_index.h mkindex.rb *.c {
+    run $interp $script -o $target $inputs
+  }
+
+} {
 	# XXX: Would be nice if script and inputs were optional
 	getopt {--interp: --chdir target script inputs rules args} args
 
@@ -1228,10 +1358,18 @@ rule Generate {args} {
 }
 
 rule Depends {target args} {
+Depends target target-args...
+
+Creates a local target with the given additional target arguments.
+} {
 	target [make-local {*}$target] -depends {*}$args
 }
 
 rule Phony {target args} {
+Phony target target-args...
+
+Creates a Phony, local target with the given additional target arguments.
+} {
 	show-this-rule
 	target [make-local {*}$target] -phony -depends {*}$args
 }
@@ -1241,8 +1379,14 @@ proc LocalMakefile {name} {
 }
 
 rule DefaultTarget {name} {
+DefaultTarget target
+
+Sets the default (local) target.
+i.e. when tmake is invoked with no options.
+The default is 'all'
+} {
 	show-this-rule
-	set ::tmake(defaulttarget) $name
+	set-default-target $name
 }
 
 # XXX: Only useful for simple cases of building a host executable from C sources
@@ -1270,21 +1414,6 @@ rule HostExecutable {target args} {
 	return $localtarget
 }
 
-proc add-publish-include {} {
-	# Can't use IncludePaths here because we only want build paths
-	set dir [publish-dir include]
-	set path [publish-path include]
-	if {$dir ni [get-define INCPATHS]} {
-		define-append INCPATHS $dir
-		CFlags [prefix -I $path]
-		C++Flags [prefix -I $path]
-	}
-}
-
-# XXX: Use an official API for this
-lappend ::tmake(deferred) {
-	add-publish-include
-}
 # ==================================================================
 # Built-in targets
 # ==================================================================
@@ -1313,9 +1442,13 @@ Phony clean-orphans -do {
 	}
 }
 
-# Automatic invocation, so move files to trash
-# (This overrides the built-in version which simply deletes)
-# .trash will be deleted on 'make clean-orphans' (and thus clean and distclean)
+# @delete-orphan-files files ...
+#
+# This callback is invoked to delete orphans
+# This version replaces the builtin version.
+# Instead of deleting files immediately, orphans are moved into
+# the .trash directory. This directory is only removed via the
+# 'clean', 'distclean' or 'clean-orphans' targets.
 proc delete-orphan-files {args} {
 	file mkdir .trash
 	foreach file $args {

@@ -15,6 +15,9 @@
 
 proc getopt {optdef argvname} {
 	upvar $argvname argv
+	if {![exists argv]} {
+		dev-error "getopt called with $argvname that does not exist in parent context"
+	}
 	set nargv {}
 
 	# Parse the options
