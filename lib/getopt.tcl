@@ -19,6 +19,8 @@ proc getopt {optdef argvname} {
 		dev-error "getopt called with $argvname that does not exist in parent context"
 	}
 	set nargv {}
+	set boolopts {}
+	set valopts {}
 
 	# Parse the options
 	set haveargs 0
