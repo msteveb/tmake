@@ -1354,7 +1354,7 @@ proc suffix {suf args} {
 # Takes a list and returns a new list with $pre prepended
 # to each element
 # 
-# suffix jim- a.c b.c => jim-a.c jim-b.c
+# prefix jim- a.c b.c => jim-a.c jim-b.c
 #
 proc prefix {pre args} {
 	set result {}
@@ -1362,6 +1362,18 @@ proc prefix {pre args} {
 		lappend result $pre$p
 	}
 	return $result
+}
+
+# @omit list elements..
+#
+# Returns a list with the given elements removed
+proc omit {list args} {
+	lmap p $list {
+		if {$p in $args} {
+			continue
+		}
+		lindex $p
+	}
 }
 
 # Takes a list of filenames and returns a new list with
