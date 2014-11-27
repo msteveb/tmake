@@ -168,18 +168,19 @@ proc show-command-reference-blob {name text} {
 
         # Now the description
         if {![regexp {^#(#)? ?(.*)} $line -> hash cmd]} {
+            set cmd ""
             set searching 1
-            continue
-        }
-        if {$hash eq "#"} {
-            set t code
-        } elseif {[regexp {^- (.*)} $cmd -> cmd]} {
-            set t list
         } else {
-            set t p
-        }
+            if {$hash eq "#"} {
+                set t code
+            } elseif {[regexp {^- (.*)} $cmd -> cmd]} {
+                set t list
+            } else {
+                set t p
+            }
 
-        #puts "hash=$hash, oldhash=$oldhash, lines=[llength $lines], cmd=$cmd"
+            #puts "hash=$hash, oldhash=$oldhash, lines=[llength $lines], cmd=$cmd"
+        }
 
         if {$t ne $type || $cmd eq ""} {
             # Finish the current block

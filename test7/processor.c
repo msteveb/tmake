@@ -8,6 +8,10 @@ int main(int argc, char* argv[]) {
 
     int ch;
 
+#ifdef PROCESSOR_VERSION
+    fprintf(stderr, "This is: %s\n", PROCESSOR_VERSION);
+#endif
+
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <input> <output>\n", argv[0]);
         return 1;

@@ -53,9 +53,11 @@ set tmake(init) 0
 set tmake(usepager) 1
 set tmake(showcache) 0
 set tmake(showvars) 0
+set tmake(showaliases) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
 set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0 writecache 0}
+set tmake(commands-overview) {}
 set tmake(commands) {}
 
 set tmakecache $tmake(emptycache)
@@ -138,6 +140,9 @@ proc make-parse-options {argv} {
 				}
 				--showvars {
 					incr tmake(showvars)
+				}
+				--showaliases {
+					incr tmake(showaliases)
 				}
 				--rulebase {
 					incr tmake(force)
@@ -381,12 +386,23 @@ proc make {argv} {
 		show-all-defines
 		tmake-exit 0
 	}
+	if {$tmake(showaliases)} {
+		show-all-aliases
+		tmake-exit 0
+	}
 	if {[info exists tmake(listtargets)]} {
 		show-all-targets $tmake(listtargets)
 		tmake-exit 0
 	}
 	if {[info exists tmake(listcommands)]} {
-		puts "We know about the following commands:"
+		foreach info $tmake(commands-overview) {
+			lassign $info loc helptext
+			set lines [split [string trim $helptext] \n]
+			set lines [string trim [join $lines \n]]
+			pputs $lines
+			pputs [string repeat - 60]
+		}
+
 		set commands $tmake(commands)
 		foreach cmd [lsort [dict keys $commands]] {
 			lassign $commands($cmd) loc helptext
@@ -396,7 +412,6 @@ proc make {argv} {
 			pputs "\n[colout purple $cmdname] [colout yellow $cmdargs]"
 			pputs \n$otherlines
 			#puts [string repeat - 60]
-			#puts [string trim $helptext]
 		}
 		tmake-exit 0
 	}
@@ -1270,9 +1285,16 @@ proc get-all-defines {} {
 }
 
 proc show-all-defines {} {
-	set defines [get-all-defines]
-	foreach k [lsort [dict keys $defines]] {
-		puts "$k=[dict get $defines $k]"
+	set d [get-all-defines]
+	foreach k [lsort [dict keys $d]] {
+		puts "$k=[dict get $d $k]"
+	}
+}
+
+proc show-all-aliases {} {
+	set d $::tmake(aliases)
+	foreach k [lsort [dict keys $d]] {
+		puts "$k=[dict get $d $k]"
 	}
 }
 
@@ -1489,14 +1511,22 @@ proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
 }
 
 # Defines a high level command.
-proc rule {cmdname arglist helptext body} {
+proc rule {cmdname arglist {helptext {}} body} {
 	global tmake
 	if {[dict exists $tmake(commands) $cmdname]} {
 		lassign [dict get $tmake(commands) $cmdname] loc help
 		dev-error "Command $cmdname already defined @$loc"
 	}
+	if {$helptext eq ""} {
+		user-notice purple "[join [info source $cmdname] :]:Warning: rule $cmdname has no help"
+	}
 	dict set tmake(commands) $cmdname [list [info source $cmdname] $helptext]
 	proc $cmdname $arglist $body
+}
+
+proc rule-overview {text} {
+	global tmake
+	lappend tmake(commands-overview) [list [info source $text] $text]
 }
 
 # This is the only way to create a rule

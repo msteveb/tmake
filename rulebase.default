@@ -72,6 +72,27 @@ set ::tmakedrb {
 }
 
 # ==================================================================
+# Help Overview
+# ==================================================================
+rule-overview {
+This is rulebase.default, the default tmake rulebase. Note the following conventions:
+
+File specifications for Install and Publish rules support the following forms:
+  - Regular filenames
+  - Renaming rules of the form: target=src
+  - Glob patterns (e.g. *.png)
+
+For rules that set variables/flags, those definitions apply to rules later in the file.
+For example, when setting C_FLAGS with CFlags, those flags are used by subsequent
+Object and Executable rules, but not earlier rules.
+
+(Note: When Scope is implemented, it will allow explicitly limiting the scope of these definitions)
+
+Note that by default, Lib is an alias for ArchiveLib. This can be changed with:
+  alias Lib SharedLib
+}
+
+# ==================================================================
 # BUILT-IN Object Rules
 # ==================================================================
 
@@ -82,11 +103,16 @@ define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 # Rule for creating 'object' from source file 'source' with the
 # extentions 'ext'.
 #
-# Allows ...
+# The appropriate ObjectRule.<ext> is invoked from Object
+# (and hence Objects, Executable and Lib) based on the extension.
+
 rule ObjectRule.c {obj src} {
 ObjectRule.c object source
 
 Generates an object file from a C source file
+
+Imported variables: CC, C_FLAGS (from CFlags, ObjectCFlags), INCPATHS (from IncludePaths)
+Used variables: CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 } {
 	# Capture the current value of CC, C_FLAGS and INCPATHS
 	target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
@@ -100,6 +126,9 @@ rule ObjectRule.cpp {obj src} {
 ObjectRule.cpp object source
 
 Generates an object file from a C++ source file
+
+Imported variables: CXX, CXX_FLAGS (from C++Flags), INCPATHS (from IncludePaths)
+Used variables: CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 } {
 	# Capture the current value of CXX, CXX_FLAGS and INCPATHS
 	target $obj -inputs $src -msg {note C++ $targetname} -getvars CXX CXX_FLAGS INCPATHS -do {
@@ -144,19 +173,329 @@ proc BuildSpecEpilog {} {
 }
 
 # ==================================================================
-# HIGH LEVEL RULES
+# UTILTY PROCS
 # ==================================================================
 
+# @target-alias target targetexe
+#
+# On some systems, executables are identified with an extension (e.g. .exe)
+# For cross-platform compatibility, rules omit this extension and an alias is used
+# to link to the actual filename.
+#
+# This command checks the rule name (e.g. abc) and the executable name (e.g. abc.exe)
+# and if they are the same, returns an appropriate target alias for the executable
+# (e.g. -alias abc). Otherwise an empty list is returned.
+#
 proc target-alias {target targetexe} {
 	if {$target ne $targetexe} {
-		list -alias [make-local $target]
+		return [list -alias [make-local $target]]
+	}
+	return ""
+}
+
+# @publish-path dir
+#
+# Returns the path to the given 'publish' subdirectory,
+# e.g. [publish-path include] returns something like objdir/.publish/include
+#
+proc publish-path {dir} {
+	file-build [file-join [get-define PUBLISH] $dir]
+}
+
+# @publish-dir dir
+#
+# Returns the path to the given 'publish' subdirectory relative to the build directory
+# e.g. [publish-dir include] returns something like .publish/include
+#
+proc publish-dir {dir} {
+	file-join [get-define PUBLISH] $dir
+}
+
+# @publish-prefix dir
+#
+# Like publish-dir, but returns the value suitable to be used as a prefix
+#
+proc publish-prefix {dir} {
+	make-prefix [publish-dir $dir]
+}
+
+# @publish-one-file dest src
+#
+# Creates a rule to publish $src as $dest (build relative name) by creating a hard link.
+# e.g. publish-one-file include/header.h header.h
+#
+proc publish-one-file {dest src} {
+	#puts "publish-one-file: dest=$dest, src=$src, realdest=[publish-dir $dest]"
+	hard-link [publish-dir $dest] $src -msg {note Publish $targetname}
+}
+
+# @publish-lib libname alias
+#
+# Creates a rule to publish an archive library, $libname, to the $PUBLISH/lib directory.
+# $alias is the alias name of the library, e.g. <lib>blah
+#
+proc publish-lib {libname alias} {
+	hard-link [publish-prefix lib]$libname [make-local $libname] -msg {note Publish $targetname} -alias $alias
+}
+
+# @make-shlib-symlinks first ...
+#
+# Create symlinks such that each of the given args is a symlink to $first.
+# All paths/names should be in the same directory
+#
+proc make-shlib-symlinks {first args} {
+	foreach alias $args {
+		exec ln -s -f [file tail $first] $alias
 	}
 }
+
+# @publish-shared-lib names source alias
+#
+# Creates a rule to publish a shared library, $source, with the given names to the
+# $PUBLISH/lib directory.
+# This includes creating appropriate symlinks.
+# $alias is the alias name of the library, e.g. <lib>blah
+#
+proc publish-shared-lib {names source alias} {
+	set published [prefix [publish-prefix lib] {*}$names]
+
+	target $published -inputs $source -msg {note Publish [lindex $targetname 0]} -do {
+		file delete {*}$target
+		exec ln -f $inputs [lindex $target 0]
+		make-shlib-symlinks {*}$target
+	} -vars libname [lindex $names 0] -alias $alias
+	add-clean [make-local clean] $published
+	add-clean [make-local distclean] $published
+}
+
+# @install-shared-lib dest names source flags
+#
+# Creates a rule to install a shared library, $source, to install directory $dest
+# This includes creating appropriate symlinks.
+# $flags are passed to install-file and should either be empty, or "striplib".
+proc install-shared-lib {dest names source flags} {
+	set installed [prefix [make-prefix [get-define DESTDIR]$dest] $names]
+
+	target $installed -nocache -inputs $source -msg {note Install $libname} -do {
+		file delete {*}$target
+		install-file [lindex $target 0] $inputs $flags
+		make-shlib-symlinks {*}$target
+	} -vars flags $flags libname [file-join $dest [lindex $names 0]]
+
+	target install -depends {*}$installed
+	add-clean uninstall $installed
+}
+
+# @expand-filespec dir filelist keepdir
+#
+# Implements target renaming/globbing for Publish and Install
+#
+# $dir is the target directory
+# $filelist is the file specification
+# $keepdir is a boolean which indicates whether to keep the source dir in the target name
+#
+# The file specification may include:
+# - Regular filenames
+# - Renaming rules of the form: target=src
+# - Glob patterns
+#
+# Returns a list of the form: target1 source1 target2 source2 ...
+proc expand-filespec {dir filelist keepdir} {
+	set result {}
+
+	foreach spec $filelist {
+		if {$spec eq ""} {
+			continue
+		}
+		if {[string match *=* $spec]} {
+			lassign [split $spec =] target src
+			lappend result [file-join $dir $target] [make-local $src]
+			continue
+		}
+		if {[string match {*[{}*?]*} $spec]} {
+			set srcs [Glob --all $spec]
+		} else {
+			set srcs $spec
+		}
+		foreach src $srcs {
+			if {$keepdir} {
+				lappend result [file-join $dir $src] [make-local $src]
+			} else {
+				lappend result [file-join $dir [file tail $src]] [make-local $src]
+			}
+		}
+	}
+	#puts "expand-filespec: $filelist => $result"
+	return $result
+}
+
+# @expand-objects objs
+#
+# Expands a list of objects which may contain library aliases of the form <lib>$basename
+# Each library alias is expanded into the list of objects for that library.
+# (Note that SharedLib and ArchiveLib create an object list when creating libraries)
+# Any non-aliases are left unchanged.
+# 
+# Returns the expanded object list.
+proc expand-objects {objs} {
+	set result {}
+	foreach obj $objs {
+		if {[string match <lib>* $obj]} {
+			if {![dict exists $::tmakedrb(objmap) $obj]} {
+				build-error "Error: Unable to find objects for unknown lib $obj"
+				return -code break
+			}
+			# XXX: How to guarantee that $SH_CFLAGS are set on these objects?
+			# (Either directly via ObjectCFlags or with a top-level CFlags)
+			#
+			lappend result {*}[file-build [dict get $::tmakedrb(objmap) $obj]]
+		} else {
+			lappend result $obj
+		}
+	}
+	#puts "expand-objects $objs =>\n$result"
+	return $result
+}
+
+# @load-config-file filename
+#
+# XXX explain how config files are loaded...
+proc load-config-file {filename} {
+	# All lines look like one of:
+	#CONFIG_BOOL_VALUE=y (or m)
+	#CONFIG_STR_VALUE="string value"
+	#CONFIG_INT_VALUE=123
+	set n 0
+	foreach line [split [readfile $filename] \n] {
+		incr n
+		set line [string trim $line]
+		if {$line eq "" || [string match "#*" $line]} {
+			continue
+		}
+		if {[regexp {^([^=:]*):?=(.*)} $line -> name value]} {
+			set value [string trim $value]
+			if {$value eq "y"} {
+				set value 1
+			} elseif {[string match {"*"} $value]} {
+				set value [lindex $value 0]
+			}
+			dputs c "define $name $value"
+			define $name $value
+		} else {
+			user-notice purple "$filename:$n: Warning: Failed to parse $line"
+		}
+	}
+	if {$n == 0} {
+		user-notice purple "Warning: $filename contains no configuration"
+	}
+}
+
+# @setup-test-env
+#
+# XXX helper for Test
+proc setup-test-env {} {
+	# Set up LD_LIBRARY_PATH (or equivalent) for tests
+	set ldlibpath [get-define LD_LIBRARY_PATH]
+	if {$ldlibpath ne ""} {
+		set path [getenv $ldlibpath ""]
+		# Must use a full path here since tests do chdir
+		set addlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
+		append-with-space path $addlib $::tcl_platform(pathSeparator)
+		setenv $ldlibpath $path
+	}
+}
+
+# @get-test-id
+#
+# XXX helper for Test
+proc get-test-id {} {
+	return test#[incr ::tmakedrb(testid)]
+}
+
+# @run-test-command
+#
+# XXX helper for Test
+# Note that we don't pass SRCDIR explictly to keep the
+# 'tmake -n' output clean
+proc run-test-command {testcommand} {
+	setup-test-env
+	setenv SRCDIR [uplevel 1 set SRCDIR]
+	setenv TOPBUILDDIR [uplevel 1 set TOPBUILDDIR]
+	incr ::tmakedrb(testruncount)
+	run $testcommand
+	incr ::tmakedrb(testpasscount)
+}
+
+# @hard-link ?--fallback? dest source ?options...?
+#
+# XXX
+proc hard-link {args} {
+	#show-this-rule
+
+	getopt {--fallback dest source args} args
+
+	# XXX: If the platform doesn't support hard links
+	# and --fallback is set, fall back to soft links
+	# and then to file copy
+	# Want to depend on the existence of the dir, not the time
+	target $dest -inputs $source -do {
+		file delete $target
+		exec ln $inputs $target
+	} {*}$args
+	add-clean [make-local clean] $dest
+	add-clean [make-local distclean] $dest
+}
+
+# @install-file target source flags
+#
+# XXX
+# Helper for installing files
+proc install-file {target source flags} {
+	vputs "Copy $source $target"
+	file copy -force $source $target
+	if {"bin" in $flags} { chmodx-file $target }
+	if {"strip" in $flags} { strip-file [get-define STRIPFLAGS {}] $target }
+	if {"striplib" in $flags} { strip-file [get-define STRIPLIBFLAGS {}] $target }
+}
+
+# @chmodx-file target
+#
+# Makes the given file executable with chmod +x
+proc chmodx-file {target} {
+	vputs "Chmod $target"
+	exec chmod +x $target
+}
+
+# @strip-file flags target
+#
+# Invokes '$STRIP $flags $target' to strip the given executable
+#
+# If $STRIP is not set, does nothing
+proc strip-file {flags target} {
+	vputs "Strip $target"
+	exec {*}[get-define STRIP true] {*}$flags $target
+}
+
+# ==================================================================
+# HIGH LEVEL RULES
+# ==================================================================
 
 rule Executable {args} {
 Executable --test --chdir --nobuild --publish --strip --install=<dir> target sources...
 
-...
+Builds an executable from one or more source files. For each source, the appropriate ObjectRule is used
+to generate the object file, and these files are linked (along with any libraries) to create the executable.
+
+Imported variables: CCLD (from Linker), LD_FLAGS (from LinkFlags), PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
+Used variables: LDFLAGS
+
+The following options are supported:
+  --test              Marks the executable as a test (see Test)
+  --chdir             This options is passed to Test if --test is also specified.
+  --nobuild           Don't make this executable dependent on phony 'all', which is otherwise the default
+  --publish           Publishes the executable (see PublishBin)
+  --install=<dir>     Install the executable to the given directory (see InstallFile)
+  --strip             Marks the executable to be stripped when installed (see InstallFile)
 } {
 	show-this-rule
 	getopt {--test --chdir --nobuild --publish --strip --install: target args} args
@@ -198,84 +537,6 @@ Executable --test --chdir --nobuild --publish --strip --install=<dir> target sou
 	}
 }
 
-proc publish-path {dir} {
-	file-build [file-join [get-define PUBLISH] $dir]
-}
-
-proc publish-dir {dir} {
-	file-join [get-define PUBLISH] $dir
-}
-
-proc publish-prefix {dir} {
-	make-prefix [publish-dir $dir]
-}
-
-proc publish-one-file {dest src} {
-	#puts "publish-one-file: dest=$dest, src=$src, realdest=[publish-dir $dest]"
-	hard-link [publish-dir $dest] $src -vars dest $dest -msg {note Publish $targetname}
-}
-
-proc make-shlib-symlinks {first args} {
-	foreach alias $args {
-		exec ln -s -f [file tail $first] $alias
-	}
-}
-
-proc publish-shared-lib {names source alias} {
-	set published [prefix [publish-prefix lib] {*}$names]
-
-	target $published -inputs $source -msg {note Publish [lindex $targetname 0]} -do {
-		file delete {*}$target
-		exec ln -f $inputs [lindex $target 0]
-		make-shlib-symlinks {*}$target
-	} -vars libname [lindex $names 0] -alias $alias
-	add-clean [make-local clean] $published
-	add-clean [make-local distclean] $published
-}
-
-# XXX: very similar to publish-shared-lib
-proc install-shared-lib {dest names source flags} {
-	set installed [prefix [make-prefix [get-define DESTDIR]$dest] $names]
-
-	target $installed -nocache -inputs $source -msg {note Install $libname} -do {
-		file delete {*}$target
-		install-file [lindex $target 0] $inputs $flags
-		make-shlib-symlinks {*}$target
-	} -vars flags $flags libname [file-join $dest [lindex $names 0]]
-
-	target install -depends {*}$installed
-	add-clean uninstall $installed
-}
-
-proc expand-filespec {dir filelist keepdir} {
-	set result {}
-
-	foreach spec $filelist {
-		if {$spec eq ""} {
-			continue
-		}
-		if {[string match *=* $spec]} {
-			lassign [split $spec =] target src
-			lappend result [file-join $dir $target] [make-local $src]
-			continue
-		}
-		if {[string match {*[{}*?]*} $spec]} {
-			set srcs [Glob --all $spec]
-		} else {
-			set srcs $spec
-		}
-		foreach src $srcs {
-			if {$keepdir} {
-				lappend result [file-join $dir $src] [make-local $src]
-			} else {
-				lappend result [file-join $dir [file tail $src]] [make-local $src]
-			}
-		}
-	}
-	#puts "expand-filespec: $filelist => $result"
-	return $result
-}
-
 rule PublishBin {args} {
 PublishBin ?--script? name ...
 
@@ -303,20 +564,21 @@ ObjectRule.cpp object source
 	}
 }
 
-proc publish-lib {libname alias} {
-	#show-this-rule
-
-	hard-link [publish-prefix lib]$libname [make-local $libname] -vars dest lib/$libname -msg {note Publish $targetname} -alias $alias
-}
-
-
 rule Publish {args} {
 Publish ?--keepdir? dir name...
 
-Publishes one or more files
-(Note re bin, lib)
+Publishes one or more files to directory $PUBLISH/$dir
 
-Note that 'name' can be 'target=src' to rename a file when published.
+Accepts the following file names:
+  - Regular filenames
+  - Renaming rules of the form: target=src
+  - Glob patterns (.e.g *.img)
+
+Normally files are publish directly into $PUBLISH/$dir, but if --keepdir is
+specified, the relative source directory is kept and replicated under $PUBLISH/$dir
+
+Note: Libraries and Binaries should not be published with this rule.
+Rather Publishlib and PublishBin should be used.
 } {
 	show-this-rule
 	getopt {--keepdir dir args} args
@@ -333,33 +595,11 @@ Note that 'name' can be 'target=src' to rename a file when published.
 	}
 }
 
-# Expands a list of objects which may contain library aliases of the form <lib>$basename
-# which are then expanded to the list of objects for the library
-# The list of objects is created by the ArchiveLib rule
-proc expand-objects {objs} {
-	set result {}
-	foreach obj $objs {
-		if {[string match <lib>* $obj]} {
-			if {![dict exists $::tmakedrb(objmap) $obj]} {
-				build-error "Error: Unable to find objects for unknown lib $obj"
-				return -code break
-			}
-			# XXX: How to guarantee that $SH_CFLAGS are set on these objects?
-			# (Either directly via ObjectCFlags or with a top-level CFlags)
-			#
-			lappend result {*}[file-build [dict get $::tmakedrb(objmap) $obj]]
-		} else {
-			lappend result $obj
-		}
-	}
-	#puts "expand-objects $objs =>\n$result"
-	return $result
-}
-
 rule ArchiveLib {args} {
 ArchiveLib ?--publish? ?--install=<dir>? basename sources...
 
 Creates an archive library from the given sources
+XXX
 } {
 	show-this-rule
 	getopt {--publish --install: basename args} args
@@ -397,6 +637,7 @@ rule SharedLib {args} {
 SharedLib ?--publish? ?--strip? ?--version=<vers>? ?--install=<dir> basename source...
 
 Creates a shared library ...
+XXX
 } {
 	show-this-rule
 	getopt {--publish --strip --version: --install: basename args} args
@@ -552,6 +793,8 @@ and simply returns them
 
 rule Object {target src} {
 Object obj src
+
+Creates object $target from source $src by using the appropriate ObjectRule
 } {
 	show-this-rule
 	set ext [file ext $src]
@@ -567,8 +810,14 @@ Object obj src
 	return $obj
 }
 
-# Add object-specific CFLAGS
-proc ObjectCFlags {srcs args} {
+rule ObjectCFlags {srcs args} {
+ObjectCFlags srcs ...
+
+Like CFlags, but instead of adding C_FLAGS for all subsequent rules, adds
+C_FLAGS only to the objects created from the given sources.
+
+$srcs is a list of source files
+} {
 	show-this-rule
 	foreach src $srcs {
 		set obj [change-ext .o $src]
@@ -576,24 +825,58 @@ proc ObjectCFlags {srcs args} {
 	}
 }
 
-proc CFlags {args} {
+rule CFlags {args} {
+CFlags ...
+
+Add the given flags to C_FLAGS (used in ObjectRule.c)
+e.g.  CFlags -DABC=7
+
+Note that to pass a string value, it generally sufficient to quote it normally:
+
+  CFlags -DVERSION="v1.0"
+
+However if the value contains spaces, quote with a double backslash:
+
+  CFlags -DVERSION="prog\\ v1.0"
+} {
 	show-this-rule
 	define-append C_FLAGS {*}$args
 }
 
-proc C++Flags {args} {
+rule C++Flags {args} {
+C++Flags ...
+
+Add the given flags to CXX_FLAGS (used in ObjectRule.cpp)
+
+See CFlags
+} {
 	define-append CXX_FLAGS {*}$args
 }
 
-proc LinkFlags {args} {
+rule LinkFlags {args} {
+LinkFlags ...
+
+Add the given flags to LD_FLAGS (used in Executable and SharedLib)
+} {
 	define-append LD_FLAGS {*}$args
 }
 
-proc Linker {linker} {
+rule Linker {linker} {
+Linker prog
+
+Defines the linker to use for subsequent Executable and SharedLib.
+By default $CC is used. For C++ applications, it is typical to set:
+
+  Linker $CXX
+} {
 	define CCLD $linker
 }
 
-proc UseLibs {args} {
+rule UseLibs {args} {
+UseLibs ...
+
+XXX
+} {
 	# Create/append to PROJLIBS (the link line)
 	if {[get-define PROJLIBS] eq ""} {
 		define PROJLIBS "-L[publish-path lib]"
@@ -604,7 +887,11 @@ proc UseLibs {args} {
 	define-append PROJDEPS [prefix <lib> $args]
 }
 
-proc IncludePaths {args} {
+rule IncludePaths {args} {
+IncludePaths ...
+
+XXX
+} {
 	show-this-rule
 	foreach dir $args {
 		foreach prefix [list [local-dir] [build-dir]] {
@@ -618,37 +905,11 @@ proc IncludePaths {args} {
 	}
 }
 
-proc load-config-file {filename} {
-	# All lines look like one of:
-	#CONFIG_BOOL_VALUE=y (or m)
-	#CONFIG_STR_VALUE="string value"
-	#CONFIG_INT_VALUE=123
-	set n 0
-	foreach line [split [readfile $filename] \n] {
-		incr n
-		set line [string trim $line]
-		if {$line eq "" || [string match "#*" $line]} {
-			continue
-		}
-		if {[regexp {^([^=:]*):?=(.*)} $line -> name value]} {
-			set value [string trim $value]
-			if {$value eq "y"} {
-				set value 1
-			} elseif {[string match {"*"} $value]} {
-				set value [lindex $value 0]
-			}
-			dputs c "define $name $value"
-			define $name $value
-		} else {
-			user-notice purple "$filename:$n: Warning: Failed to parse $line"
-		}
-	}
-	if {$n == 0} {
-		user-notice purple "Warning: $filename contains no configuration"
-	}
-}
+rule Load {args} {
+Load ...
 
-proc Load {args} {
+XXX
+} {
 	show-this-rule
 
 	getopt {--nocare --config filename} args
@@ -681,11 +942,19 @@ proc Load {args} {
 	lappend ::tmake(projfiles) $filename $nocare
 }
 
-proc UseSystemLibs {args} {
+rule UseSystemLibs {args} {
+UseSystemLibs ...
+
+XXX
+} {
 	define-append SYSLIBS {*}$args
 }
 
-proc PublishIncludes {args} {
+rule PublishIncludes {args} {
+PublishIncludes ...
+
+XXX
+} {
 	show-this-rule
 	getopt {--keepdir args} args
 	set args [join $args]
@@ -695,40 +964,17 @@ proc PublishIncludes {args} {
 	}
 }
 
-proc setup-test-env {} {
-	# Set up LD_LIBRARY_PATH (or equivalent) for tests
-	set ldlibpath [get-define LD_LIBRARY_PATH]
-	if {$ldlibpath ne ""} {
-		set path [getenv $ldlibpath ""]
-		# Must use a full path here since tests do chdir
-		set addlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
-		append-with-space path $addlib $::tcl_platform(pathSeparator)
-		setenv $ldlibpath $path
-	}
-}
-
-proc get-test-id {} {
-	return test#[incr ::tmakedrb(testid)]
-}
-
-# Note that we don't pass SRCDIR explictly to keep the
-# 'tmake -n' output clean
-proc run-test-command {testcommand} {
-	setup-test-env
-	setenv SRCDIR [uplevel 1 set SRCDIR]
-	setenv TOPBUILDDIR [uplevel 1 set TOPBUILDDIR]
-	incr ::tmakedrb(testruncount)
-	run $testcommand
-	incr ::tmakedrb(testpasscount)
-}
-
 # Run an executable test
 # The executable must be built in the current dir
 #
-proc Test {args} {
+rule Test {args} {
+Test --interp=<interp> --chdir --quiet command args
+
+XXX
+} {
 	show-this-rule
 
-	getopt {--interp: --chdir --quiet --diff: command args} args
+	getopt {--interp: --chdir --quiet command args} args
 	set testid [get-test-id]
 	set depends {}
 	set localcommand [make-local $command]
@@ -781,7 +1027,11 @@ proc Test {args} {
 	return $testid
 }
 
-proc CopyFile {dest source} {
+rule CopyFile {dest source} {
+CopyFile dest source
+
+XXX
+} {
 	show-this-rule
 	target [make-local $dest] -inputs [make-local $source] -msg [list note Copy $dest] -do {
 		file delete $target
@@ -790,43 +1040,7 @@ proc CopyFile {dest source} {
 	Clean $dest
 }
 
-proc hard-link {args} {
-	#show-this-rule
-
-	getopt {--fallback dest source args} args
-
-	# XXX: If the platform doesn't support hard links
-	# and --fallback is set, fall back to soft links
-	# and then to file copy
-	# Want to depend on the existence of the dir, not the time
-	target $dest -inputs $source -do {
-		file delete $target
-		exec ln $inputs $target
-	} {*}$args
-	add-clean [make-local clean] $dest
-	add-clean [make-local distclean] $dest
-}
-
-# Helper for installing files
-proc install-file {target source flags} {
-	vputs "Copy $source $target"
-	file copy -force $source $target
-	if {"bin" in $flags} { chmodx-file $target }
-	if {"strip" in $flags} { strip-file [get-define STRIPFLAGS {}] $target }
-	if {"striplib" in $flags} { strip-file [get-define STRIPLIBFLAGS {}] $target }
-}
-
-proc chmodx-file {target} {
-	vputs "Chmod $target"
-	exec chmod +x $target
-}
-
-proc strip-file {flags target} {
-	vputs "Strip $target"
-	exec {*}[get-define STRIP true] {*}$flags $target
-}
-
-proc InstallFile {dest src {flags {}}} {
+rule InstallFile {dest src {flags {}}} {
 	show-this-rule
 
 	#puts "InstallFile $dest $src"
@@ -848,7 +1062,7 @@ proc InstallFile {dest src {flags {}}} {
 	return $destfile
 }
 
-proc Install {args} {
+rule Install {args} {
 	show-this-rule
 
 	getopt {--bin --strip --keepdir destdir args} args
@@ -911,7 +1125,7 @@ proc clean-target {type msg} {
 	}
 }
 
-proc Clean {args} {
+rule Clean {args} {
 	# DistClean also cleans these files
 	DistClean {*}$args
 
@@ -925,7 +1139,7 @@ proc Clean {args} {
 	}
 }
 
-proc DistClean {args} {
+rule DistClean {args} {
 	getopt {--src args} args
 	set args [join $args]
 
@@ -991,7 +1205,7 @@ proc find-project-bin {bin args} {
 	return $result
 }
 
-proc Generate {args} {
+rule Generate {args} {
 	# XXX: Would be nice if script and inputs were optional
 	getopt {--interp: --chdir target script inputs rules args} args
 
@@ -1013,11 +1227,11 @@ proc Generate {args} {
 	Clean $target
 }
 
-proc Depends {target args} {
+rule Depends {target args} {
 	target [make-local {*}$target] -depends {*}$args
 }
 
-proc Phony {target args} {
+rule Phony {target args} {
 	show-this-rule
 	target [make-local {*}$target] -phony -depends {*}$args
 }
@@ -1026,18 +1240,18 @@ proc LocalMakefile {name} {
 	user-notice purple [warning-location "Warning: LocalMakefile is deprecated and ignored"]
 }
 
-proc DefaultTarget {name} {
+rule DefaultTarget {name} {
 	show-this-rule
 	set ::tmake(defaulttarget) $name
 }
 
 # XXX: Only useful for simple cases of building a host executable from C sources
 # 
-proc HostLibs {args} {
+rule HostLibs {args} {
 	define-append HOST_SYSLIBS {*}$args
 }
 
-proc HostExecutable {target args} {
+rule HostExecutable {target args} {
 	set localtarget [make-local $target]
 
 	# Hmmm, EXEEXT may be different on the host
