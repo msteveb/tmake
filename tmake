@@ -821,6 +821,16 @@ proc file-src-relative {srcpath {builddir {}}} {
 	relative-path $there $here
 }
 
+proc Scope {script} {
+	global tmake
+	# Save all defines
+	set defines $tmake(defines)
+	# What if a failure occurs in this script?
+	uplevel 1 $script
+	set tmake(defines) $defines
+}
+
+
 # Read in the given spec file in the given directory (relative to topdir)
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir {optional 0}} {
@@ -841,19 +851,17 @@ proc process-build-spec-file {dir {optional 0}} {
 		incr ignore
 	}
 
-	set defines $tmake(defines)
+	Scope {
+		BuildSpecProlog
+		if {$ignore} {
+			set rc 0
+		} else {
+			lassign [invoke-spec-file $path] rc msg opts
 
-	BuildSpecProlog
-	if {$ignore} {
-		set rc 0
-	} else {
-		lassign [invoke-spec-file $path] rc msg opts
-
-		dputs T "Parsed [local-prefix]build.spec"
+			dputs T "Parsed [local-prefix]build.spec"
+		}
+		BuildSpecEpilog
 	}
-	BuildSpecEpilog
-
-	set tmake(defines) $defines
 
 
 	if {$rc == 20} {
