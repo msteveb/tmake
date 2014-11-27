@@ -547,6 +547,11 @@ proc add-build-targets {args} {
 	lappend tmake(addtargets) {*}$args
 }
 
+proc add-project-file {filename nocare} {
+	global tmake
+	lappend tmake(projfiles) $filename $nocare
+}
+
 # @set-default-target target
 #
 # Sets the default target, when tmake is invoked with no options.

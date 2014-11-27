@@ -570,6 +570,52 @@ proc add-clean {type filelist} {
 	target-add-var $type cleanfiles [file-build $filelist]
 }
 
+# Returns a list of {dependency filename}
+#
+proc find-project-bin {bin args} {
+	set opts [list -chdir 0 -optional 0 {*}$args]
+
+	set localbin [make-local $bin]
+
+	if {[is-target? $localbin]} {
+		dputxs m {[find-source-location]: find-project-bin: $localbin is a local target}
+		if {$opts(-chdir)} {
+			set result [list $localbin ./$bin]
+		} else {
+			# Note: Use [build-dir] here rather than [file-build] to retain ./
+			#       if building in-tree
+			set result [list $localbin [build-dir]/$localbin]
+		}
+	} elseif {[regexp {^<bin>(.*)} $bin -> basename]} {
+		dputxs m {[find-source-location]: find-project-bin: $bin is a publish target}
+		set publishbin [publish-prefix bin]$basename
+		if {$opts(-chdir)} {
+			# Need to adjust the interp to account for chdir
+			#puts "localbin=$localbin, file-build-relative $publishbin => [file-build-relative $publishbin]"
+			#puts "localbin=$localbin, file-build $publishbin => [file-build $publishbin]"
+			set result [list $bin ./$publishbin]
+		} else {
+			set result [list $bin [file-build $publishbin]]
+		}
+	} elseif {[file exists $localbin]} {
+		dputxs m {[find-source-location]: find-project-bin: $localbin exists as source}
+		if {$opts(-chdir)} {
+			# Need to adjust the interp to account for chdir
+			set result [list $localbin [file-src-relative $localbin]]
+		} else {
+			set result [list $localbin $localbin]
+		}
+	} elseif {$opts(-optional)} {
+		dputxs m {[find-source-location]: find-project-bin: $bin is assumed to be external}
+		set result [list "" $bin]
+	} else {
+		# Not found
+		dev-error "$bin is neither a local nor a published (<bin>) target"
+	}
+	dputxs m {[find-source-location]: find-project-bin returning $result}
+	return $result
+}
+
 add-deferred-action {
 	# Need to add $PUBLISH/include to the include paths
 	IncludePaths --build [publish-dir include]
@@ -1070,7 +1116,7 @@ XXX
 		# If we find the file, we now care about it
 		set nocare 0
 	}
-	lappend ::tmake(projfiles) $filename $nocare
+	add-project-file $filename $nocare
 }
 
 rule UseSystemLibs {args} {
@@ -1231,74 +1277,26 @@ The following arguments are supported:
 }
 
 rule Clean {args} {
+Clean target ...
+
+Adds the given targets to the list of files to be removed on 'tmake clean'
+} {
 	# DistClean also cleans these files
 	DistClean {*}$args
 
-	getopt {--src args} args
 	set args [join $args]
 
-	if {$src} {
-		add-clean [make-local clean] [prefix [local-src-prefix] $args]
-	} else {
-		add-clean [make-local clean] [make-local {*}$args]
-	}
+	add-clean [make-local clean] [make-local {*}$args]
 }
 
 rule DistClean {args} {
-	getopt {--src args} args
+DistClean target ...
+
+Adds the given targets to the list of files to be removed on 'tmake distclean'
+} {
 	set args [join $args]
 
-	if {$src} {
-		add-clean [make-local distclean] [prefix [local-src-prefix] $args]
-	} else {
-		add-clean [make-local distclean] [make-local {*}$args]
-	}
-}
-
-# Returns a list of {dependency filename}
-#
-proc find-project-bin {bin args} {
-	set opts [list -chdir 0 -optional 0 {*}$args]
-
-	set localbin [make-local $bin]
-
-	if {[is-target? $localbin]} {
-		dputxs m {[find-source-location]: find-project-bin: $localbin is a local target}
-		if {$opts(-chdir)} {
-			set result [list $localbin ./$bin]
-		} else {
-			# Note: Use [build-dir] here rather than [file-build] to retain ./
-			#       if building in-tree
-			set result [list $localbin [build-dir]/$localbin]
-		}
-	} elseif {[regexp {^<bin>(.*)} $bin -> basename]} {
-		dputxs m {[find-source-location]: find-project-bin: $bin is a publish target}
-		set publishbin [publish-prefix bin]$basename
-		if {$opts(-chdir)} {
-			# Need to adjust the interp to account for chdir
-			#puts "localbin=$localbin, file-build-relative $publishbin => [file-build-relative $publishbin]"
-			#puts "localbin=$localbin, file-build $publishbin => [file-build $publishbin]"
-			set result [list $bin ./$publishbin]
-		} else {
-			set result [list $bin [file-build $publishbin]]
-		}
-	} elseif {[file exists $localbin]} {
-		dputxs m {[find-source-location]: find-project-bin: $localbin exists as source}
-		if {$opts(-chdir)} {
-			# Need to adjust the interp to account for chdir
-			set result [list $localbin [file-src-relative $localbin]]
-		} else {
-			set result [list $localbin $localbin]
-		}
-	} elseif {$opts(-optional)} {
-		dputxs m {[find-source-location]: find-project-bin: $bin is assumed to be external}
-		set result [list "" $bin]
-	} else {
-		# Not found
-		dev-error "$bin is neither a local nor a published (<bin>) target"
-	}
-	dputxs m {[find-source-location]: find-project-bin returning $result}
-	return $result
+	add-clean [make-local distclean] [make-local {*}$args]
 }
 
 rule Generate {args} {
@@ -1389,16 +1387,27 @@ The default is 'all'
 	set-default-target $name
 }
 
-# XXX: Only useful for simple cases of building a host executable from C sources
-# 
 rule HostLibs {args} {
+HostLibs ...
+
+Like UseSystemLibs, but for host builds with HostExecutable.
+Adds the given arguments to HOST_SYSLIBS
+} {
 	define-append HOST_SYSLIBS {*}$args
 }
 
 rule HostExecutable {target args} {
+HostExecutable target sources ...
+
+A very simple version of Executable for building host (as opposed to target) applications.
+
+Imported variables: HOST_CFLAGS, HOST_SYSLIBS (from HostLibs)
+Used variables: CC_FOR_BUILD (default to cc)
+
+Note: HostExecutable and HostLibs are stopgaps until separate build contexts are fully support
+} {
 	set localtarget [make-local $target]
 
-	# Hmmm, EXEEXT may be different on the host
 	set localtargetexe $localtarget[get-define HOST_EXEEXT]
 	set targetexe $target[get-define HOST_EXEEXT]
 
