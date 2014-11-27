@@ -384,12 +384,17 @@ proc expand-objects {objs} {
 
 # @load-config-file filename
 #
-# XXX explain how config files are loaded...
+# Reads a configuration file of the form:
+#
+## CONFIG_BOOL_VALUE=y (or m)
+## CONFIG_STR_VALUE="string value"
+## CONFIG_INT_VALUE=123
+#
+# Each matching value is loaded as a corresponding variable definition
+# where if the value is "y", it is changed to "1", and if the value
+# is a quoted string, the quotes are removed.
 proc load-config-file {filename} {
 	# All lines look like one of:
-	#CONFIG_BOOL_VALUE=y (or m)
-	#CONFIG_STR_VALUE="string value"
-	#CONFIG_INT_VALUE=123
 	set n 0
 	foreach line [split [readfile $filename] \n] {
 		incr n
@@ -417,13 +422,15 @@ proc load-config-file {filename} {
 
 # @setup-test-env
 #
-# XXX helper for Test
+# Prepares the environment for running tests.
+# Currently appends (the absolute path of) $PUBLISH/lib to LD_LIBRARY_PATH
+# in the environment to allow published shared libraries to be loaded
 proc setup-test-env {} {
-	# Set up LD_LIBRARY_PATH (or equivalent) for tests
+	# XXX some platforms use a different name
 	set ldlibpath [get-define LD_LIBRARY_PATH]
 	if {$ldlibpath ne ""} {
 		set path [getenv $ldlibpath ""]
-		# Must use a full path here since tests do chdir
+		# Must use a full path here since some tests do chdir
 		set addlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
 		append-with-space path $addlib $::tcl_platform(pathSeparator)
 		setenv $ldlibpath $path
@@ -432,49 +439,66 @@ proc setup-test-env {} {
 
 # @get-test-id
 #
-# XXX helper for Test
+# Returns a unique test id of the form 'test#nnn'
+# Used to help identify Test targets since they don't have
+# a natural target name.
 proc get-test-id {} {
 	return test#[incr ::tmakedrb(testid)]
 }
 
-# @run-test-command
+# @run-test-command testcommand
 #
-# XXX helper for Test
+# This is a help for running test commands.
+# The environment is set up with setup-test-env
+# Then SRCDIR and TOPBUILDDIR 
+# The given command
 # Note that we don't pass SRCDIR explictly to keep the
 # 'tmake -n' output clean
 proc run-test-command {testcommand} {
 	setup-test-env
-	setenv SRCDIR [uplevel 1 set SRCDIR]
-	setenv TOPBUILDDIR [uplevel 1 set TOPBUILDDIR]
+
+	# Get these values from the calling scope and set in the environment
+	uplevel 1 {
+		setenv SRCDIR $SRCDIR
+		setenv TOPBUILDDIR $TOPBUILDDIR
+	}
 	incr ::tmakedrb(testruncount)
 	run $testcommand
 	incr ::tmakedrb(testpasscount)
 }
 
-# @hard-link ?--fallback? dest source ?options...?
+# @hard-link dest source ?target-args...?
 #
-# XXX
+# Creates a rule to link $dest to $source
+# Additional arguments may be passed and are added to the target rule.
+# 
 proc hard-link {args} {
 	#show-this-rule
 
-	getopt {--fallback dest source args} args
+	getopt {dest source args} args
 
-	# XXX: If the platform doesn't support hard links
-	# and --fallback is set, fall back to soft links
-	# and then to file copy
-	# Want to depend on the existence of the dir, not the time
+	# XXX: If the platform doesn't support hard links,
+	# consider falling back to soft links and then to file copy
 	target $dest -inputs $source -do {
 		file delete $target
 		exec ln $inputs $target
 	} {*}$args
+
+	# Note that we can't use Clean here because $dest is already
+	# a local name
 	add-clean [make-local clean] $dest
 	add-clean [make-local distclean] $dest
 }
 
 # @install-file target source flags
 #
-# XXX
 # Helper for installing files
+# Copies the file from $source to $target, then performs zero or more actions
+# depending upon the flags (which is a list)
+#
+# bin      - make the target executable with chmodx-file
+# strip    - strips the target with strip-file $STRIPFLAGS
+# striplib - strips the target with strip-file $STRIPLIBFLAGS
 proc install-file {target source flags} {
 	vputs "Copy $source $target"
 	file copy -force $source $target
@@ -570,8 +594,20 @@ proc add-clean {type filelist} {
 	target-add-var $type cleanfiles [file-build $filelist]
 }
 
-# Returns a list of {dependency filename}
+# @find-project-bin binfile ?-chdir 0|1? ?-optional 0|1?
 #
+# Searches for the given binary file as follows:
+# 1. If $binfile is a known target, the result is the target
+# 2. If $binfile is of the form <bin>name, the result is the published binary
+# 3. If the file exists in the local directory, the result is the file
+# 4. Otherwise, if optional=1, the file is assumed to be an external binary
+# 5. Otherwise an error is raised.
+#
+# The result is a list of two values: {dependency filename}
+#
+# The first value is a build dependency for the file. (Empty for an external binary)
+# The second value is the path to the file suitable for executing it, taking
+# into account the setting of 'chdir'.
 proc find-project-bin {bin args} {
 	set opts [list -chdir 0 -optional 0 {*}$args]
 
@@ -590,10 +626,16 @@ proc find-project-bin {bin args} {
 		dputxs m {[find-source-location]: find-project-bin: $bin is a publish target}
 		set publishbin [publish-prefix bin]$basename
 		if {$opts(-chdir)} {
-			# Need to adjust the interp to account for chdir
-			#puts "localbin=$localbin, file-build-relative $publishbin => [file-build-relative $publishbin]"
-			#puts "localbin=$localbin, file-build $publishbin => [file-build $publishbin]"
-			set result [list $bin ./$publishbin]
+			# We will be running in [file-build [local-dir]],
+			# while the executable to run is in [file-build $PUBLISH/bin]
+			# So calculate a relative path
+			set curdir [file-build [local-dir]]
+			set builddir [publish-path bin]
+			# It can't hurt to create the $PUBLISH/bin here and it makes relative-path always work
+			file mkdir $builddir
+			set reldir [relative-path $builddir $curdir]
+
+			set result [list $bin $reldir/$basename]
 		} else {
 			set result [list $bin [file-build $publishbin]]
 		}
