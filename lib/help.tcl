@@ -98,20 +98,6 @@ proc show-reference {{type text}} {
     exit 0
 }
 
-proc show-rules {{type text}} {
-
-    use_pager
-    help-select-formatter $type
-
-    set rulebase [get-rulebase]
-    if {[llength $rulebase] == 1} {
-        lassign $rulebase file
-        show-command-reference-blob [file rootname [file tail $file]] [readfile $file]
-    } else {
-        show-command-reference-blob {*}$rulebase
-    }
-}
-
 proc output-help-block {type lines} {
     if {[llength $lines]} {
         switch $type {

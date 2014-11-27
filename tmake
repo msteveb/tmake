@@ -52,6 +52,7 @@ set tmake(force) 0
 set tmake(init) 0
 set tmake(usepager) 1
 set tmake(showcache) 0
+set tmake(showvars) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
 set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0 writecache 0}
@@ -80,9 +81,9 @@ if {$tmake(debug)} {
 # Argument Processing
 # ==================================================================
 
-proc make-parse-options {argv {type tmake}} {
+proc make-parse-options {argv} {
 	global tmake
-	#puts "make-parse-options [list $argv] type=$type"
+	#puts "make-parse-options [list $argv]"
 
 	foreach arg $argv {
 		if {[info exists nextopt]} {
@@ -99,37 +100,11 @@ proc make-parse-options {argv {type tmake}} {
 			continue
 		}
 		if {[regexp {^(\w+)=(.*)} $arg -> n v]} {
-			# Allow: make O=tmake-options
-			if {$n eq "O" && $type ne "tmake"} {
-				make-parse-options $v
-				continue
-			}
+			# Allow: make ABC=DEF
 			define! $n $v
 			continue
 		}
-		if {$type ne "tmake"} {
-			continue
-		}
 		if {[regexp {^(-+[^=]*)(=)?(.*)?} $arg -> option equals value]} {
-			if {$option eq "--mflags"} {
-				# The only thing we care about from mflags is -n
-				if {[regexp {^-[^ ]*n} $value]} {
-					set tmake(norun) 1
-				}
-				continue
-			}
-			if {$option eq "--bsdmakeflags"} {
-				# Pick up variable definitions
-				make-parse-options $value bsd
-				continue
-			}
-			if {$option eq "--gnumakeflags"} {
-				# Pick up variable definitions
-				make-parse-options $value gnu
-				continue
-			}
-			# Here we are parsing tmake options
-			# XXX: There is no way to pass these through make
 			if {$option eq "-d?"} {
 				puts "Different debugging can be enabled with -d..."
 				puts "The different debuggin categories are as follows:\n"
@@ -161,6 +136,9 @@ proc make-parse-options {argv {type tmake}} {
 				--force {
 					incr tmake(force)
 				}
+				--showvars {
+					incr tmake(showvars)
+				}
 				--rulebase {
 					incr tmake(force)
 					set rulebase [get-rulebase]
@@ -170,6 +148,10 @@ proc make-parse-options {argv {type tmake}} {
 						puts [readfile [lindex $rulebase 0]]
 					}
 					exit 0
+				}
+				--rules {
+					user-notice purple "Warning: Use --commands rather than the deprecated --rules"
+					set tmake(listcommands) $value
 				}
 				--commands {
 					set tmake(listcommands) $value
@@ -223,11 +205,6 @@ proc make-parse-options {argv {type tmake}} {
 				}
 				--nopager {
 					set tmake(usepager) 0
-				}
-				--rules {
-					use help
-					show-rules
-					exit 0
 				}
 				--genie {
 					use genie
@@ -398,6 +375,10 @@ proc make {argv} {
 	}
 	if {$tmake(showrules)} {
 		show-all-rules
+		tmake-exit 0
+	}
+	if {$tmake(showvars)} {
+		show-all-defines
 		tmake-exit 0
 	}
 	if {[info exists tmake(listtargets)]} {
@@ -1197,14 +1178,19 @@ proc show-cache {} {
 }
 
 proc show-all-targets {detailed} {
+	set shown 0
 	foreach i [lsort [dict keys $::tmake(targets)]] {
 		if {$detailed eq ""} {
 			if {![dict get [get-target-rule $i] phony]} {
+				incr shown
 				puts $i
 			}
 		} else {
 			puts "$i @[make-source-location $i]"
 		}
+	}
+	if {$shown == 0 && $detailed eq ""} {
+		puts "Note: All targets are phone. Use --targets=all to show all targets"
 	}
 }
 
@@ -1242,7 +1228,7 @@ proc define {name args} {
 
 proc define! {name args} {
 	set value [join $args]
-	#dputs v "define! $name $value"
+	dputs v "define! $name $value"
 	dict set ::tmake(fixedvars) $name 1
 	dict set ::tmake(defines) $name $value
 	uplevel #1 [list set $name $value]
@@ -1253,7 +1239,7 @@ proc define! {name args} {
 #
 proc define? {name args} {
 	global $name
-	#puts "define? $name $args"
+	dputs v "define? $name $args"
 	if {[get-define $name] eq ""} {
 		define $name {*}$args
 	}
@@ -1264,7 +1250,7 @@ proc define? {name args} {
 # separated by a space.
 #
 proc define-append {name args} {
-	#dputs v "define-append $name $args"
+	dputs v "define-append $name $args"
 	set value [get-define $name]
 	append-with-space value [join $args]
 	define $name $value
@@ -1281,6 +1267,13 @@ proc get-define {name {default ""}} {
 
 proc get-all-defines {} {
 	return $::tmake(defines)
+}
+
+proc show-all-defines {} {
+	set defines [get-all-defines]
+	foreach k [lsort [dict keys $defines]] {
+		puts "$k=[dict get $defines $k]"
+	}
 }
 
 proc define-exists {name} {
@@ -1833,7 +1826,7 @@ proc set-global {name value} {
 	if {[info exists ::$name] && [set ::$name] eq $value} {
 		return
 	}
-	#dputs v "! $name=$value"
+	dputs v "! $name=$value"
 	set ::$name $value
 }
 
