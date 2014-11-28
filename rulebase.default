@@ -263,14 +263,15 @@ proc publish-lib {libname alias} {
 	hard-link [publish-prefix lib]$libname [make-local $libname] -msg {note Publish $targetname} -alias $alias
 }
 
-# @make-shlib-symlinks first ...
+# @make-shlib-symlinks first alias...
 #
-# Create symlinks such that each of the given args is a symlink to $first.
+# Create symlinks such that each of the given aliase is a symlink to $first.
 # All paths/names should be in the same directory
+# The alias targets must not exist.
 #
 proc make-shlib-symlinks {first args} {
 	foreach alias $args {
-		exec ln -s -f [file tail $first] $alias
+		file link -sym [file tail $first] $alias
 	}
 }
 
@@ -286,7 +287,7 @@ proc publish-shared-lib {names source alias} {
 
 	target $published -inputs $source -msg {note Publish [lindex $targetname 0]} -do {
 		file delete {*}$target
-		exec ln -f $inputs [lindex $target 0]
+		file link $inputs [lindex $target 0]
 		make-shlib-symlinks {*}$target
 	} -vars libname [lindex $names 0] -alias $alias
 	add-clean [make-local clean] $published
@@ -481,7 +482,7 @@ proc hard-link {args} {
 	# consider falling back to soft links and then to file copy
 	target $dest -inputs $source -do {
 		file delete $target
-		exec ln $inputs $target
+		file link $inputs $target
 	} {*}$args
 
 	# Note that we can't use Clean here because $dest is already
