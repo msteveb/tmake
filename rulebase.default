@@ -271,7 +271,7 @@ proc publish-lib {libname alias} {
 #
 proc make-shlib-symlinks {first args} {
 	foreach alias $args {
-		file link -sym [file tail $first] $alias
+		file link -sym $alias [file tail $first]
 	}
 }
 
@@ -287,7 +287,7 @@ proc publish-shared-lib {names source alias} {
 
 	target $published -inputs $source -msg {note Publish [lindex $targetname 0]} -do {
 		file delete {*}$target
-		file link $inputs [lindex $target 0]
+		file link [lindex $target 0] $inputs
 		make-shlib-symlinks {*}$target
 	} -vars libname [lindex $names 0] -alias $alias
 	add-clean [make-local clean] $published
@@ -482,7 +482,7 @@ proc hard-link {args} {
 	# consider falling back to soft links and then to file copy
 	target $dest -inputs $source -do {
 		file delete $target
-		file link $inputs $target
+		file link $target $inputs
 	} {*}$args
 
 	# Note that we can't use Clean here because $dest is already
