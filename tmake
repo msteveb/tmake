@@ -219,7 +219,7 @@ proc make-parse-options {argv} {
 				--dry-run - --just-print - -n {
 					set tmake(norun) 1
 				}
-				-N {
+				-N - -nn {
 					set tmake(norun) 2
 				}
 				--tim* - -t {
@@ -2278,7 +2278,7 @@ proc build {target} {
 			build-error [error-stacktrace $msg]
 		}
 
-		if {[dict get $tmake(debugtypes) r]} {
+		if {[debug-is-set r]} {
 			dputs r "Rule for $ruletarget"
 			show-rule $ruletarget
 		}
@@ -2292,17 +2292,24 @@ proc build {target} {
 		}
 
 		if {$tmake(norun)} {
-			foreach do $t(do) {
-				show-rule-commands [subst-do $ruletarget $vardict $do]
+			if {$tmake(norun) == 1} {
+				foreach do $t(do) {
+					show-rule-commands [subst-do $ruletarget $vardict $do]
+				}
 			}
 			set rc 0
 		} else {
 			# Create all the target directories as required
-			# XXX: Probably should make this more efficient
+			set dirlist {}
 			foreach i $ruletarget {
 				set targetdir [file-build [file dirname $i]]
-				dputs m "mkdir $targetdir"
-				file mkdir $targetdir
+				if {![file isdir $targetdir]} {
+					lappend dirlist $targetdir
+				}
+			}
+			if {[llength $dirlist]} {
+				dputs m "mkdir [join $dirlist]"
+				file mkdir {*}$dirlist
 			}
 			# If necessary, chdir now
 			if {$t(chdir)} {
