@@ -60,6 +60,7 @@ set tmake(addtargets) {}
 set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0 writecache 0}
 set tmake(commands-overview) {}
 set tmake(commands) {}
+set tmake(cli-options) {}
 # The known clean targets
 set tmake(clean-targets) {clean distclean clean-orphans}
 
@@ -95,6 +96,7 @@ proc make-parse-options {argv} {
 			switch -exact -- $nextopt {
 				-C {
 					# This will fail with a fatal error if not a dir
+					enter-new-dir [file-normalize $arg]
 					cd $arg
 				}
 				default {
@@ -107,12 +109,13 @@ proc make-parse-options {argv} {
 		if {[regexp {^(\w+)=(.*)} $arg -> n v]} {
 			# Allow: make ABC=DEF
 			define! $n $v
+			lappend tmake(cli-options) $arg
 			continue
 		}
 		if {[regexp {^(-+[^=]*)(=)?(.*)?} $arg -> option equals value]} {
 			if {$option eq "-d?"} {
-				puts "Different debugging can be enabled with -d..."
-				puts "The different debuggin categories are as follows:\n"
+				puts "Debugging can be enabled with -d..."
+				puts "The debugging categories are as follows:\n"
 
 				foreach {n desc} $tmake(debughelp) {
 					puts "\t$n\t$desc"
@@ -123,6 +126,7 @@ proc make-parse-options {argv} {
 				foreach i [dict keys $tmake(debugtypes)] {
 					dict set tmake(debugtypes) $i 1
 				}
+				lappend tmake(cli-options) $arg
 				continue
 			}
 			switch -glob -- $option {
@@ -239,6 +243,7 @@ proc make-parse-options {argv} {
 				}
 				-C {
 					set nextopt $arg
+					continue
 				}
 				-- {
 				}
@@ -246,6 +251,7 @@ proc make-parse-options {argv} {
 					user-error "Unknown option $arg"
 				}
 			}
+			lappend tmake(cli-options) $arg
 			continue
 		}
 
@@ -1962,6 +1968,24 @@ proc run {args} {
 	# XXX: What to do on signal?
 }
 
+proc run-tmake {args} {
+	global tmake
+	set cmdline [list tmake {*}$tmake(cli-options) {*}$args]
+
+	set rc [catch {
+		exec-save-stderr {*}$cmdline
+	} msg opts]
+	if {$rc == 0 && $msg ne ""} {
+		puts [colout grey $msg]
+	}
+	if {$rc == 1} {
+		pputs \n\t$cmdline\n
+		# On error, display the command and the error and return break
+		build-error "$msg\n"
+		return -code break
+	}
+}
+
 proc calc-dyndeps {vardict target} {
 	set t [get-rule $target]
 	#puts "=============="
@@ -2035,7 +2059,7 @@ proc run-do {__vardict __script} {
 	list [catch $__script msg opts] $msg $opts
 }
 
-proc enter-new-dir {dirname ruletarget} {
+proc enter-new-dir {dirname} {
 	global tmake
 	if {$tmake(lastchdir) ne $dirname} {
 		# emulate make for vim quickerr
@@ -2294,9 +2318,9 @@ proc build {target} {
 		if {$t(chdir)} {
 			# Note that -chdir uses the *first* target to determine the directory
 			set chdir [file-build [file dirname [lindex $ruletarget 0]]]
-			enter-new-dir [file-normalize $chdir] $ruletarget
+			enter-new-dir [file-normalize $chdir]
 		} else {
-			enter-new-dir $tmake(topsrcdir) $ruletarget
+			enter-new-dir $tmake(topsrcdir)
 		}
 
 		if {$tmake(norun)} {
