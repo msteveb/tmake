@@ -4,11 +4,11 @@
 # Module which provides version, usage, help
 
 proc show-version {} {
-	return "tmake v$::tmake(version)"
+    return "tmake v$::tmake(version)"
 }
 
 proc show-help {argv} {
-	puts \
+    puts \
 {Usage: tmake [options] [targets]
 
    tmake builds projects based on simple, flexible build descriptions.
@@ -17,7 +17,7 @@ proc show-help {argv} {
    -C|--directory=<dir>  Run as if from directory <dir>
    -v|--verbose          Force V=1 mode when building to show commands executed
    -n|--dry-run          Show commands which would have been run
-   -N                    Like -n, but don't show detailed commands
+   -N|-nn                Like -n, but don't show detailed commands
    --force               Treat all targets to be built as out-of-date
    -t|--time             Show build time even if nothing was run
    -q|--quickstop        Stop on the first build error
@@ -40,8 +40,8 @@ proc show-help {argv} {
    --rulebase            Output the builtin rulebase
    --genie               Create sample project.spec and build.spec files
 }
-	puts [show-version]
-	exit 0
+    puts [show-version]
+    exit 0
 }
 
 # If not already paged and stdout is a tty, pipe the output through the pager

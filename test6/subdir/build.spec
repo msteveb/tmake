@@ -10,11 +10,14 @@ IncludePaths include
 Executable --install=/bin blah blah.c
 Generate {blah.c include/blah.h} make-two {} {
 	note "MakeTwo $target"
-	writefile tempfile.dat "This is a temp file"
+	puts "Creating $build/tempfile.dat"
+	writefile $build/tempfile.dat "This is a temp file\n"
 	run sh $script $target
 } -onerror {
 	note "MakeTwo failed, so cleaning up..."
-} -clean tempfile.dat
+	puts "file delete $build/tempfile.dat"
+	file delete $build/tempfile.dat
+}
 
 # Test the -nofail support
 Phony failtest -nofail -do {

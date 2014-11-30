@@ -458,11 +458,8 @@ proc get-test-id {} {
 proc run-test-command {testcommand} {
 	setup-test-env
 
-	# Get these values from the calling scope and set in the environment
-	uplevel 1 {
-		setenv SRCDIR $SRCDIR
-		setenv TOPBUILDDIR $TOPBUILDDIR
-	}
+	# Get this value from the calling scope and set in the environment
+	uplevel 1 {setenv SRCDIR $SRCDIR}
 	incr ::tmakedrb(testruncount)
 	run $testcommand
 	incr ::tmakedrb(testpasscount)

@@ -13,4 +13,10 @@ echo "Building $c and $i"
 echo "#include \"`basename $i`\"" >$c
 echo "int main() { return 1; }" >>$c
 echo "#define header" >$i
+
+if [ -n "$FAIL" ]; then
+	echo 1>&2 "Testing failure"
+	exit 1
+fi
+
 echo done

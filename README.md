@@ -1,6 +1,7 @@
 Overview of tmake
 -----------------
-Currently implementation is a usable proof-of-concept.
+tmake is a usable, proof-of-concept, advanced build system.
+
 It has perfectly acceptable performance for small projects (~1000 files),
 but slows down beyond that. It also has no support for parallel builds.
 
@@ -15,7 +16,7 @@ What it does have:
   - Rebuilding if build commands change
   - Rebuilding if the target is to be built by a different rule
   - A file is "up-to-date" if it rule runs even if the file didn't change (virtual mtime)
-- Good support for "generators" which generate 
+- Good support for "generators" which generate sources
 - Dynamic dependency support, including caching dependencies and support for generated files
 - Excellent debugging facilities to identify exactly what is occuring and why
 - 'tmake --find' to find specify rules
@@ -23,52 +24,19 @@ What it does have:
 - Non-recursive
 - Automatic creation of directories as required
 - Common operations (mkdir, rm) can be done without forking a process
-- Bootstraps with no external tools, just a C compiler
 - Add additional dependencies, bound vars, etc. to existing rules
-- Generates stub Makefiles to easily allow 'make' from any subdirectory
+- tmake --genie for fast-start
+- Requires jimsh, the Jim Tcl interpreter to run
 
 Essentially almost everything listed here: http://www.conifersystems.com/whitepapers/gnu-make/
 is addressed, except performance.
 
-TODO Items
-----------
-- Documentation, especially basic --help documentation, and developer docs (e.g. known rules)
-- 'tmake --rules' would be very handy
-- tmake-genie?
-- Address known issues below, if possible
-- Do we need a -vars variant which completely replaces the var?
-- I don't think I have used define!, is it necessary?
-- Lots of windows support
-  - 
-
-Known Issues
-------------
-Under Tcl, it is not possible to interrupt ^C, so that make cache
-is not saved if the build is interrupted. Should the cache be saved periodically?
-The same is true when running the non-msys jimsh under the msys shell. 
-- Could package require TclX (but that doesn't seem to be available for Tcl 8.5 on ubuntu)
-
-Passing options to tmake via make O=... is a bit awkward.
-
-The pure scripting option is nice, but I think we really have to create an executable
-which embeds Jim Tcl. That way we can speed up some processing which is currently
-too slow in Tcl.
-
-Installing tmake in the path is not a perfect alternative for
-the make wrappers since:
-- tmake doesn't know where it is for out-of-build trees
-- and thus it doesn't scope targets to the current subdir
-
-Slows down with a large project
-
-No support for non-unix platforms, e.g. msvc
-
-Changing --build means that all orphans are forgotten since
-the cached targets only include the path relative to $BUILDDIR.
-
-
 Simple things are simple
 ------------------------
+
+Consider the following example of building a library and an executable
+that links against they library. The build descriptions is simple, succinct
+and has a minimum use of punctuation.
 
 # Set CFLAGS for all subsequent sources
 CFlags -DPOLARSSLTEST
@@ -86,6 +54,15 @@ Lib polarssl {
 # Automatically links against polarssl
 Executable polarssl main.c
 
+TODO Items
+----------
+- Documentation, especially basic --help documentation, and developer docs (e.g. known rules)
+- 'tmake --rules' would be very handy
+- Address known issues below, if possible
+- Do we need a -vars variant which completely replaces the var?
+- I don't think I have used define!, is it necessary?
+- Lots of windows support
+
 High Level vs Low Level Rules
 -----------------------------
 The core tmake essentially has a single command to create a rule, target.
@@ -98,19 +75,21 @@ ArchiveLib, SharedObject, Phony, Install and more.
 The default rulebase may be extended or replaced, or rules tweaked
 with the low level 'target' if required.
 
-Differences with make
----------------------
-- Differenentiates between rule 'inputs' and 'dependencies'
-- Allows binding of values to variables during the definition phase which are
-  then available to the command(s) at run time.
-- Commands are Tcl scripts, which means that many operations do not require a fork/exec
-- The 'run' built-in runs external commands
-- Commands used to build a target a cached so that 
-- Automatic directory creation
-
 Documentation for the 'target' command
 --------------------------------------
-Explain the '-key values...' structure of arguments to 'target'.
+All build rules are constructed using the 'target' command:
+
+  target ruletarget arg...
+
+e.g.
+
+  target blah -depends <lib>foo -inputs a.o b.o -do { run $CC -o $target $inputs }
+
+Arguments to 'target' take the form '-key1 values... -key2 ...', where all subsequent
+values are considered to belong to a key until the next key. This approach make
+it very easy to compose rules by simply appending keys and values.
+
+Note that many keys do not expect any values.
 
 -phony
 	Marks the target as phony. A phony target is considered to always need building
@@ -119,19 +98,15 @@ Explain the '-key values...' structure of arguments to 'target'.
 -nofail
 	Failure of the '-do' commands for the rule is ignored.
 
--replace
-	First discards any previous rule for the target.
-	Note: I have never used this
-
--add
-	Normally only one rule for a target may contain -do. With -add, -do commands
-	may be added to an existing rule.
-	Note: I have never used this
+-onerror command
+	Tcl script to run if the command fails. Allows for cleanup, e.g. of
+	temporary files.
 
 -chdir
 	Normally all commands are run from the top level *source* directory.
-	If -chdir is given, commands for this target are run from the top level *build* directory
-	(objdir) instead. This is most often used for unit tests or generators which make assumptions
+	If -chdir is given, commands for this target are run from the local *build* directory
+	(objdir) instead. i.e. for a -chdir rule in directory 'abc', the rule is run from objdir/abc.
+	This is most often used for unit tests or generators which make assumptions
 	about the current directory. It should be avoided where possible.
 
 -nocache
@@ -139,19 +114,14 @@ Explain the '-key values...' structure of arguments to 'target'.
 	uses -nocache for performance reasons since install targets are never used
 	as dependencies.
 
--inputs targets
+-inputs args
 	List of files/targets which are used by the -do command to create the target.
 	These targets are available to the -do command as $inputs
 
--depends targets
+-depends args
 	List of files/targets upon which this target depends.
-	These targets are available to the -do command as $targets
+	These targets are available to the -do command as $depends
 	Note that -inputs are automatically added to -depends
-
--clean filenames
-	List of files/targets which should be deleted after the -do commands run.
-	Used to clean up temporary files
-	Note: I have never used this
 
 -msg command
 	Tcl script to run when the rule is invoked to build the target.
@@ -160,15 +130,11 @@ Explain the '-key values...' structure of arguments to 'target'.
 
 	  -msg {note Cc $target}
 
--onerror command
-	Tcl script to run if the command fails. Allows for cleanup, e.g. of
-	temporary files.
-	Note: I have never used this
-
 -do command
 	Tcl script to run when the target needs to be built.
 	Unless the target is phony, the -do command *must* create the given target(s).
 	The standard variables are set for the rule ($inputs, $target, etc.)
+	See 'Variables available to commands'
 
 -dyndep command-prefix
 	Tcl command prefix invoked to extract dynamic dependencies from each of the dependencies.
@@ -180,18 +146,18 @@ Explain the '-key values...' structure of arguments to 'target'.
 	Before invoking Tcl commands associated with -do, -msg, -onerror and -dyndep, variables (defines) are
 	created/set according to any bound variables. For example, in the following rule, $C_FLAGS
 	and $INCPATHS are set to the given values before the -dyndep and -do scripts are run.
-	Compare this with $CCACHE, $CC and $CFLAGS which are global variables (defines) which are the
-	same for all rules.
+	Compare this with $CCACHE, $CC and $CFLAGS which are global variables (defines),
+	and thus are the same for all rules.
 
-	Note that if a -var is specified multiple times (possibly in multiple rules), the values accumulate
+	Note that if a name is specified with -var multiple times (possibly in multiple rules), the values accumulate
 	(with a space separator). Condsider the rule created by:
 	
 	  Objects auth.app.c
 
 		authapp/auth.app.o: authapp/auth.app.c
-		dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+		dyndep=...
 		local=authapp
-		  var C_FLAGS=-Wall -g -Os -fstrict-aliasing -Werror -D_GNU_SOURCE -std=gnu99 -Iinclude -Ipublish/include -Iauthapp
+		  var C_FLAGS=...
 		  var INCPATHS=include publish/include authapp
 				run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 
@@ -202,15 +168,24 @@ Explain the '-key values...' structure of arguments to 'target'.
 	Now the new rule is:
 
 		authapp/auth.app.o: authapp/auth.app.c
-		dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+		dyndep=...
 		local=authapp
-		  var C_FLAGS=-Wall -g -Os -fstrict-aliasing -Werror -D_GNU_SOURCE -std=gnu99 -Iinclude -Ipublish/include -Iauthapp
+		  var C_FLAGS=...
 		  var INCPATHS=include publish/include authapp axtls
 				run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 
 -getvars name ...
 	Similar to -vars, except that the value of the variable is taken from current value
 	of the global variable (define)
+
+The following options are experimental and may be removed in the future.
+
+-replace
+	First discards any previous rule for the target.
+
+-add
+	Normally only one rule for a target may contain -do. With -add, -do commands
+	may be added to an existing rule.
 
 On Directories
 --------------
@@ -225,24 +200,23 @@ Normally this works well, but some tasks, especially tests and generator command
 may expect to find support files locally, or find output files in the local source
 or target directory. tmake supports this as follows:
 
-1. 'target -chdir' causes the task '-do' to be run from the top build directory.
+1. 'target -chdir' causes the task '-do' to be run from the local build directory.
 
 The following are all implemented in rulebase.default
 
-2. Test targets set the $SRCDIR environment variable to point to the local source dir.
+2. Test targets (from rulebase.default) set the $SRCDIR environment variable
+   to point to the local source dir.
 
    Consider the following two tasks in local subdir, "dir":
 
    Test test1
    Test --chdir test2
 
-   In the first case, $SRCDIR will be "dir", while in the second it will be "../dir"
+   In the first case, $SRCDIR will be "dir", while in the second it will be "../../dir"
    If the test program/script needs to reference support input files in can find them relative to $SRCDIR.
 
 3. Similarly, 'Generate' is given the '--chdir' flag, it creates a 'target -chdir' rule and also
    uses this directory specification to find the script or interpreter.
-
-4. Note that 'Executable --test' alwasy specifies 'Test --chdir'
 
 Environment Variables
 ---------------------
@@ -251,8 +225,13 @@ $TOPSRCDIR   - absolute path to the top of the source tree (where project.spec l
 $TOPBUILDDIR - absolute path to the top of the build tree (by default, $TOPSRCDIR/objdir)
 $BUILDDIR    - relative build directory, specified by --build (by default, objdir)
 
-setenv
-getenv
+rulebase.default also sets the following for Test targets:
+
+$SRCDIR      - relative source directory. Depends on with -chdir is in effect.
+
+Environment variables may be set with 'setenv' and retrieved with 'getenv'
+
+Note that the environment is saved/restored for each '-do' command.
 
 Variables available during parsing
 ----------------------------------
@@ -261,11 +240,13 @@ Variables available to commands
 -------------------------------
 In the -do clause of a command, the following variables are defined.
 
-$target  - The target(s) of the rule
-$inputs  - Any files mentioned with -inputs
-$depends - Any files mentioned with -depends, plus any mentioned with -inputs
-$local   - The (relative) directory associated with the rule
-$build   - The (relative) build directory associated with the rule - outputs should go here
+$targetname  - The name of the target(s) of the rule
+$target      - The path to the target(s) of the rule ($BUILDDIR/$targetname)
+$inputs      - Any files mentioned with -inputs
+$depends     - Any files mentioned with -depends, plus any mentioned with -inputs
+$local       - The (relative) directory associated with the rule
+$build       - The (relative) build directory associated with the rule - outputs should go here
+$local       - The name of the local subdirectory
 
 In addition, any variables defined with 'define' (including variants) are available.
 
@@ -310,10 +291,6 @@ be resolved via the alias to the underlying target. Note that the alias
 name can by anything, but the "<type>name" convention is used to avoid
 conflict with real files or targets.
 
-Makefile wrapper
-----------------
-- Created by rulebase.default in Prolog/Epilog
-
 Selecting files by globbing
 ---------------------------
 Glob, Glob --recursive, etc.
@@ -347,9 +324,11 @@ tmake maintains a cache of all targets which have previously been built.
 This allows tmake to "know" when rules change such that a previous target
 is no longer a target, and thus the old file can be discarded.
 
-The low level commands, get-orphan-targets and discard-orphan-targets are wrapped
-by the high level phony target in rulebase.default, clean-orphans. This target can
-be run manually, or automatically via the clean, distclean and test targets.
+Note that rulebase.default overrides delete-orphan-files to move orphans
+to .trash/ instead of deleting them immediately. This is useful if a generated
+file is replaced with a source file and the source is misidentified as an orphan.
+The deleted orphan can be manually reinstated from .trash/, until 'tmake clean' is run,
+at which point all files from .trash/ are deleted.
 
 Consider the build.spec:
 
@@ -427,7 +406,50 @@ When using 'target' directly, use of [make-local].
 
 publish
 -------
-The concept of publishing binaries, libraries and headers for sharing 
+Normally any files referred to in a build.spec relate to files found in that directory,
+but sometimes files need to be shared across directories.  Typically this will be:
+- Header files
+- Host executables and scripts
+- Libraries
+
+Instead of having each command that needs these things refer
+to the various directories that contain them, we "publish" these
+shared files to a top level directory, such as 'publish'
+Ideally we do this with hard links (if supported) so that
+if an error occurs (say in a header file) and the file is edited,
+it will be the original file which is edited.
+If hard links aren't supported, soft links or simply copying will work too.
+
+Unlike Install where the installed files are never dependencies, these
+published files become the dependency via the chain:
+
+  dir2/target.o <- publish/include/file.h <- dir1/file.h
+
+A typical scenario is where a library and some header files need to be exported
+from a directory. build.spec would look something like this.
+
+  PublishIncludes public1.h public2.h
+  # Private header files are not published
+  Lib --publish my file1.c file2.c file3.c
+
+This will publish publish/include/{public1,public2}.h and publish/lib/libmy.a where
+they will be available for other directories.
+
+To publish an executable (say, needed during the build):
+
+  HostExecutable --publish generate generate.c
+
+Now the directory which uses these published files does something like:
+
+  # Note that published header files are found automatically
+
+  Generate table.c <bin>generate input.txt {
+    run $script $inputs >$target
+  }
+  Executable xyz main.c table.c <lib>my
+
+Here we use <bin> and <lib> selectors to refer to the corresponding published targets.
+
 Note that the publish dir can be changed from the project.spec file. e.g.
 
   define PUBLISH .publish
@@ -477,14 +499,6 @@ Out-of-tree Builds
 Discuss builddir, srcdir, --build, -chdir and implications
 In particular, note that rules run from $TOPSRCDIR and should
 create targets under $build
-
-make wrapper
-------------
-Discuss gmake, bsdmake wrappers via generated Makefiles
-
-make /clean vs make clean
-tmake vs make
-passing options to tmake via make
 
 Dynamic Dependency Checking
 ---------------------------
@@ -563,7 +577,6 @@ Debugging
 Explain the various debugging "types" and how to use them when things go wrong.
 
 Explain tmake --find=rule
-
 Explain tmake --showcache
 
 Jim Tcl vs Tcl
@@ -571,9 +584,7 @@ Jim Tcl vs Tcl
 Downside of Tcl is that quitting the build with ^C fails to write the make cache.
 One approach is to write the cache after every change!
 
-Bootstrapping tmake
--------------------
-Same explanation of tclsh/jimsh vs jimsh0 as for autosetup
+Discuss required version of Jim Tcl
 
 Variables
 ---------
@@ -605,6 +616,7 @@ Also, the target status is reset after every target.
 clean, distclean and clean-orphans are special
 ----------------------------------------------
 In that they don't causing building of the Load targets.
+Additional clean targets can be added with 'add-clean-targets'
 
 Reinvoking the Build
 --------------------
@@ -759,8 +771,6 @@ include/polarssl/config.h
   because it wanted to generate output in the current dir.
   I changed it slightly to take the full path to the target on the command line.
 
-=> Need support for shared lib
-   - Now done
 => polarsslwrap does not work on Windows because of the lack of fork, exec, poll
 => Need to add all possible options to auto.def, including dependencies
 
@@ -787,3 +797,39 @@ fossil
 ~~~~~~
 - A number of HostExecutable generators are used
 - Most of these could be easily replaced with Tcl commands or scripts
+
+Why Jim Tcl?
+------------
+Explain the use of Tcl.
+Then why not big Tcl?
+- no ^C support
+- array/dict problem
+
+Differences with make
+---------------------
+- Differentiates between rule 'inputs' and 'dependencies'
+- Allows binding of values to variables during the definition phase which are
+  then available to the command(s) at run time.
+- Commands are Tcl scripts, which means that many operations do not require a fork/exec
+- The 'run' built-in runs external commands
+- Commands used to build a target a cached so that if commands change, rules are re-run
+- Automatic directory creation
+
+
+Future Plans
+------------
+While the proof-of-concept works very well, performance is an issue.
+I expect that a production version will use a C/C++ implementation for the
+core build engine, with an embedded Jim Tcl interpreter for scripting.
+
+This should also make it easier to support parallel builds.
+
+Known Issues
+------------
+Slows down with a large project
+
+No support for non-unix platforms, e.g. msvc
+
+Changing --build means that all orphans are forgotten since
+the cached targets only include the path relative to $BUILDDIR.
+

@@ -1,3 +1,8 @@
+TODO
+====
+
+Tracking External Dependencies
+------------------------------
 Consider caching the size, location and timestamp of
 any commands which are run via exec.
 
@@ -5,12 +10,21 @@ If any of these change, dependent commands need to be re-run.
 This can be done in 'proc run', but means that we need to be able to interpret
 that PATH and determine if something is really executable.
 
-* Depends and Phony should refer to local files for -depends, and possibly -inputs.
-  Could add a -local flag which means that the next -depends or -inputs refers
-  to local files. How will this work in practice? What about the target?
-  What if we want a non-local target?
-* change Clean to add-clean and create Clean and DistClean for external consumption
-* It is hard to chain (e.g.) Objects, Link, Executable if the input is local but the result is global
+Local vs non-local
+------------------
+It is hard to chain (e.g.) Objects, Link, Executable if the input is local but the result is non-local.
+
+Also, Depends and Phony currently use non-local specifications for -depends and -inputs.
+Is there some way to allow local names to be easily used?
+
+Cleaning files from the source tree
+-----------------------------------
+
+Sometimes rules will create files in the source tree.
+e.g. a ctags rule
+
+There is no easy way to clean those files
+
 ** make clean/distclean should not require configure to be run
    - currently this is an ugly hack to check for known cleaning targets: clean, distclean, clean-orphans
 ** make distclean should remove stub Makefiles (or else tmake --clean should do this)
@@ -20,172 +34,6 @@ that PATH and determine if something is really executable.
 * Building in a subdir does not build targets in subdirs of that subdir.
   e.g. subdir/clean does not invoke subdir/unit/clean
   maybe this can be done by depending subdir/clean on subdir/unit/clean instead of clean on subdir/unit/clean
-
-Agressively cleaning orphans
-----------------------------
-Leaving orphan files in the tree can cause unwanted behaviour.
-For example, a shared library may now be created as an archive library,
-but the linker may still pick up the shared library in the tree.
-
-To address this, orphans are cleaned automatically before any non-cleaning
-target is run.
-
-There is one consequence of this. If a target was previously generated but
-is now intended to be a source file, deleting the orphan is undesirable.
-I will consider moving orphans to .trash instead of deleting the directly.
-Then make clean can empty .trash
-
-Which directory as cwd?
------------------------
-My inclination is to:
-1. use TOPDIR as the cwd for rules
-The other options are:
-2. use current (local) subdir as cwd and use "../../dir" for other dirs
-3. always cd to the dir for the rule
-
-Options (3) probably means adjusting paths all the time.
-
-If a target is '-chdir', should $target, $inputs and $depends all be adjusted
-for the new dir? Or just $target and $inputs?
-
-Performance
------------
-Should cache the results of dyndep header scan. [DONE]
-In order to use the cache, we need:
-- command needs to be identical
-- real mtime of the file needs to be unchanged
-- cache the results of header-scan-regexp, not header-scan-regexp-recursive
-  so we don't need to care if the targets or incpaths change
-
-When to discard the cache results?
-- when the target becomes an orphan
-
-Reloading build definitions
----------------------------
-It's possible to run a command which updates the build definition,
-probably via Load.
-
-The idea is to detect when one of these files is modified and
-reload the build definition and restart.
-
-This is currently done partially manually.
-After parsing, any targets of Load are built.
-If anything changes, parsing is restarted.
-
-Publish
--------
-The idea here is that normally any files referred to in a build.spec
-relate to files found in that directory.
-
-But sometimes files need to be shared across directories.
-Typically this will be:
-- Header files
-- Host executables and scripts
-- Libraries
-
-Instead of having each command which needs these things refer
-to the various directories which contain them, we "publish" these
-shared files to a top level directory, such as _publish
-Ideally we do this with hard links (if supported) so that
-if an error occurs (say in a header file) and the file is edited,
-it will be the original file which is edited.
-If hard links aren't supported, soft links or simply copying will work too.
-
-Unlike Install where the installed files are never dependencies, these
-published files become the dependency via the chain:
-
-  dir2/target.o <- publish/include/file.h <- dir1/file.h
-
-A typical scenario is where a library and some header files need to be exported
-from a directory. build.spec would look something like this.
-
-  PublishIncludes public1.h public2.h
-  # Private header files are not published
-  Lib --publish my file1.c file2.c file3.c
-
-This will publish publish/include/{public1,public2}.h and publish/lib/libmy.a where
-they will be available for other directories.
-
-To publish an executable (say, needed during the build):
-
-  HostExecutable --publish generate generate.c
-
-Now the directory which uses these published files does something like:
-
-  # Note that published header files are found automatically
-
-  Generate table.c [FindBin generate] input.txt {
-    run $script $inputs >$target
-  }
-  Executable xyz main.c table.c [FindLib my]
-
-Here FindBin and FindLib return the path to the published files.
-
-Currently it isn't done this way.
-One of the reasons is that the appropriate build.spec may not have been parsed,
-so it's not clear where to search.
-Instead, Generate assumes that if the file or target isn't found locally it
-must be in publish/bin, and non-local libs are always searched in publish/lib.
-
-This may be a problem when we have both shared and archive libs.
-In that case, we will need to create a dependency on (.e.g publish/lib/libname.stamp)
-but link with -Lpublish/lib -llibname
-
-So currently we have:
-
-  Generate table.c generate input.txt {
-    run $script $inputs >$target
-  }
-  UseLibs my
-  Executable xyz main.c table.c
-
-Out of tree build
------------------
-Builds occur in a separate tree.
-Source files are located and the full or relative path is used in rules.
-($target in build dir, $inputs in either source or build dir)
-
-Here is the idea:
-- cwd is the top of the *build* tree (call this $topblddir)
-- stub Makefile includes a reference to the source dir containing project.spec
-  (call this $topsrcdir)
-
-  tmake -P <dir-containing-project.spec> ...
-
-- All targets are relative to $topblddir
-
-
-load-build-description loads $topsrcdir/project.spec and $topblddir/.makecache
-
-Then build.spec files are loaded from $topsrcdir down.
-
-$PUBLISH is $topblddir/publish
-Default install DESTDIR is still _install
-
-In [build], if the arg is not a target, it must exist in the source dir.
-If it is a target, we build it in the build dir.
-This is a general rule which should be true for everything, including
-when scanning for header files.
-
-[find-file] needs to do this. Can we use this for everthing, or
-do we need a separate proc.
-
-Install
--------
-Explain the install philosophy
-
-* We have $local/clean and $local/distclean but not $local/install
-  This is a bit awkward
-
-Build from any directory within the tree
-----------------------------------------
-Stub makefiles, search for project.spec
-
-- If tmake is installed as autosetup/tmake, it won't be in the PATH
-  so it is hard to run with debugging options, etc.
-  So normally we would have to run it via the stub Makefile. 
-  Do we create a tmake wrapper at the project top?
-  Do we run "make M="-dgn -t -p mytarget"?
 
 Integrating foreign projects
 ----------------------------
@@ -207,12 +55,6 @@ automake
 Explain how to do automake-like things.
 Also migration from automake
 
-Cross Compilation
------------------
-Support for host vs target rules, defines and targets
-is weak. Consider making two entire sets of everything, or
-add the notion of a "context" that includes all of these things.
-
 Installation
 ------------
 It is useful to be able to install different classes of things.
@@ -233,7 +75,7 @@ tmake TODO
   problems at the cost of being a bit ugly.
   Ideally we could have a trace callback on access to an undefined variable.
   But Tcl can't do this anyway :-(
-* Properly manage the precedence of vars:
+* Properly manage/document the precedence of vars:
   - command line => make these as "fixed"
   - environment => these need to be made fixed with 'import'
   - Load settings.conf => use define to override everything which is not "fixed"
@@ -241,81 +83,11 @@ tmake TODO
 * I think I plan to set all variables and execute rules in a separate interpreter
   - But what about parsing of rules? Currently we rely on having access to variables
     in build.spec and rulebase.
-* Have a 'tmake -init' which will generate stub Makefiles (if they don't exist)
-  - This should probably be run by configure
-  - Currently they are always created if they don't exist
-* Work out a good arrangement for the distribution of:
-  - low level rules (tmake)
-  - high level rules (lib/rulebase.default or rulebase.spec)
-  - default rule base (lib/rulebase.default)
-  - local customisations (rulebase.spec)
-* Add parallel build support.
-  - With exec &, and os.wait
-  - This is actually quite hard to do
-* Support Test
-  - Got something. Do we need more?
-  - cd [make-local .]?
-* Support shared libraries
-* Do proper getopt processing for the tmake command line
-* Need support for host executables with (at least):
-  - HostExecutable
-  - HostCFlags
-  - Use CC_FOR_BUILD
-* rename the project to autoproj or autoproject when it is nearing the capabilities
-  for automake (although there are projects by both of those names)
+* Alternatively, do it all in a namespace
+* Consider "real" getopt processing for the tmake command line
 * Load should probably load values into a ::tmake(config) dictionary and
   ifconfig should look there
   - Perhaps it is possible to also import certain of these settings (by glob)
     as global variables
 * archive libraries uses a pretty simple format.
   we could parse these libraries for timestamps directly in Tcl if required
-
-Done
-----
-* clean-orphans should not remove installed files
-* Record commands used to build targets in a cache
-* Add a version number and --version
-* Add --help
-* Add getopt and use it like automf for Executable --test --install=/blah ...
-* Need a way to specify that a single command creates multiple targets.
-  - something like: target {t1 t2 t3} ...
-  - then create an "aliases" table which points to the target: aliases(t1) -> targets(t1 t2 t3)
-  - when an alias needs to be built, lookup the rule
-* Use source location even when unable to build something to show what rules
-  were used to determine that something was needed. Perhaps look back along
-  tmake(current). This is done, but could be formatted better.
-* Scan for header file dependencies
-  - How to only notice headers we care about?
-  - Just before building abc.c, scan for headers
-  - If we have a rule for making a found header, mark it as a dependency
-  - Otherwise ignore it
-  - Note that Jam uses NOCARE to ignore these dependencies if they file doesn't exist
-    - But that causes problems when the headers are generated...
-* header scan should take include path(s) into consideration
-* Add user errors and internal errors like autosetup/automf
-* Modify to support jimsh, bootstrap jimsh and Tcl8.5
-* Support Publish* and --publish
-* How to add rules for new Object types?
-  - ObjectCFlags
-* Publish includes, libs, bins to a dir as ungristed
-* There is a problem in handling rules which run but don't update the target because
-  nothing has changed. Ideally we would record the fact that the rule had run in
-  a cache file along with the time that the rule ran. See .makecache
-* Does .makecache and tmake(cache) ever need to be cleaned up?
-  - Should record the real mtime as well as the virtual mtime.
-    If the real mtime changes (or the file disappears) we need to flush the entry
-* Add support for per-directory rules. Probably need something like Jam's <grist>
-  - except I will probably use "path/from/top" as the grist
-* Read project.spec and build.spec in subdirs
-* Allow detection of build rule dependencies (project.spec, build.spec, settings.conf)
-  and reload rules.
-
-Subdirectories
---------------
-
-Note that Jam allows the rule to capture per-rule flags.
-e.g.
-
-    CCFLAGS on $(<) += $(CCFLAGS) $(SUBDIRCCFLAGS) $(OPTIM) ;
-
-tmake does something similar with C_FLAGS and CCFLAGS.
