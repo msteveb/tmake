@@ -59,6 +59,8 @@ set tmake(addtargets) {}
 set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0 writecache 0}
 set tmake(commands-overview) {}
 set tmake(commands) {}
+# The known clean targets
+set tmake(clean-targets) {clean distclean clean-orphans}
 
 set tmakecache $tmake(emptycache)
 
@@ -286,7 +288,10 @@ proc make {argv} {
 	if {$tmake(topsrcdir) eq ""} {
 		user-error "Failed to find project.spec in any parent directory."
 	}
-	make-parse-options [readfile $tmake(topsrcdir)/tmake.opt ""]
+	if {[file exists $tmake(topsrcdir)/tmake.opt]} {
+		dputs m "tmake.opt exists, so loading command line options"
+		make-parse-options [readfile $tmake(topsrcdir)/tmake.opt]
+	}
 
 	# We want disabled debugging to be as fast as possible
 	# These are called very frequently
@@ -451,10 +456,7 @@ proc make {argv} {
 
 		set tmake(addtargets) {}
 
-		# XXX: Rules should be marked -cleaning to identify those
-		# which don't need to force projfiles to be loaded
-		# target must be a single cleaning target
-		if {$target in {clean distclean clean-orphans}} {
+		if {$target in $tmake(clean-targets)} {
 			set tmake(cleaning) 1
 		} else {
 			# Try to build all Load targets
@@ -550,6 +552,15 @@ proc add-build-targets {args} {
 proc add-project-file {filename nocare} {
 	global tmake
 	lappend tmake(projfiles) $filename $nocare
+}
+
+# @add-clean-targets target...
+#
+# Adds the targets to list of those considered to be "cleaning" targets.
+# i.e. Those that don't need to force projfiles to be loaded
+proc add-clean-targets {args} {
+	global tmake
+	lappend tmake(clean-targets) {*}$args
 }
 
 # @set-default-target target
@@ -1629,7 +1640,6 @@ proc target {ruletarget args} {
 	}
 	lappend orig(depends) {*}$info(depends)
 	lappend orig(inputs) {*}$info(inputs)
-	lappend orig(clean) {*}$info(clean)
 	incr orig(phony) $info(phony)
 	incr orig(nofail) $info(nofail)
 	incr orig(chdir) $info(chdir)
@@ -1712,7 +1722,7 @@ proc parse-rule-args {&arglist &opt} {
 #
 proc parse-rule {target arglist} {
 	set info {
-		inputs {} depends {} clean {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
+		inputs {} depends {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
 		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
 	}
 
@@ -1738,9 +1748,6 @@ proc parse-rule {target arglist} {
 			}
 			inputs - depends {
 				lappend info($opt) {*}[join $optargs]
-			}
-			clean {
-				set info($opt) $optargs
 			}
 			do - msg - dyndep - onerror - alias {
 				if {[llength $optargs] > 1} {
@@ -2338,12 +2345,6 @@ proc build {target} {
 			pputs ""
 			set tmake(exitcode) 2
 			set rc 5
-		}
-
-		# Always delete $t(clean) files after the rule has run
-		if {[llength $t(clean)] && !$tmake(norun)} {
-			dputs m "file delete $t(clean)"
-			file delete {*}$t(clean)
 		}
 
 		# Did the rule make the targets?
