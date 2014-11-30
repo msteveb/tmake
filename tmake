@@ -11,7 +11,7 @@ set tmake(version) {0.5 (27-Nov-2014)}
 set tmake(cacheversion) 3
 set tmake(debug) 0
 
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 D 0 C 0 T 0 B 0 v 0 x 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 l 0 D 0 C 0 T 0 B 0 v 0 x 0}
 set tmake(debughelp) {
 	* "Enable all debug"
 	? "Display help for debug types"
@@ -26,6 +26,7 @@ set tmake(debughelp) {
 	G "List goals (targets) as they are attempted"
 	p "Print rules while parsing"
 	m "Miscellaneous (locating and parsing of files)"
+	l "Locating sources and targets"
 	c "Configuration expressions via ifconfig"
 	C "Cache handling"
 	T "Timing"
@@ -1061,7 +1062,7 @@ proc dputs {types msg {indent 1}} {
 proc dputs-null {args} {}
 
 # Like dputs, but msg needs to be expanded with subst
-# This is used for messages which may be expensive to evalue
+# This is used for messages which may be expensive to evaluate
 proc dputxs {types msg {indent 1}} {
 	if {[debug-is-set $types]} {
 		dputs $types [uplevel 1 [list subst $msg]]

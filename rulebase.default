@@ -612,7 +612,7 @@ proc find-project-bin {bin args} {
 	set localbin [make-local $bin]
 
 	if {[is-target? $localbin]} {
-		dputxs m {[find-source-location]: find-project-bin: $localbin is a local target}
+		dputxs l {[find-source-location]: find-project-bin: $localbin is a local target}
 		if {$opts(-chdir)} {
 			set result [list $localbin ./$bin]
 		} else {
@@ -621,7 +621,7 @@ proc find-project-bin {bin args} {
 			set result [list $localbin [build-dir]/$localbin]
 		}
 	} elseif {[regexp {^<bin>(.*)} $bin -> basename]} {
-		dputxs m {[find-source-location]: find-project-bin: $bin is a publish target}
+		dputxs l {[find-source-location]: find-project-bin: $bin is a publish target}
 		set publishbin [publish-prefix bin]$basename
 		if {$opts(-chdir)} {
 			# We will be running in [file-build [local-dir]],
@@ -638,7 +638,7 @@ proc find-project-bin {bin args} {
 			set result [list $bin [file-build $publishbin]]
 		}
 	} elseif {[file exists $localbin]} {
-		dputxs m {[find-source-location]: find-project-bin: $localbin exists as source}
+		dputxs l {[find-source-location]: find-project-bin: $localbin exists as source}
 		if {$opts(-chdir)} {
 			# Need to adjust the interp to account for chdir
 			set result [list $localbin [file-src-relative $localbin]]
@@ -646,13 +646,13 @@ proc find-project-bin {bin args} {
 			set result [list $localbin $localbin]
 		}
 	} elseif {$opts(-optional)} {
-		dputxs m {[find-source-location]: find-project-bin: $bin is assumed to be external}
+		dputxs l {[find-source-location]: find-project-bin: $bin is assumed to be external}
 		set result [list "" $bin]
 	} else {
 		# Not found
 		dev-error "$bin is neither a local nor a published (<bin>) target"
 	}
-	dputxs m {[find-source-location]: find-project-bin returning $result}
+	dputxs l {[find-source-location]: find-project-bin returning $result}
 	return $result
 }
 
