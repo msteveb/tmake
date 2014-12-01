@@ -125,6 +125,25 @@ proc file-join {dir path} {
 	file join $dir $path
 }
 
+if {"link" in [file -commands] && 0} {
+	alias file-link file link
+} else {
+	proc file-link {{-symbolic|-hard -hard} dest src} {
+		set opt ${-symbolic|-hard}
+		switch -glob -- $opt {
+			-h* {
+				exec ln $src $dest
+			}
+			-s* {
+				exec ln -s $src $dest
+			}
+			default {
+				return -code error "bad option \"$opt\": must be -hard, or -symbolic"
+			}
+		}
+	}
+}
+
 ##################################################################
 #
 # Directory/path handling
