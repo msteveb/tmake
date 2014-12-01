@@ -771,6 +771,11 @@ proc AutoSubDirs {onoff} {
 }
 
 proc SubDirs {args} {
+	foreach dir $args {
+		if {![file exists $dir/build.spec]} {
+			dev-error "Subdirs: No $dir/build.spec found"
+		}
+	}
 	lappend ::tmake(subdirs) {*}$args
 }
 
