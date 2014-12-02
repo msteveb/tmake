@@ -164,6 +164,10 @@ Used variables: CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation
 # PROLOG/EPILOG HOOKS
 # ==================================================================
 proc BuildSpecProlog {} {
+	global tmakedrb
+
+	show-this-rule [local-dir]
+
 	# Local phony targets build from the current directory down
 	if {[local-prefix] ne ""} {
 		set parentprefix [make-prefix [file dirname [local-dir]]]
@@ -178,11 +182,17 @@ proc BuildSpecProlog {} {
 		clean-target [make-local distclean] DistClean
 	}
 
-	# XXX: Is there ever a reason to *not* include the current directory?
+	# Capture these variables
+	foreach i {INCPATHS C_FLAGS CXX_FLAGS} {
+		dict set tmakedrb $i [get-define $i]
+	}
+
+	# This can be removed with IncludePaths --reset
 	IncludePaths .
 }
 
 proc BuildSpecEpilog {} {
+	show-this-rule [local-dir]
 	global tmake
 
 	# Does subdir/all have any dependencies? If not, make it depend on subdir/libs (if that rule exists)
@@ -1085,13 +1095,21 @@ XXX
 }
 
 rule IncludePaths {args} {
-IncludePaths ?--build? ?--source? paths...
+IncludePaths ?--reset? ?--build? ?--source? paths...
 
 XXX
 } {
 	show-this-rule
 
-	getopt {--build --source args} args
+	getopt {--reset --build --source args} args
+
+	if {$reset} {
+		global tmakedrb
+		# Reset INCPATHS, C_FLAGS and CXX_FLAGS to their defaults
+		foreach i {INCPATHS C_FLAGS CXX_FLAGS} {
+			define $i [dict get $tmakedrb $i]
+		}
+	}
 
 	if {!$build && !$source} {
 		# No options means both
