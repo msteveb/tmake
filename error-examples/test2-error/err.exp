@@ -1,0 +1,3 @@
+build.spec:2: Error: invalid command name "blah"
+
+*** Error: Targets failed to build

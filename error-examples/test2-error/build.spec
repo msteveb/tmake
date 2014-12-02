@@ -1,0 +1,3 @@
+Phony all -do {
+	blah
+}

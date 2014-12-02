@@ -1,0 +1,7 @@
+5 Error Scenarios
+
+1. SIGPIPE received because stdout is closed
+2. Error thrown from 'make'
+3. Error thrown from 'make' during init (before error-stacktrace is defined)
+4. Error thrown during summary output
+5. No error
