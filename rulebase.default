@@ -717,7 +717,8 @@ The following options are supported:
 		} else {
 			Test $target
 		}
-	} elseif {!$nobuild} {
+	}
+	if {!$nobuild} {
 		Phony all $localtargetexe
 	}
 }
