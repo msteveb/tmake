@@ -1281,10 +1281,12 @@ proc define {name args} {
 		} else {
 			set value 1
 		}
-		#dputs c "define $name $value"
+		#dputs v "define $name $value"
 		dict set ::tmake(defines) $name $value
 		# Ensure that the value is visibile the current spec file
 		uplevel #1 [list set $name $value]
+	} else {
+		dputs v "define $name => not overwriting fixed value"
 	}
 }
 
@@ -1319,10 +1321,11 @@ proc define-append {name args} {
 }
 
 proc get-define {name {default ""}} {
-	#dputs v "get-define $name"
 	if {[dict exists $::tmake(defines) $name]} {
+		#dputs v "get-define $name => [dict get $::tmake(defines) $name]"
 		dict get $::tmake(defines) $name
 	} else {
+		#dputs v "get-define $name => default ($default)"
 		return $default
 	}
 }
@@ -1546,13 +1549,17 @@ proc get-rule-status {ruletarget} {
 	dict get $::tmake(rulestatus) $ruletarget
 }
 
-proc show-this-rule {} {
+proc show-this-rule {args} {
 	if {[debug-is-set p]} {
+		set extra ""
 		set where "[find-source-location] "
 		if {$where eq "unknown "} {
 			set where ""
 		}
-		dputs p "$where[info level -1]" 0
+		if {[llength $args]} {
+			set extra " [join $args]"
+		}
+		dputs p "$where[info level -1]$extra" 0
 	}
 }
 
