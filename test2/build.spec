@@ -45,6 +45,9 @@ foreach pkg $JIM_STATIC_TCL_EXTS {
 	}
 	define-append SRCS $src
 }
+ifconfig HAVE_WINDOWS {
+	define-append SRCS jim-win32compat.c
+}
 
 Install $prefix/lib/jim [suffix .tcl $JIM_TCL_EXTENSIONS]
 

@@ -22,8 +22,8 @@ use getopt glob
 # If settings are loaded via Load, these should all be ignored
 # Thus we use define?
 define? CCACHE ""
-define? CC cc
-define? CXX c++
+define? CC gcc
+define? CXX g++
 define? AR ar
 define? RANLIB ranlib
 define? STRIP strip
@@ -31,7 +31,11 @@ define? ARFLAGS cr
 define? CFLAGS ""
 define? CXXFLAGS ""
 define? LDFLAGS ""
-define? EXEEXT ""
+if {[iswin]} {
+	define? EXEEXT .exe
+} else {
+	define? EXEEXT ""
+}
 
 define? SH_CFLAGS ""
 define? SH_LDFLAGS ""
@@ -40,9 +44,13 @@ define? SH_SOEXT .so
 define? SHOBJ_CFLAGS ""
 define? SHOBJ_LDFLAGS ""
 
-define? CC_FOR_BUILD cc
+define? CC_FOR_BUILD gcc
 define? HOST_CFLAGS ""
-define? HOST_EXEEXT ""
+if {[iswin]} {
+	define? HOST_EXEEXT .exe
+} else {
+	define? HOST_EXEEXT ""
+}
 
 define? LOCAL_LIBS ""
 define? DESTDIR ""

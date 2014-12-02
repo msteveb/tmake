@@ -4,9 +4,13 @@
 # Module containing misc procs useful to modules
 # Largely for platform compatibility
 
-set tmakecompat(iswin) [string equal windows $tcl_platform(platform)]
+if {[string equal windows $tcl_platform(platform)]} {
+	proc iswin {} { return 1 }
+} else {
+	proc iswin {} { return 0 }
+}
 
-if {$tmakecompat(iswin)} {
+if {[iswin]} {
 	# mingw/windows separates $PATH with semicolons
 	# and doesn't have an executable bit
 	proc split-path {} {
@@ -32,12 +36,11 @@ if {$tmakecompat(iswin)} {
 			}
 			close $f
 		}
-		puts [list exec >@stdout {*}$args]
 		exec >@stdout {*}$args
 	}
 	# minw32 seems to use full buffering for stderr
 	stdout buffering line
-	stderr buffering line
+	stderr buffering none
 } else {
 	# unix separates $PATH with colons and has and executable bit
 	proc split-path {} {
@@ -49,6 +52,7 @@ if {$tmakecompat(iswin)} {
 	proc exec-save-stderr {args} {
 		exec >@stdout {*}$args
 	}
+	define EXEEXT .exe
 }
 
 proc lunique {list} {
@@ -84,7 +88,7 @@ proc getenv {name args} {
 	} else {
 		return -code error "environment variable \"$name\" does not exist"
 	}
-	if {$::tmakecompat(iswin)} {
+	if {[iswin]} {
 		# On Windows, backslash convert all environment variables
 		set value [string map {\\ /} $value]
 	}

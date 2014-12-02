@@ -1007,6 +1007,7 @@ proc user-error {{col lred} msg} {
 proc build-error {{col lred} msg} {
 	dputs b "BUILD ERROR: $msg"
 	puts stderr [colerr $col $msg]
+	stderr flush
 	set ::tmake(exitcode) 1
 }
 
