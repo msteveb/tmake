@@ -32,8 +32,12 @@ if {$tmakecompat(iswin)} {
 			}
 			close $f
 		}
+		puts [list exec >@stdout {*}$args]
 		exec >@stdout {*}$args
 	}
+	# minw32 seems to use full buffering for stderr
+	stdout buffering line
+	stderr buffering line
 } else {
 	# unix separates $PATH with colons and has and executable bit
 	proc split-path {} {
@@ -273,20 +277,28 @@ proc error-stacktrace {msg} {
 }
 
 proc check-signal {{clear 0}} {
-	if {$clear} {
-		set clear -clear
-	} else {
-		set clear ""
-	}
-	if {[signal check {*}$clear] ne ""} {
-		return 1
+	if {[exists -command signal]} {
+		if {$clear} {
+			set clear -clear
+		} else {
+			set clear ""
+		}
+		if {[signal check {*}$clear] ne ""} {
+			return 1
+		}
 	}
 	return 0
 }
 
+if {[exists -command signal]} {
+	alias signal-ignore signal ignore
+} else {
+	proc signal-ignore {args} {}
+}
+
 proc init-compat {} {
 	# Check these signals with check-signal
-	signal ignore SIGINT SIGTERM
+	signal-ignore SIGINT SIGTERM
 
 	# Do we have the two-argument [source]?
 	if {[catch {source filename {}}]} {
