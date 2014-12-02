@@ -89,7 +89,7 @@ runtest "In-tree shadows system header" {
 }
 
 filedef build-a2 build.spec {
-IncludePaths x y
+IncludePaths --reset x y
 Executable a a.c
 }
 
