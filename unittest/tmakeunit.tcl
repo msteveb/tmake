@@ -45,10 +45,10 @@ proc filedef {name path contents} {
 
 proc makefiles {args} {
 	foreach name $args {
-		if {![dict exists ::filedefs($name)]} {
+		if {![dict exists $::filedefs $name]} {
 			error "No such file definition: $name"
 		}
-		lassign [dict get $::filedefs($name)] path contents
+		lassign [dict get $::filedefs $name] path contents
 		file mkdir [file dirname $path]
 		writefile $path $contents
 	}
@@ -56,10 +56,10 @@ proc makefiles {args} {
 
 proc rmfiles {args} {
 	foreach name $args {
-		if {![dict exists ::filedefs($name)]} {
+		if {![dict exists $::filedefs $name]} {
 			error "No such file definition: $name"
 		}
-		lassign [dict get $::filedefs($name)] path contents
+		lassign [dict get $::filedefs $name] path contents
 		file delete $path
 	}
 }
@@ -88,7 +88,7 @@ proc runtest {description script} {
 
 proc msg {msg} {
 	puts "-------------------------"
-	puts $msg\n
+	puts "*** $msg ***\n"
 }
 
 proc checkbuilt {args} {
@@ -97,6 +97,7 @@ proc checkbuilt {args} {
 		puts stderr "Built files did not match"
 		puts stderr "Wanted: [lsort $args]"
 		puts stderr "Got:    $::builtfiles"
+		exit 1
 	}
 }
 
