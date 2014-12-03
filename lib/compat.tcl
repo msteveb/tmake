@@ -247,9 +247,15 @@ proc find-source-location {{pattern *.spec}} {
 # In this case we want to show the stack trace in user code, but not in system code
 # (unless --debug is enabled)
 #
-proc error-stacktrace {msg} {
-	# Prepend a live stacktrace to the error stacktrace, omitting the current level
-	set stacktrace [concat [info stacktrace] [lrange [stacktrace] 3 end]]
+proc error-stacktrace {msg {stacktrace {}}} {
+	if {$stacktrace eq ""} {
+		# By default, use the current error stacktrace
+		set stacktrace [info stacktrace]
+	}
+	if {$::tmake(debug)} {
+		# In debug mode, prepend a live stacktrace to the error stacktrace, omitting the current level
+		lappend stacktrace {*}[lrange [stacktrace] 3 end]
+	}
 
 	if {!$::tmake(debug)} {
 		# Only keep levels from *.spec files or with no file
@@ -277,7 +283,12 @@ proc error-stacktrace {msg} {
 		set prefix ""
 	}
 
-	return "${prefix}Error: $msg\n[stackdump $newstacktrace]"
+	if {[llength $newstacktrace]} {
+		return "${prefix}Error: $msg\n[stackdump $newstacktrace]"
+	} else {
+		return "${prefix}Error: $msg"
+	}
+
 }
 
 proc check-signal {{clear 0}} {

@@ -3,5 +3,6 @@
 set -e
 TMAKE=${TMAKE:-`pwd`/../tmake}
 for i in test*; do
+	echo "Entering directory `pwd`/$i"
 	( cd $i; ./test.sh )
 done

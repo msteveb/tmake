@@ -2320,7 +2320,7 @@ proc build {target} {
 		dputs b "Building [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget "with rule @"]"
 		lassign [run-do $vardict $t(msg)] rc msg opts
 		if {$rc != 0} {
-			build-error [error-stacktrace $msg]
+			build-error [error-stacktrace $msg $opts(-errorinfo)]
 		}
 
 		if {[debug-is-set r]} {
@@ -2420,9 +2420,9 @@ proc build {target} {
 			# Try to run onerror
 			lassign [run-do $vardict $t(onerror)] frc fmsg fopts
 			if {$frc} {
-				build-error [error-stacktrace $fmsg]
+				build-error [error-stacktrace $fmsg $fopts(-errorinfo)]
 			} elseif {$rc == 1} {
-				build-error [error-stacktrace $msg]
+				build-error [error-stacktrace $msg $opts(-errorinfo)]
 			}
 			set result -1
 		}
@@ -2658,9 +2658,9 @@ proc colerr {colour string} {
 # ENTRY POINT
 # ==================================================================
 
-if {[catch {make $argv} msg]} {
+if {[catch {make $argv} msg opts]} {
 	if {[exists -command error-stacktrace]} {
-		user-notice lred [error-stacktrace $msg]
+		user-notice lred [error-stacktrace $msg $opts(-errorinfo)]
 	} else {
 		user-notice lred $msg
 	}
