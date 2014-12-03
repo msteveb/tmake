@@ -10,8 +10,3 @@ options {
 set objdir [get-env BUILDDIR objdir]
 
 make-tmake-settings $objdir/settings.conf {[A-Z]*}
-
-if {![file exists Makefile]} {
-    # Normally this would be autosetup/tmake
-    catch {exec ../tmake --init}
-}
