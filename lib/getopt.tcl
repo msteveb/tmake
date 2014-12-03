@@ -16,7 +16,7 @@
 proc getopt {optdef argvname} {
 	upvar $argvname argv
 	if {![exists argv]} {
-		dev-error "getopt called with $argvname that does not exist in parent context"
+		parse-error "getopt called with $argvname that does not exist in parent context"
 	}
 	set nargv {}
 	set boolopts {}
@@ -40,7 +40,7 @@ proc getopt {optdef argvname} {
 					uplevel 1 [list set $name {}]
 				}
 				default {
-					dev-error "Bad getopt specification: $i"
+					parse-error "Bad getopt specification: $i"
 				}
 			}
 			continue
@@ -72,13 +72,13 @@ proc getopt {optdef argvname} {
 			# --abc=def
 			if {![info exists valopts($name)]} {
 				if {[info exists boolopts($name)]} {
-					dev-error "Option --$name does not accept a parameter"
+					parse-error "Option --$name does not accept a parameter"
 				}
-				dev-error "Unknown option: --$name"
+				parse-error "Unknown option: --$name"
 			}
 			if {$valopts($name) == 1} {
 				if {[info exists seen($name)]} {
-					dev-error "Option --$name given more than once"
+					parse-error "Option --$name given more than once"
 				}
 				incr seen($name)
 				uplevel 1 [list set $name $value]
@@ -89,9 +89,9 @@ proc getopt {optdef argvname} {
 			# --abc
 			if {![info exists boolopts($name)]} {
 				if {[info exists valopts($name)]} {
-					dev-error "Option --$name requires a parameter"
+					parse-error "Option --$name requires a parameter"
 				}
-				dev-error "Unknown option: --$name"
+				parse-error "Unknown option: --$name"
 			}
 			set boolopts($name) 1
 		} else {
@@ -102,7 +102,7 @@ proc getopt {optdef argvname} {
 		uplevel 1 set $i $boolopts($i)
 	}
 	if {!$haveargs && [llength $nargv] > [llength $named]} {
-		dev-error "Too many parameters"
+		parse-error "Too many parameters"
 	}
 	if {[llength $named]} {
 		set argv [uplevel 1 [list lassign $nargv {*}$named]]

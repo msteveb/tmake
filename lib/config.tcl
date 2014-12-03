@@ -27,7 +27,7 @@ proc do_ifconfig {name expr exprargs} {
 			}
 		}
 	}
-	dev-error "should be $name {expr} ?{code}? ?else {code}?"
+	parse-error "ifconfig: should be $name {expr} ?{code}? ?else {code}?"
 }
 
 proc is-defined? {name} {

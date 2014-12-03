@@ -268,6 +268,11 @@ proc make {argv} {
 	#puts "make '$argv'"
 	#parray ::env
 
+	# This is to support unit testing
+	if {[env TMAKE_ERROR ""] eq "early"} {
+		fake-an-error
+	}
+
 	# 'compat' is needed before we can do anything, so set a temporary $tmake(dir)
 	if {!$tmake(installed)} {
 		set argv0 $::argv0
@@ -765,7 +770,7 @@ proc AutoSubDirs {onoff} {
 			set ::tmake(autosubdirs) 0
 		}
 		default {
-			dev-error "on or off expected"
+			parse-error "on or off expected"
 		}
 	}
 }
@@ -773,7 +778,7 @@ proc AutoSubDirs {onoff} {
 proc SubDirs {args} {
 	foreach dir $args {
 		if {![file exists $dir/build.spec]} {
-			dev-error "Subdirs: No $dir/build.spec found"
+			parse-error "Subdirs: No $dir/build.spec found"
 		}
 	}
 	lappend ::tmake(subdirs) {*}$args
@@ -977,7 +982,7 @@ proc use {args} {
 
 		set source $::tmake(dir)/lib/${m}.tcl
 		if {![file exists $source]} {
-			dev-error "use: No such module: $m"
+			parse-error "use: No such module: $m"
 		}
 		uplevel #0 [list source $source]
 		if {[info procs init-$m] ne {}} {
@@ -1009,7 +1014,20 @@ proc build-error {{col lred} msg} {
 	puts stderr [colerr $col $msg]
 	stderr flush
 	set ::tmake(exitcode) 1
+	#tmake-exit 1
+	#user-notice lred [error-location "Error: $msg"]
 }
+
+# @build-fatal-error msg
+#
+# Indicate that something failed to build and set exitcode=1
+proc build-fatal-error {msg} {
+	dputs b "BUILD FATAL ERROR: $msg"
+	puts stderr [colerr lred $msg]
+	stderr flush
+	tmake-exit 1
+}
+
 
 # @user-notice msg
 #
@@ -1024,9 +1042,17 @@ proc user-notice {{col {}} msg} {
 }
 
 # Incorrect usage in the build.spec file. Identify the location.
-proc dev-error {msg} {
+proc parse-error {msg} {
+	global tmake
+	# Message may contain a source reference relative to the top source dir
+	enter-new-dir $tmake(topsrcdir)
+
 	user-notice lred [error-location "Error: $msg"]
 	tmake-exit 1
+}
+
+proc parse-warning {msg} {
+	user-notice purple [warning-location "Warning: $msg"]
 }
 
 proc tmake-exit {code} {
@@ -1109,7 +1135,10 @@ proc pad {text width {char { }}} {
 # Pretty-print the commands for a rule
 #
 proc show-rule-commands {do} {
-	set lines [split $do \n]
+	# Note that we don't want to lose source info for $do, so
+	# go to special effort to make a copy first
+	set docmd [string cat $do ""]
+	set lines [split $docmd \n]
 	set first [lindex $lines 0]
 	if {$first eq ""} {
 		set lines [lrange $lines 1 end]
@@ -1528,7 +1557,7 @@ proc update-rule {ruledict} {
 		# Haven't seen this rule before so individual target pointers
 		foreach t $ruletarget {
 			if {[dict exists $::tmake(targets) $t]} {
-				dev-error "Rule for $t was already specified at [make-source-location $t]"
+				parse-error "Rule for $t was already specified at [make-source-location $t]"
 			}
 			dict set ::tmake(targets) $t $ruletarget
 		}
@@ -1582,7 +1611,7 @@ proc rule {cmdname arglist {helptext {}} body} {
 	global tmake
 	if {[dict exists $tmake(commands) $cmdname]} {
 		lassign [dict get $tmake(commands) $cmdname] loc help
-		dev-error "Command $cmdname already defined @$loc"
+		parse-error "Command $cmdname already defined @$loc"
 	}
 	if {$helptext eq ""} {
 		user-notice purple "[join [info source $cmdname] :]:Warning: rule $cmdname has no help"
@@ -1613,7 +1642,7 @@ proc target {ruletarget args} {
 	} elseif {[is-target? $ruletarget]} {
 		# Can't update a rule via the invidual target
 		set source [dict get [get-target-rule $ruletarget] source]
-		dev-error "Multiple-target rule for $ruletarget was already specified at [make-source-location $source @]"
+		parse-error "A multiple-target rule for $ruletarget was already specified at $source"
 	}
 
 	set info [parse-rule $ruletarget $args]
@@ -1630,10 +1659,10 @@ proc target {ruletarget args} {
 
 	if {$replace} {
 		if {[info exists orig]} {
-			dputs t "Replacing existing rule for $ruletarget @$orig(source)"
+			dputs t "Replacing existing rule for $ruletarget at $orig(source)"
 			unset orig
 		} else {
-			dputs t "Rule for $ruletarget with -replace but not existing target @$info(source)"
+			dputs t "Rule for $ruletarget with -replace but not existing target at $info(source)"
 		}
 	}
 	# Cache the prefix with the rule, also
@@ -1651,12 +1680,12 @@ proc target {ruletarget args} {
 	# merge the new data into orig
 
 	if {[llength $info(do)] && [llength $orig(do)]} {
-		#dev-error "$ruletarget already has '-do' @$orig(source)"
-		user-notice purple [warning-location "Warning: $ruletarget already has '-do' @$orig(source)"]
+		#parse-error "$ruletarget already has '-do' at $orig(source)"
+		parse-warning "$ruletarget already has '-do' at $orig(source)"
 		set info(do) {}
 	}
 	if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
-		dev-error "$ruletarget already has '-dyndep' @$orig(source)"
+		parse-error "$ruletarget already has '-dyndep' at $orig(source)"
 	}
 	lappend orig(depends) {*}$info(depends)
 	lappend orig(inputs) {*}$info(inputs)
@@ -1699,7 +1728,7 @@ proc target {ruletarget args} {
 proc target-add-var {ruletarget varname list} {
 	# The rule must already exist
 	if {![is-rule? $ruletarget]} {
-		dev-error "$ruletarget is not a rule target"
+		parse-error "$ruletarget is not a rule target"
 	}
 	# Note that if we do this blindly, we will duplicate the dict
 	# Instead, get the current value. Replace it.
@@ -1715,7 +1744,7 @@ proc parse-rule-args {&arglist &opt} {
 	set arglist [lassign $arglist opt]
 
 	if {![string match -* $opt]} {
-		dev-error "Unexpected parameter for rule: $opt"
+		parse-error "Unexpected parameter for rule: $opt"
 	}
 	if {$opt eq "-vars"} {
 		set incr 2
@@ -1762,7 +1791,7 @@ proc parse-rule {target arglist} {
 		switch -exact -- $opt {
 			phony - nofail - replace - add - chdir - nocache {
 				if {[llength $optargs]} {
-					dev-error "Rule for $target has non-option parameters after -$opt: $optargs"
+					parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
 				set info($opt) 1
 			}
@@ -1771,7 +1800,7 @@ proc parse-rule {target arglist} {
 			}
 			do - msg - dyndep - onerror - alias {
 				if {[llength $optargs] > 1} {
-					dev-error "Rule for $target has more than one '-$opt' parameter"
+					parse-error "Rule for $target has more than one '-$opt' parameter"
 				}
 				if {$opt eq "do"} {
 					set info($opt) $optargs
@@ -1781,30 +1810,30 @@ proc parse-rule {target arglist} {
 			}
 			vars {
 				if {[llength $optargs] % 2} {
-					dev-error "Rule for $target has an odd number of parameters to '-vars'"
+					parse-error "Rule for $target has an odd number of parameters to '-vars'"
 				}
 				lappend info($opt) {*}$optargs
 			}
 			getvars {
 				foreach v $optargs {
 					if {![define-exists $v]} {
-						dev-error "Rule for $target has -getvars for non-existent variable: $v"
+						parse-error "Rule for $target has -getvars for non-existent variable: $v"
 					}
 					lappend info(vars) $v [get-define $v]
 				}
 			}
 			default {
-				dev-error "Rule for $target has unknown option: -$opt"
+				parse-error "Rule for $target has unknown option: -$opt"
 			}
 		}
 	}
 
 	if {$info(add) && $info(replace)} {
-		dev-error "Rule for $target has both '-add' and '-replace'"
+		parse-error "Rule for $target has both '-add' and '-replace'"
 	}
 	if {$info(add)} {
 		if {![llength $info(do)]} {
-			dev-error "Rule for $target has '-add' but no '-do'"
+			parse-error "Rule for $target has '-add' but no '-do'"
 		}
 		# Transfer -do to add-do
 		set info(add-do) $info(do)
@@ -1813,10 +1842,10 @@ proc parse-rule {target arglist} {
 	unset info(add)
 
 	if {[llength $info(do)] == 0 && [llength $info(inputs)]} {
-		dev-error "Rule for $target has '-inputs' but no '-do'"
+		parse-error "Rule for $target has '-inputs' but no '-do'"
 	}
 	if {[llength $info(do)] == 0 && $info(msg) ne ""} {
-		dev-error "Rule for $target has '-msg' but no '-do'"
+		parse-error "Rule for $target has '-msg' but no '-do'"
 	}
 
 	return $info
@@ -2057,7 +2086,7 @@ proc subst-do {__target __vardict __script} {
 }
 
 # Set up the defines and local vars and evaluate the script
-# Returns a list of {ret msg opts} from catch
+# Returns a list of {ret msg opts stacktrace} from catch
 #
 proc run-do {__vardict __script} {
 	# Create local vars based on $::tmake(defines) and $__vardict
@@ -2069,7 +2098,9 @@ proc run-do {__vardict __script} {
 		set $__n [dict get $__vardict $__n]
 	}
 	unset __vardict __n
-	list [catch $__script msg opts] $msg $opts
+	set result [list [catch $__script msg opts] $msg $opts]
+	#puts "run-do returned $result"
+	return $result
 }
 
 proc enter-new-dir {dirname} {
@@ -2123,7 +2154,7 @@ proc build {target} {
 		}
 		checking {
 			set current [list {*}$tmake(current) $target]
-			dev-error "Recursive definition for [join [lreverse $current] { <= }] [make-source-location $ruletarget @]"
+			build-fatal-error "[make-source-location $ruletarget "" :] Error: Recursive definition for [join [lreverse $current] { <= }]"
 		}
 		failed {
 			dputs b "$target has previously failed to build"
@@ -2215,6 +2246,14 @@ proc build {target} {
 				}
 			} elseif {[lsort $dyndeps] ne [dict get $tmakecache(deps) $ruletarget]} {
 				dputs b "dyndeps for $ruletarget have changed, so forcing build"
+				if {[debug-is-set d] && [debug-is-set b]} {
+					set olddeps [dict get $tmakecache(deps) $ruletarget]
+					puts "=== old ==="
+					puts [join [lsort $olddeps] \n]
+					puts "=== new ==="
+					puts [join [lsort $dyndeps] \n]
+					puts "-----------"
+				}
 				set result 1
 				lappend reason dyndeps
 			}
@@ -2658,23 +2697,41 @@ proc colerr {colour string} {
 # ENTRY POINT
 # ==================================================================
 
-if {[catch {make $argv} msg opts]} {
-	if {[exists -command error-stacktrace]} {
-		user-notice lred [error-stacktrace $msg $opts(-errorinfo)]
-	} else {
-		user-notice lred $msg
+set rc [catch -signal {
+	set rc [catch {make $argv} msg opts]
+	if {$rc} {
+		if {[exists -command error-stacktrace]} {
+			user-notice lred [error-stacktrace $msg $opts(-errorinfo)]
+		} else {
+			user-notice lred $msg
+		}
+		set tmake(exitcode) 1
 	}
-	set tmake(exitcode) 1
-}
 
-if {$tmake(numtargets) || $tmake(showtime) || $tmake(verbose)} {
-	set elapsed [expr {([clock millis] - $tmake(start)) / 1000.0}]
-	if {!$tmake(quiet)} {
-		pputs cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"
+	# We do this even on error
+	if {$tmake(numtargets) || $tmake(showtime) || $tmake(verbose)} {
+		set elapsed [expr {([clock millis] - $tmake(start)) / 1000.0}]
+		if {!$tmake(quiet)} {
+			pputs cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"
+		}
 	}
-}
-if {$tmake(exitcode)} {
-	user-notice lred "*** Error: Targets failed to build"
+	# This is to support unit testing
+	if {[env TMAKE_ERROR ""] eq "late"} {
+		fake-an-error
+	}
+	if {$tmake(exitcode)} {
+		user-notice lred "*** Error: Targets failed to build"
+	}
+} msg opts]
+
+switch [info returncodes $rc] {
+	"signal" {
+		# This must be SIGPIPE since we catch/ignore other errors
+		set tmake(exitcode) 1
+	}
+	"error" {
+		stderr puts $msg
+	}
 }
 
 tmake-exit $tmake(exitcode)

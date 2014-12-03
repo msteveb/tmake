@@ -162,6 +162,8 @@ if {"link" in [file -commands] && 0} {
 #
 proc relative-path {path {pwd {}}} {
 	if {![file exists $path]} {
+		puts [errorInfo "$path does not exist. May not be canonical"i [stacktrace]]
+		error "$path does not exist. May not be canonical"
 		stderr puts "Warning: $path does not exist. May not be canonical"
 	} else {
 		set path [file-normalize $path]
@@ -208,11 +210,11 @@ proc relative-path {path {pwd {}}} {
 # By default, we only want to show the error location in user code.
 # We use [info frame] to achieve this, but it works differently on Tcl and Jim.
 #
-# This is designed to be called for incorrect usage, via dev-error
+# This is designed to be called for incorrect usage, via parse-error
 #
 proc error-location {msg} {
 	if {$::tmake(debug)} {
-		return [error-stacktrace $msg]
+		tailcall error-stacktrace $msg
 	}
 	warning-location $msg
 }
@@ -225,6 +227,7 @@ proc warning-location {msg {pattern *.spec}} {
 	if {$loc ne "unknown"} {
 		return "$loc: $msg"
 	}
+	puts "warning-location: no location found"
 	return $msg
 }
 
@@ -248,10 +251,6 @@ proc find-source-location {{pattern *.spec}} {
 # (unless --debug is enabled)
 #
 proc error-stacktrace {msg {stacktrace {}}} {
-	if {$stacktrace eq ""} {
-		# By default, use the current error stacktrace
-		set stacktrace [info stacktrace]
-	}
 	if {$::tmake(debug)} {
 		# In debug mode, prepend a live stacktrace to the error stacktrace, omitting the current level
 		lappend stacktrace {*}[lrange [stacktrace] 3 end]
@@ -273,7 +272,10 @@ proc error-stacktrace {msg {stacktrace {}}} {
 	# Convert filenames to relative paths
 	set newstacktrace {}
 	foreach {p f l} $stacktrace {
-		lappend newstacktrace $p [relative-path $f] $l
+		if {$f ne ""} {
+			set f [relative-path $f]
+		}
+		lappend newstacktrace $p $f $l
 	}
 	lassign $newstacktrace p f l
 	if {$f ne ""} {
@@ -288,32 +290,28 @@ proc error-stacktrace {msg {stacktrace {}}} {
 	} else {
 		return "${prefix}Error: $msg"
 	}
-
 }
 
 proc check-signal {{clear 0}} {
-	if {[exists -command signal]} {
-		if {$clear} {
-			set clear -clear
-		} else {
-			set clear ""
-		}
-		if {[signal check {*}$clear] ne ""} {
-			return 1
-		}
+	if {$clear} {
+		set clear -clear
+	} else {
+		set clear ""
+	}
+	if {[signal check {*}$clear] ne ""} {
+		return 1
 	}
 	return 0
 }
 
-if {[exists -command signal]} {
-	alias signal-ignore signal ignore
-} else {
-	proc signal-ignore {args} {}
-}
-
 proc init-compat {} {
-	# Check these signals with check-signal
-	signal-ignore SIGINT SIGTERM
+	# Do we have the signal command?
+	if {![exists -command signal]} {
+		proc signal {args} {
+			# Return "no signal" for [signal check]
+			return ""
+		}
+	}
 
 	# Do we have the two-argument [source]?
 	if {[catch {source filename {}}]} {
@@ -327,4 +325,10 @@ proc init-compat {} {
 	} else {
 		alias source-eval source
 	}
+
+	# Check these signals with check-signal
+	signal ignore SIGINT SIGTERM
+	# SIGPIPE is caught in main
+	signal handle SIGPIPE
+
 }

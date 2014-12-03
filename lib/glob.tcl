@@ -62,7 +62,7 @@ proc Glob {args} {
 	set pwd [pwd]
 	foreach pattern $args {
 		if {[file join $pwd $pattern] eq $pattern} {
-			dev-error "Error: Glob $pattern is not a (source) relative path. Try \[glob\]"
+			parse-error "Glob $pattern is not a (source) relative path. Try \[glob\]"
 		}
 	}
 	set patterns [make-local-src {*}$args]
