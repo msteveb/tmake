@@ -271,7 +271,7 @@ proc error-stacktrace {msg {stacktrace {}}} {
 	# Convert filenames to relative paths
 	set newstacktrace {}
 	foreach {p f l} $stacktrace {
-		if {$f ne ""} {
+		if {$f ne "" && [file exists $f]} {
 			set f [relative-path $f]
 		}
 		lappend newstacktrace $p $f $l
@@ -312,17 +312,22 @@ proc init-compat {} {
 		}
 	}
 
-	# Do we have the two-argument [source]?
-	if {[catch {source filename {}}]} {
-		proc source-eval {filename args} {
-			if {[llength $args]} {
-				tailcall eval {*}$args
-			} else {
-				tailcall source $filename
-			}
+	# How to eval a script and provide source info?
+	if {[catch {info source {} t.tcl 1}] == 0} {
+		# Have [info source]
+		proc eval-source {script filename line} {
+			tailcall eval [info source $script $filename $line]
+		}
+	} elseif {[catch {source filename {}}] == 0} {
+		# Have [source script loc]
+		proc eval-source {script filename line} {
+			tailcall source $script $filename $line
 		}
 	} else {
-		alias source-eval source
+		# Have neither, so just use [eval]
+		proc eval-source {script filename args} {
+			tailcall eval $script
+		}
 	}
 
 	# Check these signals with check-signal
