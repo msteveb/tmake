@@ -52,7 +52,6 @@ if {[iswin]} {
 	proc exec-save-stderr {args} {
 		exec >@stdout {*}$args
 	}
-	define EXEEXT .exe
 }
 
 proc lunique {list} {
