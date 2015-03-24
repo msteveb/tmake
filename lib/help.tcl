@@ -35,7 +35,6 @@ proc show-help {argv} {
    --build=<objdir>      Specify the directory for build results (default: objdir)
    --targets[=all]       List all non-phony targets. If a parameter is given, include all targets and the rule location.
    --install=<dir>       Install tmake to the given directory
-   --init                Run only the parsing phase??
    --version             Show the tmake version
    --rulebase            Output the builtin rulebase
    --genie               Create sample project.spec and build.spec files

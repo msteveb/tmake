@@ -50,7 +50,6 @@ set tmake(cleaning) 0
 set tmake(quiet) 0
 set tmake(ignoreforce) 0
 set tmake(force) 0
-set tmake(init) 0
 set tmake(usepager) 1
 set tmake(showcache) 0
 set tmake(showvars) 0
@@ -196,9 +195,6 @@ proc make-parse-options {argv} {
 				--nocol* {
 					set tmake(colout) 0
 					set tmake(colerr) 0
-				}
-				--init {
-					set tmake(init) 1
 				}
 				--version {
 					use help
@@ -392,9 +388,6 @@ proc make {argv} {
 
 	dputs T "Parsing phase complete"
 
-	if {$tmake(init)} {
-		tmake-exit 0
-	}
 	if {$tmake(showrules)} {
 		show-all-rules
 		tmake-exit 0
