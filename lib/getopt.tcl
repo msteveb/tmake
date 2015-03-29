@@ -65,6 +65,7 @@ proc getopt {optdef argvname} {
 		if {$arg eq "--"} {
 			# End of options
 			incr i
+			lappend nargv {*}[lrange $argv $i end]
 			break
 		}
 
@@ -95,9 +96,11 @@ proc getopt {optdef argvname} {
 			}
 			set boolopts($name) 1
 		} else {
-			lappend nargv $arg
+			lappend nargv {*}[lrange $argv $i end]
+			break
 		}
 	}
+
 	foreach i [dict keys $boolopts] {
 		uplevel 1 set $i $boolopts($i)
 	}
