@@ -9,7 +9,9 @@
 
 set tmake(version) {0.5 (27-Nov-2014)}
 set tmake(cacheversion) 3
-set tmake(debug) 0
+
+# Turn on debugging as early as possible
+set tmake(debug) $("--debug" in $argv)
 
 set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 l 0 D 0 C 0 T 0 B 0 v 0 x 0}
 set tmake(debughelp) {
