@@ -764,6 +764,9 @@ ObjectRule.cpp object source
 
 	foreach {dest src} [expand-filespec $destdir $args 0] {
 		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $targetname} -alias <bin>[file tail $dest]
+		target $dest$exe -add -do {
+			chmodx-file $target
+		}
 	}
 }
 
