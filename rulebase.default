@@ -386,7 +386,7 @@ proc expand-objects {objs} {
 	foreach obj $objs {
 		if {[string match <lib>* $obj]} {
 			if {![dict exists $::tmakedrb(objmap) $obj]} {
-				build-error "Error: Unable to find objects for unknown lib $obj"
+				build-fatal-error "Error: Unable to find objects for unknown lib $obj"
 				return -code break
 			}
 			# XXX: How to guarantee that $SH_CFLAGS are set on these objects?
@@ -413,7 +413,6 @@ proc expand-objects {objs} {
 # where if the value is "y", it is changed to "1", and if the value
 # is a quoted string, the quotes are removed.
 proc load-config-file {filename} {
-	# All lines look like one of:
 	set n 0
 	foreach line [split [readfile $filename] \n] {
 		incr n
@@ -537,7 +536,7 @@ proc chmodx-file {target} {
 #
 # If $STRIP is not set, does nothing
 proc strip-file {flags target} {
-	vputs "Strip $target"
+	vputs "Strip $target $flags"
 	exec {*}[get-define STRIP true] {*}$flags $target
 }
 
@@ -668,7 +667,7 @@ proc find-project-bin {bin args} {
 		set result [list "" $bin]
 	} else {
 		# Not found
-		dev-error "$bin is neither a local nor a published (<bin>) target"
+		build-fatal-error "$bin is neither a local nor a published (<bin>) target"
 	}
 	dputxs l {[find-source-location]: find-project-bin returning $result}
 	return $result
@@ -859,7 +858,7 @@ XXX
 		incr n
 	}
 	if {$n < 0 || $n > 3} {
-		dev-error "Not a valid shared library version number: $version"
+		build-fatal-error "Not a valid shared library version number: $version"
 	}
 
 	# What names may our shared lib have?
@@ -1017,7 +1016,7 @@ Creates object $target from source $src by using the appropriate ObjectRule
 	set src [make-local $src]
 	if {$ext ne ".o"} {
 		if {[info commands ObjectRule$ext] eq ""} {
-			dev-error "Don't know how to build Object from $src"
+			build-fatal-error "Don't know how to build Object from $src"
 		}
 		ObjectRule$ext $obj $src
 		Clean $target
@@ -1168,7 +1167,7 @@ XXX
 		set f $filename
 		lappend result $f
 	} elseif {![is-cleaning?] && !$nocare} {
-		build-error [warning-location "Error: Load $filename does not exist and is not a target"]
+		build-fatal-error [warning-location "Error: Load $filename does not exist and is not a target"]
 		tmake-exit 1
 	}
 
