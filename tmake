@@ -746,7 +746,9 @@ proc make-local-src {args} {
 # @invoke-spec-file filename ?script?
 #
 proc invoke-spec-file {filename args} {
-	lappend ::tmake(specfiles) $filename
+	global tmake
+
+	lappend tmake(specfiles) $filename
 
 	# Spec files are loaded at frame level #1, in the scope of run-do
 	# 'define' relies on this
@@ -755,6 +757,10 @@ proc invoke-spec-file {filename args} {
 		set result [uplevel #0 [list run-do {} [list eval-source [lindex $args 0] $filename 1]]]
 	} else {
 		set result [uplevel #0 [list run-do {} [list source $filename]]]
+	}
+
+	if {[lindex $result 0] != 0} {
+		enter-new-dir $tmake(topsrcdir)
 	}
 
 	if {[check-signal]} {
