@@ -2012,7 +2012,9 @@ proc run {args} {
 	if {$rc == 1} {
 		pputs \n\t$cmdline\n
 		# On error, display the command and the error and return break
-		build-error "$msg\n"
+		if {$msg ne ""} {
+			build-error "$msg\n"
+		}
 		return -code break
 	}
 	# XXX: What to do on signal?
