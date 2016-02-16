@@ -663,6 +663,14 @@ proc add-clean {type filelist} {
 	target-add-var $type cleanfiles [file-build $filelist]
 }
 
+# @add-src-clean type filename-list
+#
+# Like add-clean, except $filelist are in the source directory rather than the build directory
+#
+proc add-src-clean {type filelist} {
+	target-add-var $type cleanfiles $filelist
+}
+
 # @find-project-bin binfile ?-chdir 0|1? ?-optional 0|1?
 #
 # Searches for the given binary file as follows:
@@ -1415,26 +1423,38 @@ The following arguments are supported:
 }
 
 rule Clean {args} {
-Clean target ...
+Clean ?--src? target ...
 
 Adds the given targets to the list of files to be removed on 'tmake clean'
 } {
 	# DistClean also cleans these files
 	DistClean {*}$args
 
+	getopt {--src args} args
+
 	set args [join $args]
 
-	add-clean [make-local clean] [make-local {*}$args]
+	if {$src} {
+		add-src-clean [make-local clean] $args
+	} else {
+		add-clean [make-local clean] [make-local {*}$args]
+	}
 }
 
 rule DistClean {args} {
-DistClean target ...
+DistClean ?--src? target ...
 
 Adds the given targets to the list of files to be removed on 'tmake distclean'
 } {
+	getopt {--src args} args
+
 	set args [join $args]
 
-	add-clean [make-local distclean] [make-local {*}$args]
+	if {$src} {
+		add-src-clean [make-local distclean] $args
+	} else {
+		add-clean [make-local distclean] [make-local {*}$args]
+	}
 }
 
 rule Generate {args} {
