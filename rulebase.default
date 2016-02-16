@@ -1315,21 +1315,22 @@ If it doesn't match, the test fails.
 		lappend opts -msg [list note Test $testcommand]
 	}
 
-	foreach i {stdout stderr} {
-		# Do we need to take into account $chdir?
-		if {[info exists $i]} {
-			set path [set $i]
-			lappend vars $i [make-local $path]
-			lappend deps [make-local $path]
-		}
-	}
-
 	# set up srcpath to allow the test command/script to find resources
 	if {$chdir} {
 		# We are in objdir/... and we need to find [local-dir] from src
-		lappend vars SRCDIR [file-src-relative [local-dir]]
+		set srcdir [file-src-relative [local-dir]]
 	} else {
+		set srcdir [local-dir]
 		lappend vars SRCDIR [local-dir]
+	}
+	lappend vars SRCDIR $srcdir
+
+	foreach i {stdout stderr} {
+		if {[info exists $i]} {
+			set path [set $i]
+			lappend deps [make-local $path]
+			lappend vars $i [file-join $srcdir $path]
+		}
 	}
 
 	target [make-local $testid] -phony -depends $deps -vars {*}$vars {*}$opts -do {
