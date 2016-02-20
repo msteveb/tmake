@@ -1680,6 +1680,19 @@ proc target {ruletarget args} {
 		# Now create/update the rule
 		update-rule $info
 		return $ruletarget
+	} else {
+		set identical 1
+		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror phony target vars} {
+			if {$info($i) ne $orig($i)} {
+				set identical 0
+				break
+			}
+		}
+		if {$identical} {
+			parse-warning "$ruletarget duplicate rule ignored at  $orig(source)"
+			update-rule $orig
+			return $ruletarget
+		}
 	}
 
 	# There is already a rule for this target, so attempt
@@ -1689,11 +1702,17 @@ proc target {ruletarget args} {
 
 	if {[llength $info(do)] && [llength $orig(do)]} {
 		#parse-error "$ruletarget already has '-do' at $orig(source)"
-		parse-warning "$ruletarget already has '-do' at $orig(source)"
+		if {$info(do) ne $orig(do)} {
+			parse-warning "$ruletarget already has '-do' at $orig(source)"
+		}
 		set info(do) {}
 	}
 	if {$info(dyndep) ne "" && $orig(dyndep) ne ""} {
-		parse-error "$ruletarget already has '-dyndep' at $orig(source)"
+		if {$info(dyndep) eq $orig(dyndep)} {
+			set info(dyndep) ""
+		} else {
+			parse-error "$ruletarget already has '-dyndep' at $orig(source)"
+		}
 	}
 	lappend orig(depends) {*}$info(depends)
 	lappend orig(inputs) {*}$info(inputs)
