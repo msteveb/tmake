@@ -1077,6 +1077,9 @@ proc user-error {{col lred} msg} {
 #
 # Indicate that something failed to build and set exitcode=1
 proc build-error {{col lred} msg} {
+	if {$msg eq ""} {
+		set msg "-- no message --"
+	}
 	dputs b "BUILD ERROR: $msg"
 	puts stderr [colerr $col $msg]
 	stderr flush
