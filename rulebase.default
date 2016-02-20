@@ -386,7 +386,7 @@ proc expand-objects {objs} {
 	foreach obj $objs {
 		if {[string match <lib>* $obj]} {
 			if {![dict exists $::tmakedrb(objmap) $obj]} {
-				build-fatal-error "Error: Unable to find objects for unknown lib $obj"
+				build-error [warning-location "Error: Unable to find objects for unknown lib $obj"]
 				return -code break
 			}
 			# XXX: How to guarantee that $SH_CFLAGS are set on these objects?
@@ -729,7 +729,8 @@ proc find-project-bin {bin args} {
 		set result [list "" $bin]
 	} else {
 		# Not found
-		build-fatal-error "$bin is neither a local nor a published (<bin>) target"
+		build-error [warning-location "$bin is neither a local nor a published (<bin>) target"]
+		set result [list "" ""]
 	}
 	dputxs l {[find-source-location]: find-project-bin returning $result}
 	return $result
@@ -923,7 +924,8 @@ XXX
 		incr n
 	}
 	if {$n < 0 || $n > 3} {
-		build-fatal-error "Not a valid shared library version number: $version"
+		build-error [warning-location "Not a valid shared library version number: $version"]
+		return
 	}
 
 	# What names may our shared lib have?
@@ -1081,10 +1083,12 @@ Creates object $target from source $src by using the appropriate ObjectRule
 	set src [make-local $src]
 	if {$ext ne ".o"} {
 		if {[info commands ObjectRule$ext] eq ""} {
-			build-fatal-error "Don't know how to build Object from $src"
+			build-error [warning-location "Don't know how to build Object from $src"]
+			return $obj
+		} else {
+			ObjectRule$ext $obj $src
+			Clean $target
 		}
-		ObjectRule$ext $obj $src
-		Clean $target
 	}
 	return $obj
 }
