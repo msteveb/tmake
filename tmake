@@ -261,6 +261,10 @@ proc make-parse-options {argv} {
 	}
 }
 
+proc rulebase-invoke {cmd} {
+	dputs m "No rulebase-invoke, ignoring $cmd"
+}
+
 proc make {argv} {
 	global tmake
 	#puts "make '$argv'"
@@ -381,6 +385,10 @@ proc make {argv} {
 
 	dputs T "Parsed rulebase"
 
+	rulebase-invoke init
+
+	dputs T "Initialised rulebase"
+
 	# Save the global state in case we need to reload
 	# At this stage it includes defaults, options and the rulebase
 
@@ -496,6 +504,11 @@ proc make {argv} {
 				# Restore the state
 				unset tmake
 				set tmake $tmake_save
+
+				# reinitialise the rulebase
+				rulebase-invoke init
+
+				dputs T "Reinitialised rulebase"
 
 				load-build-description 0
 
@@ -888,7 +901,7 @@ proc process-build-spec-file {dir {optional 0}} {
 	}
 
 	Scope {
-		BuildSpecProlog
+		rulebase-invoke prolog
 		if {$ignore} {
 			set rc 0
 		} else {
@@ -896,7 +909,7 @@ proc process-build-spec-file {dir {optional 0}} {
 
 			dputs T "Parsed [local-prefix]build.spec"
 		}
-		BuildSpecEpilog
+		rulebase-invoke epilog
 	}
 
 

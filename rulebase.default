@@ -15,68 +15,88 @@
 
 use getopt glob
 
+proc rulebase-invoke {cmd} {
+	switch -exact -- $cmd {
+		prolog {
+			tailcall rulebase-prolog
+		}
+		epilog {
+			tailcall rulebase-epilog
+		}
+		init {
+			tailcall rulebase-init
+		}
+		default {
+			dputs m "Rulebase does not implement rulebase-invoke $cmd"
+		}
+	}
+}
+
 # ==================================================================
 # Default variable settings and rules
 # ==================================================================
 
-# If settings are loaded via Load, these should all be ignored
-# Thus we use define?
-define? CCACHE ""
-define? CC gcc
-define? CXX g++
-define? AR ar
-define? RANLIB ranlib
-define? STRIP strip
-define? ARFLAGS cr
-define? CFLAGS ""
-define? CXXFLAGS ""
-define? LDFLAGS ""
-if {[iswin]} {
-	define? EXEEXT .exe
-} else {
-	define? EXEEXT ""
-}
+proc rulebase-init {} {
+	# If settings are loaded via Load, these should all be ignored
+	# Thus we use define?
+	define? CCACHE ""
+	define? CC gcc
+	define? CXX g++
+	define? AR ar
+	define? RANLIB ranlib
+	define? STRIP strip
+	define? ARFLAGS cr
+	define? CFLAGS ""
+	define? CXXFLAGS ""
+	define? LDFLAGS ""
+	if {[iswin]} {
+		define? EXEEXT .exe
+	} else {
+		define? EXEEXT ""
+	}
 
-define? SH_CFLAGS ""
-define? SH_LDFLAGS ""
-define? SH_LINKFLAGS ""
-define? SH_SOEXT .so
-define? SHOBJ_CFLAGS ""
-define? SHOBJ_LDFLAGS ""
+	define? SH_CFLAGS ""
+	define? SH_LDFLAGS ""
+	define? SH_LINKFLAGS ""
+	define? SH_SOEXT .so
+	define? SHOBJ_CFLAGS ""
+	define? SHOBJ_LDFLAGS ""
 
-define? CC_FOR_BUILD gcc
-define? HOST_CFLAGS ""
-if {[iswin]} {
-	define? HOST_EXEEXT .exe
-} else {
-	define? HOST_EXEEXT ""
-}
+	define? CC_FOR_BUILD gcc
+	define? HOST_CFLAGS ""
+	if {[iswin]} {
+		define? HOST_EXEEXT .exe
+	} else {
+		define? HOST_EXEEXT ""
+	}
 
-define? LOCAL_LIBS ""
-define? DESTDIR ""
-define? OBJCFLAGS ""
-define? INCPATHS ""
+	define? LOCAL_LIBS ""
+	define? DESTDIR ""
+	define? OBJCFLAGS ""
+	define? INCPATHS ""
 
-# These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
-define C_FLAGS ""
-define CXX_FLAGS ""
-define LD_FLAGS ""
+	# These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
+	define C_FLAGS ""
+	define CXX_FLAGS ""
+	define LD_FLAGS ""
 
-define PUBLISH publish
+	define PUBLISH publish
 
-define PROJLIBS ""
-define SYSLIBS ""
-define HOST_SYSLIBS ""
+	define PROJLIBS ""
+	define SYSLIBS ""
+	define HOST_SYSLIBS ""
 
-# Default header pattern for C and C++ dynamic dependencies
-#
-# All globals variables for rulebase.default are kept in the $::tmakedrb array
-set ::tmakedrb {
-	testruncount 0
-	testpasscount 0
-	testid 0
-	setuptestenv 0
-	objmap {}
+	# Default header pattern for C and C++ dynamic dependencies
+	#
+	# All globals variables for rulebase.default are kept in the $::tmakedrb array
+	set ::tmakedrb {
+		testruncount 0
+		testpasscount 0
+		testid 0
+		setuptestenv 0
+		objmap {}
+		objrules {}
+	}
 }
 
 # ==================================================================
@@ -128,6 +148,30 @@ Note that by default, Lib is an alias for ArchiveLib. This can be changed with:
 
 define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
+proc is-duplicate-obj-rule {obj src vars} {
+	global tmakedrb
+
+	# Build the info for the rule
+	set info [list $src]
+	foreach var $vars {
+		lappend info $var [get-define $var]
+	}
+
+	if {[dict exists $tmakedrb objrules $obj]} {
+		# Is it identical?
+		dputs t "Ignoring identical duplicate object rule for $obj at [find-source-location]"
+
+		set oldinfo [dict get $tmakedrb objrules $obj]
+		if {$oldinfo ne $info} {
+			build-error [warning-location "Error: Duplicate Object rule for $obj with different settings"]
+		}
+		return 1
+	}
+
+	dict set tmakedrb objrules $obj $info
+	return 0
+}
+
 # @ObjectRule.<ext> object source
 #
 # Rule for creating 'object' from source file 'source' with the
@@ -144,11 +188,13 @@ Generates an object file from a C source file
 Imported variables: CC, C_FLAGS (from CFlags, ObjectCFlags), INCPATHS (from IncludePaths)
 Used variables: CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 } {
-	# Capture the current value of CC, C_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
-		run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
-	} -dyndep {
-		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
+	if {![is-duplicate-obj-rule $obj $src {CC C_FLAGS INCPATHS}]} {
+		# Capture the current value of CC, C_FLAGS and INCPATHS
+		target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
+			run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+		} -dyndep {
+			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
+		}
 	}
 }
 
@@ -160,18 +206,20 @@ Generates an object file from a C++ source file
 Imported variables: CXX, CXX_FLAGS (from C++Flags), INCPATHS (from IncludePaths)
 Used variables: CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 } {
-	# Capture the current value of CXX, CXX_FLAGS and INCPATHS
-	target $obj -inputs $src -msg {note C++ $targetname} -getvars CXX CXX_FLAGS INCPATHS -do {
-		run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
-	} -dyndep {
-		header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
+	if {![is-duplicate-obj-rule $obj $src {CXX CXX_FLAGS INCPATHS}]} {
+		# Capture the current value of CXX, CXX_FLAGS and INCPATHS
+		target $obj -inputs $src -msg {note C++ $targetname} -getvars CXX CXX_FLAGS INCPATHS -do {
+			run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
+		} -dyndep {
+			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
+		}
 	}
 }
 
 # ==================================================================
 # PROLOG/EPILOG HOOKS
 # ==================================================================
-proc BuildSpecProlog {} {
+proc rulebase-prolog {} {
 	global tmakedrb
 
 	show-this-rule [local-dir]
@@ -199,7 +247,7 @@ proc BuildSpecProlog {} {
 	IncludePaths .
 }
 
-proc BuildSpecEpilog {} {
+proc rulebase-epilog {} {
 	show-this-rule [local-dir]
 	global tmake
 
