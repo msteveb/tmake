@@ -168,8 +168,6 @@ if {"mtimens" in [file -commands]} {
 #
 proc relative-path {path {pwd {}}} {
 	if {![file exists $path]} {
-		puts [errorInfo "$path does not exist. May not be canonical"i [stacktrace]]
-		error "$path does not exist. May not be canonical"
 		stderr puts "Warning: $path does not exist. May not be canonical"
 	} else {
 		set path [file-normalize $path]

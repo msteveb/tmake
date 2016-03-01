@@ -39,7 +39,7 @@ proc is-defined? {name} {
 
 proc ifconfig {expr args} {
 	# convert the simple expression into something we can evaluate
-	regsub -all {([A-Z0-9_]+)} $expr {[is-defined? \1]} tclexpr
+	regsub -all {([A-Z][A-Z0-9_]*)} $expr {[is-defined? \1]} tclexpr
 
 	dputs c "ifconfig: expr='$expr' tclexpr='$tclexpr'"
 
