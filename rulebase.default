@@ -1653,8 +1653,16 @@ DistClean .makecache
 
 # Invoked manually
 Phony clean-orphans -do {
-	clean-files [get-orphan-targets] "orphan targets"
-	discard-orphan-targets
+	# Note, this duplicates the code from tmake
+	# Consider creating a proc in tmake for this
+	set orphans [get-orphan-targets]
+	if {[llength $orphans]} {
+		delete-orphan-files {*}[file-build $orphans]
+		note Clean removing [llength $orphans] orphan target(s)
+		dputs C $orphans
+		discard-orphan-targets
+	}
+	# Now remove the trash
 	if {[file exists .trash]} {
 		note Clean .trash
 		file delete -force .trash
@@ -1672,7 +1680,10 @@ proc delete-orphan-files {args} {
 	file mkdir .trash
 	foreach file $args {
 		if {[file exists $file]} {
-			file rename -force $file .trash/[string map {/ _} $file]
+			set trashfile .trash/[string map {/ _} $file]
+			# Can't simple use file rename -force in case the files hard hard links
+			file delete $trashfile
+			file rename $file $trashfile
 		}
 	}
 }
