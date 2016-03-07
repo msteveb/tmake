@@ -1,0 +1,16 @@
+use cc tmake
+
+# Add any user options here
+options {
+}
+
+define var mystring
+define other "string 2"
+define second bonus
+define BE_TRUE
+
+define PYTHON [find-an-executable -required python]
+
+set objdir [get-env BUILDDIR objdir]
+make-config-header $objdir/config.h -auto {var other second BE_TRUE}
+make-tmake-settings $objdir/settings.conf
