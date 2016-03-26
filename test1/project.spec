@@ -1,19 +1,32 @@
+# Initial project.spec created by 'autosetup --init=tmake'
+
+# vim:set syntax=tcl:
 define PUBLISH .publish
 define? DESTDIR _install
 
-# vim:set syntax=tcl:
+# XXX If configure creates additional/different files than include/autoconf.h
+#     that should be reflected here
 
-# Arrange to re-run configure if auto.def changes
-Depends settings.conf auto.def configure -do {
-	note "Configure"
-	run [set AUTOREMAKE] >$TOPBUILDDIR/config.out
-}
-Clean config.out config.log
-DistClean settings.conf tmake.opt
+# We use [set AUTOREMAKE] here to avoid rebuilding settings.conf
+# if the AUTOREMAKE command changes
+Depends {settings.conf include/autoconf.h} auto.def -msg {note Configuring...} -do {
+	run [set AUTOREMAKE] >$build/config.out
+} -onerror {puts [readfile $build/config.out]} -fatal
+Clean config.out
+DistClean --src config.log
+DistClean settings.conf include/autoconf.h
+
+# If not configured, configure with default options
+# Note that it is expected that configure will normally be run 
+# separately. This is just a convenience for a host build
+define? AUTOREMAKE configure TOPBUILDDIR=$TOPBUILDDIR --conf=auto.def
 
 Load settings.conf
 
-define? AUTOREMAKE configure TOPBUILDDIR=$TOPBUILDDIR --conf=auto.def
+# e.g. for up autoconf.h
+IncludePaths include
+
+ifconfig CONFIGURED
 
 use util
 Phony showvars -do {
@@ -21,4 +34,3 @@ Phony showvars -do {
 }
 
 CFlags -Werror
-

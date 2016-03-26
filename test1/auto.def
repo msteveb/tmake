@@ -1,12 +1,17 @@
-# vim:se syn=tcl:
-#
+# Initial auto.def created by 'autosetup --init=tmake'
+# vim:set syntax=tcl:
 
-use cc cc-shared
+use cc cc-lib cc-db cc-shared
 use tmake
 
+# Add any user options here
+# Really want a --configure that takes over the rest of the command line
 options {
 }
 
+cc-check-tools ar ranlib
+
 set objdir [get-env BUILDDIR objdir]
 
+make-config-header $objdir/include/autoconf.h
 make-tmake-settings $objdir/settings.conf {[A-Z]*}
