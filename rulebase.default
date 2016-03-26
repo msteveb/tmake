@@ -316,7 +316,7 @@ proc publish-prefix {dir} {
 # e.g. publish-one-file include/header.h header.h
 #
 proc publish-one-file {dest src} {
-	#puts "publish-one-file: dest=$dest, src=$src, realdest=[publish-dir $dest]"
+	#dputs m "publish-one-file dest=$dest, src=$src, realdest=[publish-dir $dest]"
 	hard-link [publish-dir $dest] $src -msg {note Publish $targetname}
 }
 
@@ -401,6 +401,7 @@ proc expand-filespec {dir filelist keepdir} {
 		}
 		if {[string match *=* $spec]} {
 			lassign [split $spec =] target src
+			#dputs m "file renaming: dir=$dir, target=$target, src=$src => target=[file-join $dir $target] src=[make-local $src]"
 			lappend result [file-join $dir $target] [make-local $src]
 			continue
 		}
@@ -411,8 +412,10 @@ proc expand-filespec {dir filelist keepdir} {
 		}
 		foreach src $srcs {
 			if {$keepdir} {
+				#dputs m "keepdir: dir=$dir, src=$src => target=[file-join $dir $src] src=[make-local $src]"
 				lappend result [file-join $dir $src] [make-local $src]
 			} else {
+				#dputs m "no keepdir: dir=$dir, src=$src => target=[file-join $dir [file tail $src]] src=[make-local $src]"
 				lappend result [file-join $dir [file tail $src]] [make-local $src]
 			}
 		}
@@ -858,7 +861,6 @@ Publishes one or more executables (either binaries or scripts)
 Unless --script is specified, the executable extension (e.g. .exe) is used.
 
 Note that 'name' can be 'target=src' to rename a file when published.
-ObjectRule.cpp object source
 } {
 	show-this-rule
 
@@ -1311,16 +1313,18 @@ XXX
 }
 
 rule PublishIncludes {args} {
-PublishIncludes ...
+PublishIncludes ?--keepdir? name ...
 
-XXX
+Shorthand for:
+
+	Publish ?--keepdir? include name ...
 } {
-	show-this-rule
 	getopt {--keepdir args} args
-	set args [join $args]
 
-	foreach {dest src} [expand-filespec include $args $keepdir] {
-		publish-one-file $dest $src
+	if {$keepdir} {
+		Publish --keepdir include {*}$args
+	} else {
+		Publish include {*}$args
 	}
 }
 
