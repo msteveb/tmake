@@ -22,22 +22,20 @@ proc show-help {argv} {
    -t|--time             Show build time even if nothing was run
    -q|--quickstop        Stop on the first build error
    -Q|--quiet            Don't show the build time
-   -p|--print            Output all known rules
+   -p|--print            Show all known rules
+   --find=<target>       Show rules that contain the given substring as a target
    --genie               Generate an initial build.spec from sources in the current dir
    --ref                 Show command reference
-   --rules               Show rules from the rulebase
+   --commands            Show commands from the rulebase
    -d...                 Enable various debugging "types"
    -d?                   Show all individual debugging types
    --debug               Alternative to "-dg"
    --showcache           Dump the tmake cache in a readable form
-   --find=<target>       Search for all rules that contain given substring as a target
-   --delta               Show times as delta times rather than absolute times
    --build=<objdir>      Specify the directory for build results (default: objdir)
    --targets[=all]       List all non-phony targets. If a parameter is given, include all targets and the rule location.
-   --install=<dir>       Install tmake to the given directory
+   --install=<dir>       Install tmake to the given directory as a single script: <dir>/tmake
    --version             Show the tmake version
    --rulebase            Output the builtin rulebase
-   --genie               Create sample project.spec and build.spec files
 }
     puts [show-version]
     exit 0

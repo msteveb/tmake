@@ -31,7 +31,7 @@ set tmake(debughelp) {
 	l "Locating sources and targets"
 	c "Configuration expressions via ifconfig"
 	C "Cache handling"
-	T "Timing"
+	T "Timing (add --delta for delta times)"
 	v "Variable definition"
 }
 set tmake(verbose) 0
@@ -136,6 +136,11 @@ proc make-parse-options {argv} {
 				}
 				--find {
 					set tmake(findtarget) $value
+					set tmake(findall) 0
+				}
+				--findall {
+					set tmake(findtarget) $value
+					set tmake(findall) 1
 				}
 				--delta {
 					incr tmake(showdelta)
@@ -436,13 +441,29 @@ proc make {argv} {
 		tmake-exit 0
 	}
 	if {[info exists tmake(findtarget)]} {
-		if {[is-target? $tmake(findtarget)]} {
-			dputs r "find: Found exact match for $tmake(findtarget)"
-			show-rule $tmake(findtarget)
-			tmake-exit 0
+		if {$tmake(findall) == 0} {
+			# Prefer a local exact match
+			foreach try [list [make-local $tmake(findtarget)] $tmake(findtarget)] {
+				if {[is-target? $try]} {
+					dputs r "find: Found exact match for $try"
+					show-rule $try
+					# Are there any non-exact matches?
+					set count 0
+					foreach target [dict keys $tmake(targets)] {
+						if {[string match *$tmake(findtarget)* $target]} {
+							incr count
+						}
+					}
+					if {$count > 1} {
+						incr count -1
+						pputs cyan "Note: $count non-exact matches also exist, use --findall to show them"
+					}
+					tmake-exit 0
+				}
+			}
 		}
 		dputs r "find: Showing all targets that match *$tmake(findtarget)*"
-		foreach target [dict keys $tmake(targets)] {
+		foreach target [lsort [dict keys $tmake(targets)]] {
 			if {[string match *$tmake(findtarget)* $target]} {
 				show-rule $target
 				pputs ""
