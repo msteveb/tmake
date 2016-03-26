@@ -1228,7 +1228,7 @@ proc show-rule {target} {
 						puts @[join $v {, }]
 					}
 				}
-				phony - nofail - chdir - nocache {
+				phony - nofail - chdir - nocache - fatal {
 					if {$v} {
 						lappend flags $n
 					}
@@ -1725,7 +1725,7 @@ proc target {ruletarget args} {
 		return $ruletarget
 	} else {
 		set identical 1
-		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror phony target vars} {
+		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror phony target vars fatal} {
 			if {$info($i) ne $orig($i)} {
 				set identical 0
 				break
@@ -1763,6 +1763,7 @@ proc target {ruletarget args} {
 	incr orig(nofail) $info(nofail)
 	incr orig(chdir) $info(chdir)
 	incr orig(nocache) $info(nocache)
+	incr orig(fatal) $info(fatal)
 	append-with-space orig(onerror) $info(onerror) \n
 	# Only one of these will be non-blank
 	lappend orig(do) {*}$info(add-do)
@@ -1842,7 +1843,7 @@ proc parse-rule-args {&arglist &opt} {
 proc parse-rule {target arglist} {
 	set info {
 		inputs {} depends {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
-		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0
+		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0
 	}
 
 	set info(source) [find-source-location *build.spec]
@@ -1859,7 +1860,7 @@ proc parse-rule {target arglist} {
 	while {[llength $arglist]} {
 		set optargs [parse-rule-args arglist opt]
 		switch -exact -- $opt {
-			phony - nofail - replace - add - chdir - nocache {
+			phony - nofail - replace - add - chdir - nocache - fatal {
 				if {[llength $optargs]} {
 					parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
@@ -2538,7 +2539,7 @@ proc build {target} {
 			set result -1
 		}
 
-		if {$rc == 5 || ($tmake(quickstop) && $tmake(exitcode))} {
+		if {$rc == 5 || (($tmake(quickstop) || $t(fatal)) && $tmake(exitcode))} {
 			user-notice lred "*** Error: Targets failed to build"
 			tmake-exit $tmake(exitcode)
 		}
