@@ -92,29 +92,68 @@ proc make-parse-options {argv} {
 	global tmake
 	#puts "make-parse-options [list $argv]"
 
-	foreach arg $argv {
-		if {[info exists nextopt]} {
-			switch -exact -- $nextopt {
-				-C {
-					# This will fail with a fatal error if not a dir
-					enter-new-dir [file-normalize $arg]
-					cd $arg
-				}
-				default {
-					error "Unexpected $nextarg"
-				}
+	use argparse
+
+	# Do we need to remove anything from cli-options
+	# e.g. -C?
+	set tmake(cli-options) $argv
+
+	argparse argv {
+		--configure {
+			incr tmake(showcache)
+		}
+		--showcache {
+			incr tmake(showcache)
+		}
+		{--find --find=*} {
+			set tmake(findtarget) [argparam $arg]
+			set tmake(findall) 0
+		}
+		{--findall --findall=*} {
+			set tmake(findtarget) [argparam $arg]
+			set tmake(findall) 1
+		}
+		--delta {
+			incr tmake(showdelta)
+		}
+		--build=* {
+			set tmake(build) [argparam $arg]
+		}
+		--force {
+			incr tmake(force)
+		}
+		--showvars {
+			incr tmake(showvars)
+		}
+		--showaliases {
+			incr tmake(showaliases)
+		}
+		--rulebase {
+			set rulebase [get-rulebase]
+			if {[llength $rulebase] > 1} {
+				puts [lindex $rulebase 1]
+			} else {
+				puts [readfile [lindex $rulebase 0]]
 			}
-			unset nextopt
-			continue
+			exit 0
 		}
-		if {[regexp {^(\w+)=(.*)} $arg -> n v]} {
-			# Allow: make ABC=DEF
-			define! $n $v
-			lappend tmake(cli-options) $arg
-			continue
+		--rules {
+			user-notice purple "Warning: Use --commands rather than the deprecated --rules"
+			set tmake(listcommands) 1
 		}
-		if {[regexp {^(-+[^=]*)(=)?(.*)?} $arg -> option equals value]} {
-			if {$option eq "-d?"} {
+		--commands {
+			set tmake(listcommands) 1
+		}
+		{--targets --targets=all} {
+			set tmake(listtargets) [argparam $arg]
+		}
+		--debug {
+			# Equivalent to -dg
+			set tmake(debug) 1
+			dict set tmake(debugtypes) g 1
+		}
+		-d* {
+			if {$arg eq "-d?"} {
 				puts "Debugging can be enabled with -d..."
 				puts "The debugging categories are as follows:\n"
 
@@ -123,147 +162,98 @@ proc make-parse-options {argv} {
 				}
 				exit 0
 			}
-			if {$option eq "-d*"} {
+			if {$arg eq "-d*"} {
 				foreach i [dict keys $tmake(debugtypes)] {
 					dict set tmake(debugtypes) $i 1
 				}
 				lappend tmake(cli-options) $arg
-				continue
-			}
-			switch -glob -- $option {
-				--showcache {
-					incr tmake(showcache)
-				}
-				--find {
-					set tmake(findtarget) $value
-					set tmake(findall) 0
-				}
-				--findall {
-					set tmake(findtarget) $value
-					set tmake(findall) 1
-				}
-				--delta {
-					incr tmake(showdelta)
-				}
-				--build {
-					set tmake(build) $value
-				}
-				--force {
-					incr tmake(force)
-				}
-				--showvars {
-					incr tmake(showvars)
-				}
-				--showaliases {
-					incr tmake(showaliases)
-				}
-				--rulebase {
-					incr tmake(force)
-					set rulebase [get-rulebase]
-					if {[llength $rulebase] > 1} {
-						puts [lindex $rulebase 1]
-					} else {
-						puts [readfile [lindex $rulebase 0]]
-					}
-					exit 0
-				}
-				--rules {
-					user-notice purple "Warning: Use --commands rather than the deprecated --rules"
-					set tmake(listcommands) $value
-				}
-				--commands {
-					set tmake(listcommands) $value
-				}
-				--targets {
-					set tmake(listtargets) $value
-				}
-				--debug {
-					# Equivalent to -dg
-					set tmake(debug) 1
-					dict set tmake(debugtypes) g 1
-				}
-				-d* {
-					foreach i [split [string range $option 2 end] {}] {
-						dict set tmake(debugtypes) $i 1
-					}
-					set tmake(debug) 1
-				}
-				--install {
-					use install
-					tmake_install $value
-				}
-				--verbose - -v {
-					incr tmake(verbose)
-				}
-				--col* {
-					set tmake(colout) 1
-					set tmake(colerr) 1
-				}
-				--nocol* {
-					set tmake(colout) 0
-					set tmake(colerr) 0
-				}
-				--version {
-					use help
-					pputs [show-version]
-					exit 0
-				}
-				--help - -h {
-					use help
-					show-help $argv
-					exit 0
-				}
-				--ref {
-					use help
-					show-reference
-					exit 0
-				}
-				--nopager {
-					set tmake(usepager) 0
-				}
-				--genie {
-					use genie
-					tmake-genie $argv
-					exit 0
-				}
-				--dry-run - --just-print - -n {
-					set tmake(norun) 1
-				}
-				-N - -nn {
-					set tmake(norun) 2
-				}
-				--tim* - -t {
-					incr tmake(showtime)
-				}
-				-q - --quickstop {
-					incr tmake(quickstop)
-				}
-				-Q - --quiet {
-					incr tmake(quiet)
-				}
-				-p - --print* {
-					incr tmake(showrules)
-				}
-				-C {
-					set nextopt $arg
-					continue
-				}
-				-- {
-				}
-				default {
-					user-error "Unknown option $arg"
+			} else {
+				foreach i [split [string range $arg 2 end] {}] {
+					dict set tmake(debugtypes) $i 1
 				}
 			}
-			lappend tmake(cli-options) $arg
-			continue
+			set tmake(debug) 1
 		}
+		{--install=* --install} {
+			use install
+			tmake_install [argparam $arg]
+		}
+		--verbose - -v {
+			incr tmake(verbose)
+		}
+		--col* {
+			set tmake(colout) 1
+			set tmake(colerr) 1
+		}
+		--nocol* {
+			set tmake(colout) 0
+			set tmake(colerr) 0
+		}
+		--version {
+			use help
+			pputs [show-version]
+			exit 0
+		}
+		{--help -h} {
+			use help
+			show-help $tmake(cli-options)
+			exit 0
+		}
+		--ref {
+			use help
+			show-reference
+			exit 0
+		}
+		--nopager {
+			set tmake(usepager) 0
+		}
+		--genie {
+			use genie
+			tmake-genie $tmake(cli-options)
+			exit 0
+		}
+		{--dry-run --just-print -n} {
+			set tmake(norun) 1
+		}
+		{-N -nn} {
+			set tmake(norun) 2
+		}
+		{--tim* -t} {
+			incr tmake(showtime)
+		}
+		{-q --quickstop} {
+			incr tmake(quickstop)
+		}
+		{-Q --quiet} {
+			incr tmake(quiet)
+		}
+		{-p --print*} {
+			incr tmake(showrules)
+		}
+		-C {
+			set arg [argnext argv]
+			# This will fail with a fatal error if not a dir
+			enter-new-dir [file-normalize $arg]
+			cd $arg
+		}
+		-- {
+			break
+		}
+		--* {
+			user-error "Unknown option $arg"
+		}
+		*=* {
+			if {[regexp {^(\w+)=(.*)} $arg -> n v]} {
+				# ABC=DEF
+				define! $n $v
+			} else {
+				# What should we do here?
+				break
+			}
 
-		# Must be a target
-		lappend tmake(cmdline) $arg
+		}
 	}
-	if {[info exists nextopt]} {
-		user-error "$nextopt requires an argument"
-	}
+	return $argv
 }
 
 proc rulebase-invoke {cmd} {
@@ -296,11 +286,11 @@ proc make {argv} {
 	set tmake(dir) [file dirname $tmake(exe)]
 	set tmake(start) [clock millis]
 	set tmake(prevtime) $tmake(start)
-	set tmake(cmdline) {}
 	set tmake(initialdir) [pwd]
 	set tmake(lastchdir) $tmake(initialdir)
 
-	make-parse-options $argv
+	# Parse the options and return the list of targets to build
+	set tmake(cmdline) [make-parse-options $argv]
 
 	# Need to find the project top
 	set tmake(topsrcdir) [find-project-top]
@@ -2087,6 +2077,7 @@ proc run-tmake {args} {
 	global tmake
 	set cmdline [list tmake {*}$tmake(cli-options) {*}$args]
 
+	dputs m $cmdline
 	set rc [catch {
 		exec-save-stderr {*}$cmdline
 	} msg opts]
