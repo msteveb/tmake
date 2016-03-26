@@ -443,7 +443,7 @@ proc make {argv} {
 	if {[info exists tmake(findtarget)]} {
 		if {$tmake(findall) == 0} {
 			# Prefer a local exact match
-			foreach try [list [make-local $tmake(findtarget)] $tmake(findtarget)] {
+			foreach try [list [file-join $tmake(subdir) $tmake(findtarget)] $tmake(findtarget)] {
 				if {[is-target? $try]} {
 					dputs r "find: Found exact match for $try"
 					show-rule $try
@@ -685,6 +685,9 @@ proc load-build-description {loadcache} {
 
 	process-build-spec-file . 1
 
+	unset tmake(prefix)
+	unset tmake(localdir)
+
 	# Now validate that there is no non-phony target which depends on a phony target
 	foreach ruletarget [dict keys $::tmake(rules)] {
 		if {![get-rule-attr $ruletarget phony]} {
@@ -724,6 +727,9 @@ proc find-project-top {} {
 }
 
 proc local-prefix {} {
+	if {![exists ::tmake(prefix)]} {
+		error "local-prefix invoked outside of parse phase - did you mean \$tmake(subdir)?"
+	}
 	return $::tmake(prefix)
 }
 
@@ -732,6 +738,9 @@ proc local-src-prefix {} {
 }
 
 proc local-dir {} {
+	if {![exists ::tmake(localdir)]} {
+		error "local-dir invoked outside of parse phase - did you mean \$tmake(subdir)?"
+	}
 	return $::tmake(localdir)
 }
 
@@ -1324,7 +1333,7 @@ proc show-all-targets {detailed} {
 		}
 	}
 	if {$shown == 0 && $detailed eq ""} {
-		puts "Note: All targets are phone. Use --targets=all to show all targets"
+		puts "Note: All targets are phony. Use --targets=all to show all targets"
 	}
 }
 
