@@ -135,14 +135,22 @@ proc main {argv} {
 		autosetup_reference [opt-val {manual ref reference}]
 	}
 
-	if {[opt-val init] ne ""} {
-		use init
-		autosetup_init [opt-val init]
-	}
-
+	# Allow combining --install and --init
+	set earlyexit 0
 	if {[opt-val install] ne ""} {
 		use install
 		autosetup_install [opt-val install]
+		incr earlyexit
+	}
+
+	if {[opt-val init] ne ""} {
+		use init
+		autosetup_init [opt-val init]
+		incr earlyexit
+	}
+
+	if {$earlyexit} {
+		exit 0
 	}
 
 	if {![file exists $autosetup(autodef)]} {
@@ -459,6 +467,15 @@ proc config_sub {alias} {
 proc define {name {value 1}} {
 	set ::define($name) $value
 	#dputs "$name <= $value"
+}
+
+# @undefine name
+#
+# Undefine the named variable
+#
+proc undefine {name} {
+	unset -nocomplain ::define($name)
+	#dputs "$name <= <undef>"
 }
 
 # @define-append name value ...
@@ -1190,8 +1207,14 @@ proc autosetup_help {what} {
 # This is done by reinvoking autosetup with --nopager added
 proc use_pager {} {
     if {![opt-bool nopager] && [getenv PAGER ""] ne "" && [isatty? stdin] && [isatty? stdout]} {
-        catch {
-            exec [info nameofexecutable] $::argv0 --nopager {*}$::argv |& [getenv PAGER] >@stdout <@stdin
+        if {[catch {
+            exec [info nameofexecutable] $::argv0 --nopager {*}$::argv |& {*}[getenv PAGER] >@stdout <@stdin 2>@stderr
+        } msg opts] == 1} {
+            if {[dict get $opts -errorcode] eq "NONE"} {
+                # an internal/exec error
+                puts stderr $msg
+                exit 1
+            }
         }
         exit 0
     }
@@ -1336,7 +1359,7 @@ proc autosetup_init {type} {
 			# XXX: Use the options-show code to wrap the description
 			puts [format "%-10s %s" $type $desc]
 		}
-		exit 0
+		return
 	}
 	lassign [dict get $::autosetup(inittypes) $type] desc script
 
@@ -1346,8 +1369,6 @@ proc autosetup_init {type} {
 	cd $::autosetup(srcdir)
 
 	uplevel #0 $script
-
-	exit 0
 }
 
 proc autosetup_add_init_type {type desc script} {
@@ -1389,7 +1410,7 @@ proc autosetup_install {dir} {
 
 		set f [open autosetup/autosetup w]
 
-		set publicmodules $::autosetup(libdir)/default.auto
+		set publicmodules [glob $::autosetup(libdir)/*.auto]
 
 		# First the main script, but only up until "CUT HERE"
 		set in [open $::autosetup(dir)/autosetup]
@@ -1440,8 +1461,6 @@ proc autosetup_install {dir} {
 
 	# Now create 'configure' if necessary
 	autosetup_create_configure
-
-	exit 0
 }
 
 proc autosetup_create_configure {} {
@@ -1478,6 +1497,7 @@ proc autosetup_install_file {file dir} {
 	if {![file exists $file]} {
 		error "Missing installation file '$file'"
 	}
+	# XXX: Consider only overwriting unmodified files by verifying a checksum in the header
 	writefile [file join $dir [file tail $file]] [readfile $file]\n
 }
 
