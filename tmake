@@ -100,7 +100,9 @@ proc make-parse-options {argv} {
 
 	argparse argv {
 		--configure {
-			incr tmake(showcache)
+			# Just want to run configure with the remaining args
+			set tmake(configure) 1
+			break
 		}
 		--showcache {
 			incr tmake(showcache)
@@ -362,6 +364,14 @@ proc make {argv} {
 	flush stdout
 
 	set tmake(prefix) ""
+
+	if {[exists tmake(configure)]} {
+		dputs m "--configure options, so taking over targets"
+		# Put the command line in CONFIGURE_OPTS
+		# and build configure
+		define! CONFIGURE_OPTS $tmake(cmdline)
+		set tmake(cmdline) configure
+	}
 
 	use getopt config
 
