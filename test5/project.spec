@@ -19,7 +19,8 @@ IncludePaths mDNSCore mDNSShared
 CFlags -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\" \
     -DPID_FILE=\"/var/run/mdnsd.pid\" \
     -DNOT_HAVE_SA_LEN \
-    -DMDNS_DEBUGMSGS=0
+    -DMDNS_DEBUGMSGS=0 \
+    -DOPENSSL_NO_ASM
 
 CFlags -Wno-deprecated-declarations
 
