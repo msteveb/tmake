@@ -5,7 +5,7 @@ use tmake
 options {
 }
 
-make-tmake-settings settings.conf *
+make-tmake-settings objdir/settings.conf *
 
 if {![file exists Makefile]} {
 	exec autosetup/tmake --init
