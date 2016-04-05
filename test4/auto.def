@@ -29,9 +29,7 @@ define EXTRA_LDFLAGS ""
 define USE_SYSTEM_SQLITE ""
 
 if {[string match *-darwin* [get-define host]]} {
-    puts [info source {}]
     if {[cctest -cflags {-Wdeprecated-declarations}]} {
-    puts [info source {}]
         define-append EXTRA_CFLAGS -Wno-deprecated-declarations
     }
 }
