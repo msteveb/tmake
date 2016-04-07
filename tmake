@@ -56,9 +56,10 @@ set tmake(usepager) 1
 set tmake(showcache) 0
 set tmake(showvars) 0
 set tmake(showaliases) 0
+set tmake(showwarnings) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
-set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} version 0 writecache 0}
+set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} warnings {} version 0 writecache 0}
 set tmake(commands-overview) {}
 set tmake(commands) {}
 set tmake(cli-options) {}
@@ -79,6 +80,7 @@ set tmake(numtargets) 0
 set tmake(subdirs) {}
 set tmake(prefix) ""
 set tmake(localdir) .
+set tmake(warningmsgs) {}
 
 if {$tmake(debug)} {
 	dict set tmake(debugtypes) A 1
@@ -129,6 +131,9 @@ proc make-parse-options {argv} {
 		}
 		--showaliases {
 			incr tmake(showaliases)
+		}
+		--warnings {
+			incr tmake(showwarnings)
 		}
 		--rulebase {
 			set rulebase [get-rulebase]
@@ -2056,6 +2061,10 @@ proc set-target-result {target result} {
 	}
 }
 
+proc add-warning-msg {msg} {
+	lappend ::tmake(warningmsgs) $msg
+}
+
 proc note {type args} {
 	if {$::tmake(verbose) != 1} {
 		pputs "    [pad $type 12] [join $args]"
@@ -2075,6 +2084,7 @@ proc run {args} {
 		exec-save-stderr {*}$cmdline
 	} msg opts]
 	if {$rc == 0 && $msg ne ""} {
+		add-warning-msg $msg
 		puts [colout grey $msg]
 	}
 	if {$rc == 1} {
@@ -2481,6 +2491,7 @@ proc build {target} {
 			}
 			foreach do $t(do) {
 				set oldenv [env-save]
+				set tmake(warningmsgs) {}
 				lassign [run-do $vardict $do] rc msg opts
 				env-restore $oldenv
 				if {$rc} {
@@ -2522,8 +2533,10 @@ proc build {target} {
 				}
 			}
 			# Save the commands in the command cache and the list of dyndeps
+			# and any warning messages
 			dict set tmakecache(cmd) $ruletarget [subst-do $ruletarget $vardict $t(do)]
 			dict set tmakecache(deps) $ruletarget [lsort $dyndeps]
+			dict set tmakecache(warnings) $ruletarget $tmake(warningmsgs)
 			mark-cache-dirty "Targets built"
 		}
 
@@ -2557,7 +2570,22 @@ proc build {target} {
 	} elseif {$result > 0} {
 		set status built
 	} else {
+		# Target was up-to-date.
 		set status uptodate
+		# If --warnings is set, show any cached warnings
+		if {$tmake(showwarnings)} {
+			if {[dict exists $tmakecache(warnings) $ruletarget]} {
+				set warnings [dict get $tmakecache(warnings) $ruletarget]
+				if {[llength $warnings]} {
+					# XXX: What about -v? The msg won't be shown and
+					# we don't remember the 'run' cmdline
+					run-do $vardict $t(msg)
+					foreach msg $warnings {
+						puts [colout grey $msg]
+					}
+				}
+			}
+		}
 	}
 	#puts "status changed for $ruletarget from $oldstatus => $status ($result)"
 	set-rule-status $ruletarget $status
