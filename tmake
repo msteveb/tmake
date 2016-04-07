@@ -303,6 +303,11 @@ proc make {argv} {
 		dputs m "tmake.opt exists, so loading command line options"
 		make-parse-options [readfile $tmake(topsrcdir)/tmake.opt]
 	}
+	set TMAKEFLAGS [env TMAKEFLAGS ""]
+	if {$TMAKEFLAGS ne ""} {
+		dputs m "TMAKEFLAGS is set, so parsing"
+		make-parse-options $TMAKEFLAGS
+	}
 
 	# We want disabled debugging to be as fast as possible
 	# These are called very frequently
