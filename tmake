@@ -2148,13 +2148,9 @@ proc file-exists-all {list missingname} {
 	return 1
 }
 
-# Run [subst] on the given '-do' script to replace variables.
+# Run variable [subst] on the given '-do' scripts (a list of -do commabds)
 # This is used to determine if the commands have changed for the target.
-proc subst-do {__target __vardict __script} {
-	# No substitution required?
-	if {[string first {$} $__script] < 0} {
-		return $__script
-	}
+proc subst-do {__target __vardict __do_list} {
 	# Create local vars based on $::tmake(defines) and $__vardict
 	# Could use 'dict with $dict {}' here, but this is slow for Jim Tcl
 	foreach __n [dict keys $::tmake(defines)] {
@@ -2163,15 +2159,18 @@ proc subst-do {__target __vardict __script} {
 	foreach __n [dict keys $__vardict] {
 		set $__n [dict get $__vardict $__n]
 	}
-	# Note: It is an error if the subst fails
 	unset __vardict __n
-	set rc [catch {subst -nob -noc $__script} result opts]
-	if {$rc} {
-		# subst failed -- most likely because a variable was referenced that didn't exist.
-		user-notice lred "[make-source-location $__target "" ": "]$result while building $__target"
-		tmake-exit 1
+
+	# Return a list of substituted '-do' scripts
+	lmap __each_do $__do_list {
+		# Note: It is an error if the subst fails
+		if {[catch {subst -nob -noc $__each_do} __result __opts]} {
+			# subst failed -- most likely because a variable was referenced that didn't exist.
+			user-notice lred "[make-source-location $__target "" ": "]$__result while building $__target"
+			tmake-exit 1
+		}
+		set __result
 	}
-	return $result
 }
 
 # Set up the defines and local vars and evaluate the script
@@ -2466,8 +2465,8 @@ proc build {target} {
 
 		if {$tmake(norun)} {
 			if {$tmake(norun) == 1} {
-				foreach do $t(do) {
-					show-rule-commands [subst-do $ruletarget $vardict $do]
+				foreach do [subst-do $ruletarget $vardict $t(do)] {
+					show-rule-commands $do
 				}
 			}
 			set rc 0
