@@ -2576,8 +2576,13 @@ proc build {target} {
 			if {[dict exists $tmakecache(warnings) $ruletarget]} {
 				set warnings [dict get $tmakecache(warnings) $ruletarget]
 				if {[llength $warnings]} {
-					# XXX: What about -v? The msg won't be shown and
-					# we don't remember the 'run' cmdline
+					# In verbose mode, the 'run' cmdline won't be shown.
+					# The best we can do is output the complete cached command
+					if {$tmake(verbose)} {
+						foreach do [dict get $tmakecache(cmd) $ruletarget] {
+							show-rule-commands $do
+						}
+					}
 					run-do $vardict $t(msg)
 					foreach msg $warnings {
 						puts [colout grey $msg]
