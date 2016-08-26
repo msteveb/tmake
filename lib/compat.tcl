@@ -99,7 +99,6 @@ proc setenv {name value} {
 }
 
 
-# Jim Tcl can't normalize a non-existent path
 proc file-normalize {path} {
 	if {$path eq ""} {
 		return ""
@@ -108,6 +107,8 @@ proc file-normalize {path} {
 		set path [file readlink $path]
 	}
 	if {[catch {file normalize $path} result]} {
+		# If file normalize isn't support, use cd/pwd
+		# This requires the path to exist
 		set oldpwd [pwd]
 		if {[file isdir $path]} {
 			cd $path
@@ -132,7 +133,7 @@ proc file-join {dir path} {
 	file join $dir $path
 }
 
-if {"link" in [file -commands] && 0} {
+if {"link" in [file -commands]} {
 	alias file-link file link
 } else {
 	proc file-link {{-symbolic|-hard -hard} dest src} {
@@ -334,5 +335,4 @@ proc init-compat {} {
 	signal ignore SIGINT SIGTERM
 	# SIGPIPE is caught in main
 	signal handle SIGPIPE
-
 }
