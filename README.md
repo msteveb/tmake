@@ -9,17 +9,17 @@ What it does have:
 - Build descriptions are succinct and declarative
 - A real language for build descriptions (Tcl), with simple conditional syntax
 - Rules can create multiple files
-- Two-stage reparsing to allow build configuration to be generated and reloaded
+- Two-stage reparsing allows build configurations to be generated and reloaded
   (e.g. via configure or kconfig)
 - Cache of built targets allows for:
   - Cleaning orphan targets
   - Rebuilding if build commands change
   - Rebuilding if the target is to be built by a different rule
-  - A file is "up-to-date" if it rule runs even if the file didn't change (virtual mtime)
-- Good support for "generators" which generate sources
+  - A file is "up-to-date" if its rule runs, even if the file didn't change (virtual mtime)
+- Good support for "generators" that generate sources
 - Dynamic dependency support, including caching dependencies and support for generated files
 - Excellent debugging facilities to identify exactly what is occuring and why
-- 'tmake --find' to find specify rules
+- 'tmake --find' to find specific rules
 - Support for out-of-tree builds
 - Non-recursive
 - Automatic creation of directories as required
@@ -35,7 +35,7 @@ Simple things are simple
 ------------------------
 
 Consider the following example of building a library and an executable
-that links against they library. The build descriptions is simple, succinct
+that links against the library. The build description is simple, succinct
 and has a minimum use of punctuation.
 
 # Set CFLAGS for all subsequent sources
@@ -57,7 +57,6 @@ Executable polarssl main.c
 TODO Items
 ----------
 - Documentation, especially basic --help documentation, and developer docs (e.g. known rules)
-- 'tmake --rules' would be very handy
 - Address known issues below, if possible
 - Do we need a -vars variant which completely replaces the var?
 - I don't think I have used define!, is it necessary?
@@ -113,6 +112,10 @@ Note that many keys do not expect any values.
 	Do not cache this target. Note that the 'Install' command from rulebase.default
 	uses -nocache for performance reasons since install targets are never used
 	as dependencies.
+
+-fatal
+	If the target fails to build, exit immediately (like tmake -q) rather than building
+	other, non-dependent targets.
 
 -inputs args
 	List of files/targets which are used by the -do command to create the target.
@@ -180,9 +183,6 @@ Note that many keys do not expect any values.
 
 The following options are experimental and may be removed in the future.
 
--replace
-	First discards any previous rule for the target.
-
 -add
 	Normally only one rule for a target may contain -do. With -add, -do commands
 	may be added to an existing rule.
@@ -235,6 +235,7 @@ Note that the environment is saved/restored for each '-do' command.
 
 Variables available during parsing
 ----------------------------------
+TBD
 
 Variables available to commands
 -------------------------------
@@ -572,12 +573,13 @@ More about cached state
 -----------------------
 Explain what is in .makecache and the consequences of deleting it
 
+tmake --showcache
+
 Debugging
 ---------
 Explain the various debugging "types" and how to use them when things go wrong.
 
 Explain tmake --find=rule
-Explain tmake --showcache
 
 Jim Tcl vs Tcl
 --------------
@@ -685,7 +687,7 @@ across multiple subdirectories. Consider the following (abbreviated) example fro
 	|   |-- transports
 	|   |-- unix
 	|   `-- win32
-    |-- tests
+	|-- tests
 	`-- tests-clar
 		|-- attr
 		|-- buf
@@ -765,7 +767,7 @@ include/polarssl/config.h
   some basic compiler settings. Most settings are still hard-coded here.
 - Create settings.conf and include/polarssl/autoconf.h
 - Modify include/polarssl/config.h to include autoconf.h (to avoid overwriting current version)
-- Currently tmake only supports building polarssl as a static lib (now fixed)
+- tmake can build either static lib or shared lib
 - Created polarsslwrap based on axtlswrap
 - Test directory uses code generation. scripts/generate\_code.pl was hard to work with
   because it wanted to generate output in the current dir.
