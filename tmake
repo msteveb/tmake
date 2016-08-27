@@ -2085,7 +2085,7 @@ proc run {args} {
 	} msg opts]
 	if {$rc == 0 && $msg ne ""} {
 		add-warning-msg $msg
-		puts [colout grey $msg]
+		pputs grey $msg
 	}
 	if {$rc == 1} {
 		pputs \n\t$cmdline\n
@@ -2107,7 +2107,7 @@ proc run-tmake {args} {
 		exec-save-stderr {*}$cmdline
 	} msg opts]
 	if {$rc == 0 && $msg ne ""} {
-		puts [colout grey $msg]
+		pputs grey $msg
 	}
 	if {$rc == 1} {
 		pputs \n\t$cmdline\n
@@ -2585,7 +2585,7 @@ proc build {target} {
 					}
 					run-do $vardict $t(msg)
 					foreach msg $warnings {
-						puts [colout grey $msg]
+						pputs grey $msg
 					}
 				}
 			}
@@ -2793,6 +2793,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	return $headers
 }
 
+# These are overridden by the colour module
 proc colout {colour string} {
 	return $string
 }
