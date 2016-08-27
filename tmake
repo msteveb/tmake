@@ -23,7 +23,6 @@ set tmake(debughelp) {
 	b "Reasons for targets BUILT"
 	B "Reasons for targets BUILT - changed commands or targets"
 	r "Display rules when triggered"
-	t "Rules being replaced with 'target -replace'"
 	g "Depencency graph for each target"
 	G "List goals (targets) as they are attempted"
 	p "Print rules while parsing"
@@ -1712,20 +1711,9 @@ proc target {ruletarget args} {
 
 	#show-this-rule
 
-	set replace $info(replace)
-	unset info(replace)
-
 	# And -inputs are also -depends
 	set info(depends) [concat $info(depends) $info(inputs)]
 
-	if {$replace} {
-		if {[info exists orig]} {
-			dputs t "Replacing existing rule for $ruletarget at $orig(source)"
-			unset orig
-		} else {
-			dputs t "Rule for $ruletarget with -replace but not existing target at $info(source)"
-		}
-	}
 	# Cache the prefix with the rule, also
 	set info(local) [local-dir]
 
@@ -1853,7 +1841,7 @@ proc parse-rule-args {&arglist &opt} {
 proc parse-rule {target arglist} {
 	set info {
 		inputs {} depends {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
-		replace 0 add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0
+		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0
 	}
 
 	set info(source) [find-source-location *build.spec]
@@ -1870,7 +1858,7 @@ proc parse-rule {target arglist} {
 	while {[llength $arglist]} {
 		set optargs [parse-rule-args arglist opt]
 		switch -exact -- $opt {
-			phony - nofail - replace - add - chdir - nocache - fatal {
+			phony - nofail - add - chdir - nocache - fatal {
 				if {[llength $optargs]} {
 					parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
@@ -1909,9 +1897,6 @@ proc parse-rule {target arglist} {
 		}
 	}
 
-	if {$info(add) && $info(replace)} {
-		parse-error "Rule for $target has both '-add' and '-replace'"
-	}
 	if {$info(add)} {
 		if {![llength $info(do)]} {
 			parse-error "Rule for $target has '-add' but no '-do'"
