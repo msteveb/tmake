@@ -112,7 +112,7 @@ This is rulebase.default, the default tmake rulebase. Note the following convent
 
 File specifications for Install and Publish rules support the following forms:
   - Regular filenames
-  - Renaming rules of the form: target=src
+  - Renaming rules of the form: target=source
   - Glob patterns (e.g. *.png)
 
 For rules that set variables/flags, those definitions apply to rules later in the file.
@@ -1213,12 +1213,10 @@ for .c sources.
 }
 
 rule ObjectCFlags {srcs args} {
-ObjectCFlags srcs ...
+ObjectCFlags source ...
 
 Like CFlags, but instead of adding C_FLAGS for all subsequent rules, adds
-C_FLAGS only to the objects created from the given sources.
-
-$srcs is a list of source files
+C_FLAGS only to the objects created from the given list of source files
 } {
 	show-this-rule
 	foreach src $srcs {
@@ -1275,9 +1273,15 @@ By default $CC is used. For C++ applications, it is typical to set:
 }
 
 rule UseLibs {args} {
-UseLibs ...
+UseLibs projlib ...
 
-XXX
+Identifies published project libraries from other directories that are required for
+linking subsequent Executables, Shared Libraries and Shared Objects.
+
+The libraries are both added as dependencies (via $PROJDEPS) and added to the link line
+(via $PROJLIBS)
+
+For non-project libraries (such as system libraries), see UseSystemLibs and LinkFlags
 } {
 	# Create/append to PROJLIBS (the link line)
 	if {[get-define PROJLIBS] eq ""} {
@@ -1292,7 +1296,17 @@ XXX
 rule IncludePaths {args} {
 IncludePaths ?--reset? ?--build? ?--source? paths...
 
-XXX
+Arranges to search the given paths for header files. By default, the paths (relative)
+to the current local directory, are searched in both the source tree and the build tree,
+however specifying only one of --build and --source restricts to search to just that tree.
+
+The paths are added:
+- to $INCPATHS for use by dynamic header dependency searching
+- to CFlags ($C_FLAGS) as -I <path>
+- to C++Flags ($CXX_FLAGS) as -I <path>
+
+If --reset is specified, INCPATHS, C_FLAGS, and CXX_FLAGS are reset to their default values,
+before any IncludePaths invocations. This can be useful to remove the implicit 'IncludePaths .'
 } {
 	show-this-rule
 
@@ -1337,9 +1351,27 @@ XXX
 }
 
 rule Load {args} {
-Load ...
+Load ?--nocare? ?--config? filename
 
-XXX
+Reads a configuration file in one of two forms.
+If --config is specified, the following form is expected:
+
+  CONFIG_BOOL_VALUE=y (or m)
+  CONFIG_STR_VALUE="string value"
+  CONFIG_INT_VALUE=123
+
+Otherwise a Tcl source file is expected to contain 'define' commands. e.g.
+
+  define CONFIG_BOOL_VALUE
+  define CONFIG_STR_VALUE "string value"
+  define CONFIG_INT_VALUE 123
+
+Unless --nocare is specified, the file must exist.
+
+The symbols contained in the file are defined, and the file is marked
+as a project dependency. This means that if the file changes, it is re-read.
+It is possibly for the build to create/re-create this file, in which case the
+parsing phase will be restarted.
 } {
 	show-this-rule
 
@@ -1376,7 +1408,11 @@ XXX
 rule UseSystemLibs {args} {
 UseSystemLibs ...
 
-XXX
+Adds system libraries to be used when linking subsequent Executables, Shared Libraries and Shared Objects
+via the $SYSLIBS variable.
+Typical usage is:
+
+  UseSystemLibs -ldl -lm
 } {
 	define-append SYSLIBS {*}$args
 }
@@ -1477,7 +1513,7 @@ If it doesn't match, the test fails.
 rule CopyFile {dest source} {
 CopyFile dest source
 
-XXX
+Copies the source file to the destination file
 } {
 	show-this-rule
 	target [make-local $dest] -inputs [make-local $source] -msg [list note Copy $dest] -do {
@@ -1488,9 +1524,17 @@ XXX
 }
 
 rule InstallFile {dest src {flags {}}} {
-InstallFile dest src ?flags?
+InstallFile dest source ?flags?
 
-XXX Installs the
+Installs the given source file to the destination (file) relative to $DESTDIR
+'flags'  is a list of zero or more of the following:
+
+	bin      - make the target executable
+	strip    - strips the target with $STRIP $STRIPFLAGS
+	striplib - strips the target with $STRIP $STRIPLIBFLAGS
+
+Adds the rule to the global 'install' target and adds the file the list of files
+to be uninstalled with 'uninstall'
 } {
 	show-this-rule
 
@@ -1548,18 +1592,18 @@ The following arguments are supported:
 }
 
 rule Clean {args} {
-Clean ?--src? target ...
+Clean ?--source? target ...
 
 Adds the given targets to the list of files to be removed on 'tmake clean'
 } {
 	# DistClean also cleans these files
 	DistClean {*}$args
 
-	getopt {--src args} args
+	getopt {--src --source args} args
 
 	set args [join $args]
 
-	if {$src} {
+	if {$source || $src} {
 		add-src-clean [make-local clean] $args
 	} else {
 		add-clean [make-local clean] [make-local {*}$args]
@@ -1567,15 +1611,20 @@ Adds the given targets to the list of files to be removed on 'tmake clean'
 }
 
 rule DistClean {args} {
-DistClean ?--src? target ...
+DistClean ?--source? target ...
 
 Adds the given targets to the list of files to be removed on 'tmake distclean'
+If --source is specified, the target is relative to the source directory
+rather than the build directory.
 } {
-	getopt {--src args} args
+	getopt {--source --src args} args
 
 	set args [join $args]
 
 	if {$src} {
+		user-notice purple [warning-location "Warning: DistClean --src is deprecated, use --source instead"]
+	}
+	if {$source || $src} {
 		add-src-clean [make-local distclean] $args
 	} else {
 		add-clean [make-local distclean] [make-local {*}$args]
