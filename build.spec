@@ -2,7 +2,7 @@ AutoSubDirs off
 
 # Should pass on some options such as --force
 
-foreach dir [Glob --dirs {test[0-9]}] {
+foreach dir [Glob --dirs {test[0-9a]}] {
 	Phony all-$dir -vars dir $dir -do {
 		run-tmake -C $dir all
 	}
