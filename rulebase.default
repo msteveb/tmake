@@ -274,7 +274,7 @@ proc rulebase-epilog {} {
 # to link to the actual filename.
 #
 # This command checks the rule name (e.g. abc) and the executable name (e.g. abc.exe)
-# and if they are the same, returns an appropriate target alias for the executable
+# and if they are different, returns an appropriate target alias for the executable
 # (e.g. -alias abc). Otherwise an empty list is returned.
 #
 proc target-alias {target targetexe} {
@@ -495,7 +495,6 @@ proc load-config-file {filename} {
 # Currently appends (the absolute path of) $PUBLISH/lib to LD_LIBRARY_PATH
 # in the environment to allow published shared libraries to be loaded
 proc setup-test-env {} {
-	# XXX some platforms use a different name
 	set ldlibpath [get-define LD_LIBRARY_PATH]
 	if {$ldlibpath ne ""} {
 		set path [getenv $ldlibpath ""]
@@ -517,7 +516,7 @@ proc get-test-id {} {
 
 # @run-test-command testcommand
 #
-# This is a help for running test commands.
+# This is a helper for running test commands.
 # The environment is set up with setup-test-env
 # Then SRCDIR is exported to the environment
 # stdout, stderr and errok are checked from the caller to determine
@@ -528,6 +527,7 @@ proc run-test-command {testcommand} {
 	upvar stdout stdout
 	upvar stderr stderr
 	upvar errok errok
+	upvar SRCDIR SRCDIR
 
 	set cmdline $testcommand
 
@@ -545,7 +545,7 @@ proc run-test-command {testcommand} {
 	}
 
 	# Get this value from the calling scope and set in the environment
-	uplevel 1 {setenv SRCDIR $SRCDIR}
+	setenv SRCDIR $SRCDIR
 	incr ::tmakedrb(testruncount)
 	set rc [catch {
 		vputs [string trim $testcommand]
@@ -917,8 +917,17 @@ Rather Publishlib and PublishBin should be used.
 rule ArchiveLib {args} {
 ArchiveLib ?--publish? ?--install=<dir>? basename sources...
 
-Creates an archive library from the given sources
-XXX
+Creates an archive library from the given sources. For each source, the appropriate ObjectRule is used
+to generate the object file, and these files are combined with $AR and $RANLIB to create the archive library.
+
+		run $AR $ARFLAGS $target {*}[expand-objects $inputs]
+		run $RANLIB $target
+
+Used variables: AR, ARFLAGS, RANLIB
+
+The following options are supported:
+  --publish           Publishes the library (see PublishLib)
+  --install=<dir>     Install the library to the given directory (see InstallFile)
 } {
 	show-this-rule
 	getopt {--publish --install: basename args} args
@@ -955,16 +964,25 @@ XXX
 rule SharedLib {args} {
 SharedLib ?--publish? ?--strip? ?--version=<vers>? ?--install=<dir> basename source...
 
-Creates a shared library ...
-XXX
+Creates a shared library from the given sources. For each source, the appropriate ObjectRule is used
+to generate the object file, and these files are linked (along with any libraries) to create the shared library.
+
+Imported variables: CCLD (from Linker), PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
+Used variables: SH_LDFLAGS, LDFLAGS, SH_SOEXT, SH_SOEXTVER, SH_SOPREFIX
+
+The following options are supported:
+  --publish           For compatibility. Note that shared libraries are always published. (see PublishLib)
+  --install=<dir>     Install the shared library to the given directory (see InstallFile)
+  --strip             Marks the library to be stripped when installed (see InstallFile)
+  --version=<ver>     A version for the shared library of the form n.n.n (1-3 parts)
+  --soversion=<ver>   Override the soname version. Otherwise the first part of the version is used.
 } {
 	show-this-rule
-	getopt {--publish --strip --version: --install: basename args} args
+	getopt {--publish --strip --version: --soversion: --install: basename args} args
 
 	if {![info exists version]} {
 		set version 0
 	}
-
 	set n 0
 	foreach part [split $version .] {
 		if {![string is integer -strict $part]} {
@@ -980,8 +998,12 @@ XXX
 
 	# What names may our shared lib have?
 	set nameinfo [list [get-define SH_SOEXTVER] $version %s [get-define SH_SOEXT]]
+	set default_soversion $version
 	if {$n > 1} {
-		lappend nameinfo [get-define SH_SOEXTVER] [lindex [split $version .] 0]
+		# If more that one part is given, the first one is the defaul soversion
+		lassign [split $version .] default_soversion
+		set default_soversion $version
+		lappend nameinfo [get-define SH_SOEXTVER] $default_soversion
 	}
 
 	set names {}
@@ -1010,27 +1032,34 @@ XXX
 
 	set setsoname {}
 	if {[get-define SH_SOPREFIX ""] ne ""} {
-		set setsoname [get-define SH_SOPREFIX][file tail $libname]
+		if {![info exists soversion]} {
+			set soversion $default_soversion
+		}
+		set soname lib$basename[format [get-define SH_SOEXTVER] $soversion]
+		set setsoname [get-define SH_SOPREFIX]$soname
 	}
 
 	define? CCLD [get-define CC]
 
 	# Note: Do not link against local archive libs (LOCAL_LIBS)
-	# XXX: Here we use $LDFLAGS to capture any user-specied link flags (.e.g. -mbig-endian).
+	# XXX: Here we use $LDFLAGS to capture any user-specified link flags (.e.g. -mbig-endian).
 	#      Assume that these are required both for shared libs and for executables.
-	#      Is it necessary to separate these two?
-	#      Also, is LinkFlags/LD_FLAGS also required?
+	#      Any shared-library-only flags are in $SH_LDFLAGS.
+	#      Is LinkFlags/LD_FLAGS also required?
 
 	target $locallibname -inputs {*}$objects -depends [get-define PROJDEPS] -msg {note SharedLib $targetname} -do {
 		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
 	} -getvars CCLD PROJLIBS SYSLIBS -vars setsoname $setsoname
 	Clean $locallibname
 
-	# Only the fully versioned named is built in the local dir
+	# Only the fully versioned name is built in the local dir
 	Phony libs $locallibname
 	Clean $libname
 
 	# Note: --publish is dummy. Shared libs always need to be published to be used
+	# The reason is that it gets difficult to manage LD_LIBRARY_PATH or equalivalent.
+	# If shared libraries are always published, a single definition of LD_LIBRARY_PATH=$PUBLISH/lib
+	# will work for all shared libs
 	incr publish
 
 	if {$publish} {
@@ -1040,11 +1069,7 @@ XXX
 		# Used to make expand-objects work
 		dict set ::tmakedrb(objmap) $libalias $objects
 
-		# Local executables only link against this lib if it is published
-		# The reason is that it gets difficult to manage LD_LIBRARY_PATH or equalivalent.
-		# If the shared lib is published, a single definition of LD_LIBRARY_PATH=$PUBLISH/lib will work for all shared libs
-		# Thus UseLibs here rather than adding to LOCAL_LIBS
-
+		# Local executables link against this library
 		UseLibs $basename
 	}
 	if {[info exists install]} {
@@ -1104,7 +1129,7 @@ rule Objects {args} {
 Objects source...
 
 Create an object file from each source file
-Uses $OBJSRULES(.ext) to determine the build rule
+Uses the appropriate ObjectRule for each source.
 Returns a list of objects
 Accepts object files (.o) in addition to source files
 and simply returns them
@@ -1125,7 +1150,8 @@ and simply returns them
 rule Object {target src} {
 Object obj src
 
-Creates object $target from source $src by using the appropriate ObjectRule
+Creates object $target from source $src by using the appropriate ObjectRule, e.g. ObjectRule.c
+for .c sources.
 } {
 	show-this-rule
 	set ext [file ext $src]
@@ -1197,7 +1223,7 @@ Add the given flags to LD_FLAGS (used in Executable and SharedLib)
 rule Linker {linker} {
 Linker prog
 
-Defines the linker to use for subsequent Executable and SharedLib.
+Defines the linker to use for subsequent Executable and SharedLib ($CCLD).
 By default $CC is used. For C++ applications, it is typical to set:
 
   Linker $CXX
