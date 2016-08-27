@@ -152,6 +152,12 @@ if {"link" in [file -commands]} {
 	}
 }
 
+if {"mtimens" in [file -commands]} {
+	alias file-mtime file mtimens
+} else {
+	alias file-mtime file mtime
+}
+
 ##################################################################
 #
 # Directory/path handling
