@@ -81,6 +81,10 @@ proc apply-template {infile outfile mapping target} {
 # This is not recommended since any change to a variable will cause
 # the template to be regenerated.
 #
+# Returns the local target to allow the following construct:
+#
+# Depends all [Template target src ...]
+#
 proc Template {args} {
 	show-this-rule
 
@@ -112,4 +116,5 @@ proc Template {args} {
 		apply-template $inputs $target $mapping $targetname
 	}
 	Clean $target
+	return [make-local $target]
 }
