@@ -171,11 +171,13 @@ proc main {argv} {
 
 	autosetup_add_dep $autosetup(autodef)
 
-	set cmd [file-normalize $autosetup(exe)]
+	define CONFIGURE_OPTS ""
 	foreach arg $autosetup(argv) {
-		append cmd " [quote-if-needed $arg]"
+		define-append CONFIGURE_OPTS [quote-if-needed $arg]
 	}
-	define AUTOREMAKE $cmd
+	define AUTOREMAKE [file-normalize $autosetup(exe)]
+	define-append AUTOREMAKE [get-define CONFIGURE_OPTS]
+
 
 	# Log how we were invoked
 	configlog "Invoked as: [getenv WRAPPER $::argv0] [quote-argv $autosetup(argv)]"
@@ -408,7 +410,7 @@ proc options-show {} {
 #
 # If the name:value form is used, the value must be provided with the option (as --name=myvalue).
 # If the name:=value form is used, the value is optional and the given value is used as the default
-# if is not provided.
+# if it is not provided.
 #
 # Undocumented options are also supported by omitting the "=> description.
 # These options are not displayed with --help and can be useful for internal options or as aliases.
@@ -565,7 +567,7 @@ proc env-is-set {name} {
 # @readfile filename ?default=""?
 #
 # Return the contents of the file, without the trailing newline.
-# If the doesn't exist or can't be read, returns $default.
+# If the file doesn't exist or can't be read, returns $default.
 #
 proc readfile {filename {default_value ""}} {
 	set result $default_value
@@ -1497,7 +1499,6 @@ proc autosetup_install_file {file dir} {
 	if {![file exists $file]} {
 		error "Missing installation file '$file'"
 	}
-	# XXX: Consider only overwriting unmodified files by verifying a checksum in the header
 	writefile [file join $dir [file tail $file]] [readfile $file]\n
 }
 
