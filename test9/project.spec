@@ -8,6 +8,6 @@ Depends {settings.conf config.h} auto.def -do {
 } -onerror {puts [readfile $build/config.out]}
 Clean config.out
 DistClean settings.conf config.h
-Clean --src config.log
+Clean --source config.log
 
 Load settings.conf

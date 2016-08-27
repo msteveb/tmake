@@ -13,7 +13,7 @@ Depends {settings.conf include/autoconf.h} auto.def -msg {note Configuring...} -
 	run [set AUTOREMAKE] >$build/config.out
 } -onerror {puts [readfile $build/config.out]} -fatal
 Clean config.out
-DistClean --src config.log
+DistClean --source config.log
 DistClean settings.conf include/autoconf.h
 
 # If not configured, configure with default options
