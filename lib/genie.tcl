@@ -14,7 +14,7 @@ proc tmake-genie {argv} {
 	}
 
 	set headers [glob -nocomplain *.h *.hpp]
-	set src [glob -nocomplain *.c *.cpp *.cc *.cxx]
+	set src [glob -nocomplain *.c *.cpp *.cc *.cxx *.y *.l]
 
 	# Categorise the sources
 	set progsrc {}

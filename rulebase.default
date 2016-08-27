@@ -70,6 +70,11 @@ proc rulebase-init {} {
 		define? HOST_EXEEXT ""
 	}
 
+	define? LEX flex
+	define? LFLAGS ""
+	define? YACC bison
+	define? YFLAGS -y
+
 	define? LOCAL_LIBS ""
 	define? DESTDIR ""
 	define? OBJCFLAGS ""
@@ -196,6 +201,7 @@ Used variables: CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 		}
 	}
+	return $obj
 }
 
 rule ObjectRule.cpp {obj src} {
@@ -214,6 +220,43 @@ Used variables: CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 		}
 	}
+	return $obj
+}
+
+rule ObjectRule.l {obj src} {
+ObjectRule.l object source
+
+Generates an object file from a lexer source file
+} {
+	set base [file rootname $src]
+	set targets [list $base.lex.c $base.lex.h]
+
+	# Build the output files with lex/flex
+	target $targets -inputs $src -msg {note Lex $targetname} -getvars LEX LFLAGS -do {
+		run $LEX $LFLAGS --outfile=[lindex $target 0] --header-file=[lindex $target 1] $inputs
+	}
+	Clean $targets
+
+	# And create the object through Object
+	Object $base.lex.o $base.lex.c
+}
+
+rule ObjectRule.y {obj src} {
+ObjectRule.y object source
+
+Generates an object file from a yacc source file
+} {
+	set base [file rootname $src]
+	set targets [list $base.tab.c $base.tab.h]
+
+	# Build the output files with yacc/bison
+	target $targets -inputs $src -msg {note Yacc $targetname} -getvars YACC YFLAGS -do {
+		run $YACC $YFLAGS --output=[lindex $target 0] --defines=[lindex $target 1] $inputs
+	}
+	Clean $targets
+
+	# And create the object through Object
+	Object $base.tab.o $base.tab.c
 }
 
 # ==================================================================
@@ -1162,7 +1205,7 @@ for .c sources.
 			build-error [warning-location "Don't know how to build Object from $src"]
 			return $obj
 		} else {
-			ObjectRule$ext $obj $src
+			set obj [ObjectRule$ext $obj $src]
 			Clean $target
 		}
 	}
