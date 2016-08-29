@@ -10,16 +10,6 @@ CFlags -DHAVE_AUTOCONFIG_H $EXTRA_CFLAGS
 LinkFlags $EXTRA_LDFLAGS
 UseSystemLibs $LIBS
 
-if 0 {
-# XXX: Simple host executable for now
-proc HostExecutable {target args} {
-	target [make-local $target] -inputs {*}[make-local {*}$args] -do {
-		run $CC_FOR_BUILD -o $target $inputs
-	}
-	Clean $target
-}
-}
-
 HostExecutable translate translate.c
 HostExecutable makeheaders makeheaders.c
 HostExecutable mkindex mkindex.c
@@ -48,7 +38,7 @@ Generate page_index.h mkindex [suffix .c $src] {
 set gen_headers {}
 set headers {}
 set header_deps {}
-foreach b "$src main" {
+foreach b [concat $src main] {
 	Generate ${b}_.c translate $b.c {
 		run $script $inputs >$target
 	}
@@ -57,8 +47,6 @@ foreach b "$src main" {
 	lappend header_deps ${b}_.c
 }
 
-# Note: make-local-src is needed here because these filenames are not passed as inputs or dependencies,
-#       and nor are they targets, so tmake doesn't know that they are in the source tree.
 lappend gen_headers sqlite3.h th.h [file-build include/VERSION.h]
 lappend header_deps sqlite3.h th.h include/VERSION.h
 
