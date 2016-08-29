@@ -28,6 +28,9 @@ CFlags -I.
 ifconfig USE_LINENOISE {
 	define-append SRCS linenoise.c
 }
+ifconfig {!HAVE_REGCOMP || JIM_REGEXP} {
+	define-append SRCS jimregexp.c
+}
 
 Install $prefix/include jim.h jim-config.h jim-subcmd.h jim-win32compat.h jim-eventloop.h jim-nvp.h jim-signal.h
 
@@ -65,7 +68,7 @@ ifconfig JIM_UTF8 {
 	}
 }
 
-Lib --publish jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c jimregexp.c _loadstatic.c _initjimsh.c $SRCS
+Lib --publish jim jim.c jim-subcmd.c jim-interactive.c jim-format.c utf8.c _loadstatic.c _initjimsh.c $SRCS
 
 Executable --install=$exec_prefix/bin jimsh jimsh.c
 
