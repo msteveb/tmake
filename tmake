@@ -1317,15 +1317,23 @@ proc show-cache {} {
 	}
 	puts ""
 
-	puts "Commands used to build targets"
-	puts "------------------------------"
+	puts "Commands used to build targets and warnings"
+	puts "-------------------------------------------"
 	# Commands
 	foreach i [lsort [dict keys $tmakecache(cmd)]] {
 		puts $i
 		foreach do [dict get $tmakecache(cmd) $i] {
 			show-rule-commands $do
-			puts ""
 		}
+		if {[dict exists $tmakecache(warnings) $i]} {
+			set warnings [dict get $tmakecache(warnings) $i]
+			if {[llength $warnings]} {
+				foreach msg $warnings {
+					pputs grey $msg
+				}
+			}
+		}
+		puts ""
 	}
 }
 
