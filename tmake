@@ -2620,34 +2620,38 @@ proc header-scan-regexp {suffix regex filename} {
 	return $headers
 }
 
-# Returns a list of {type path-to-filename}
+# Returns a list of {type path-to-filename mtime}
 # where type is "target" or "source"
 #
 # If the $path/$filename is neither a target nor source, the empty list is returned
 proc find-file-on-path {filename path} {
 	set f [file-join $path $filename]
 
-	#puts "find-file-on-path $filename + $path => $f"
-
 	set result {}
 	if {[is-target? $f]} {
 		dputs-D "$f is a target, so building first"
 		# Even if it fails to build, it is needed
 		if {[build $f] >= 0} {
-			set result [list target $f]
+			# with tmake -n, the file may not have actually been built
+			set filepath [file-build $f]
+			if {[file exists $filepath]} {
+				set result [list target $f [file-mtime $filepath]]
+			} else {
+				set result [list target $f 0]
+			}
+		} else {
+			dputs-D "failed to build $f"
 		}
 	} else {
 		if {[file exists $f]} {
-			#puts "  => $f exists"
-			set result [list source $f]
-		} else {
-			#puts "  => $f does not exist"
+			set result [list source $f [file-real-mtime $f]]
 		}
 	}
+	#puts "find-file-on-path $filename + $path ($f) => $result "
 	return $result
 }
 
-# Returns a list of {type path ...}
+# Returns a list of {type path mtime ...}
 # where type is "target" or "source" and the path is:
 #
 # target -  $path-to-filename
@@ -2690,7 +2694,7 @@ proc find-file {filename paths} {
 	if {[llength $result] == 0} {
 		dputs-D "Not a file and not a target, $filename"
 	}
-	if {[debug-is-set D] && [llength $result] > 2} {
+	if {[debug-is-set D] && [llength $result] > 3} {
 		dputs-D "Note: Found multiple locations for $filename: [join $result]"
 	}
 	#puts "find-file filename=$filename, paths=$paths => $result"
@@ -2727,20 +2731,27 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 			# Need to verify that find-file returns the same result as last time
 			#puts "---- $filename ----"
 			#parray cachedresults
+			dputs-D "verifying up-to-data cached results for $filename"
 			set ok 1
 			foreach {cfile ctypepath} $cachedresults {
 				set typepath [find-file $cfile $incpaths]
 				if {$typepath ne $ctypepath} {
-					dputs-d "previously $cfile resolved to {$ctypepath}, but now resolves to {$typepath}, discarding cache"
+					dputs-d "previously $cfile resolved to {$ctypepath}, but now resolves to {$typepath} -  forcing rescan"
 
-					# Now what if the file was previously a target it is an orphan.
-					# Discard it to avoid mistakenly thinking that it is a new source file.
-					foreach {type path} $ctypepath {
-						if {$type eq "target"} {
-							dputs-d "discarding orphan $path"
-							file delete $path
+					# XXX: Previously we discarded any cached, orphan targets here, but
+					# that is not necessary since the normal orphan cleaning does it
+					if 0 {
+						foreach {ctype cpath cmtime} $ctypepath {
+							if {$ctype eq "target" && ![is-target? $cpath]} {
+								set orphanpath [file-build $cpath]
+								if {[file exists $orphanpath]} {
+									dputs-d "discarding orphan $cpath"
+									delete-orphan-files $orphanpath
+								}
+							}
 						}
 					}
+
 					set ok 0
 					break
 				}
@@ -2749,6 +2760,8 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 				# Can reuse the cache
 				dputs-d "header-scan-regexp $filename (cached) => $headers"
 				return $headers
+			} else {
+				dputs-d "cache is out-of-date for $filename - rescanning"
 			}
 		}
 		# Stale
@@ -2768,7 +2781,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 				set scanned($d) 1
 				set findfiles [find-file $d $incpaths]
 				set results($d) $findfiles
-				foreach {type deppath} $findfiles {
+				foreach {type deppath mtime} $findfiles {
 					set deps($deppath) 1
 					lappend newscan {*}[header-scan-regexp $suffix $regex $deppath]
 				}
@@ -2782,6 +2795,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	# memoize the result
 	set headers [dict keys $deps]
 	dict set tmakecache(headerscan) $filename [list $stamp $headers $results]
+	#dputs d results=$results
 	mark-cache-dirty "New header scan"
 	return $headers
 }
