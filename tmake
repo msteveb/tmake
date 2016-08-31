@@ -1368,6 +1368,8 @@ proc num-nonphony-targets {} {
 # Variable Handling
 # ==================================================================
 
+# @define name arg ...
+#
 # Set a variable to the given value, unless it was defined with define!
 # 
 # e.g. define CC arm-linux-gcc -mbig-endian
@@ -1388,6 +1390,10 @@ proc define {name args} {
 	}
 }
 
+# @define! name arg ...
+#
+# Like 'define', but marks the variable as fixed. It won't be overwritten by 'define'.
+#
 proc define! {name args} {
 	set value [join $args]
 	dputs v "define! $name $value"
@@ -1396,8 +1402,10 @@ proc define! {name args} {
 	uplevel #1 [list set $name $value]
 }
 
-# Set a variable to the given value
-# unless it is already set to a non-empty value.
+# @define? name arg ...
+#
+# Like 'define', but only sets the variable if it is undefined
+# or set to an empty value.
 #
 proc define? {name args} {
 	global $name
@@ -1407,6 +1415,8 @@ proc define? {name args} {
 	}
 }
 
+# @define-append name arg ...
+#
 # If the variable is not set, set it.
 # Otherwise append the new value to the old value
 # separated by a space.
@@ -1418,6 +1428,11 @@ proc define-append {name args} {
 	define $name $value
 }
 
+# @get-define name ?default?
+#
+# Returns the current value of the given defined variable, or $default
+# if not set. If not specified, $default is ""
+#
 proc get-define {name {default ""}} {
 	if {[dict exists $::tmake(defines) $name]} {
 		#dputs v "get-define $name => [dict get $::tmake(defines) $name]"
