@@ -86,6 +86,7 @@ proc rulebase-init {} {
 	define LD_FLAGS ""
 
 	define PUBLISH publish
+	define? STRIP_DEFAULT 0
 
 	define PROJLIBS ""
 	define SYSLIBS ""
@@ -1117,7 +1118,7 @@ The following options are supported:
 	}
 	if {[info exists install]} {
 		set flags bin
-		if {$strip} {
+		if {$strip || [get-define STRIP_DEFAULT 0]} {
 			lappend flags striplib
 		}
 
@@ -1129,7 +1130,7 @@ The following options are supported:
 alias Lib ArchiveLib
 
 rule SharedObject {args} {
-SharedObject ?--install=<dir>? target sources...
+SharedObject ?--install=<dir>? ?--strip? target sources...
 
 Builds a dynamically loadable shared object from the given sources.
 For each source, the appropriate ObjectRule is used to generate the object file,
@@ -1146,7 +1147,7 @@ The following options are supported:
 } {
 	show-this-rule
 
-	getopt {--install: target args} args
+	getopt {--install: --strip target args} args
 
 	set srcs [join $args]
 
@@ -1164,7 +1165,11 @@ The following options are supported:
 	Phony all $localtarget
 
 	if {[info exists install]} {
-		Install --bin $install $target
+		set flags bin
+		if {$strip || [get-define STRIP_DEFAULT 0]} {
+			lappend flags striplib
+		}
+		InstallFile [file-join $install $target] $localtarget $flags
 	}
 }
 
@@ -1706,6 +1711,18 @@ Creates a Phony, local target with the given additional target arguments.
 
 proc LocalMakefile {name} {
 	user-notice purple [warning-location "Warning: LocalMakefile is deprecated and ignored"]
+}
+
+rule DefaultStrip {on} {
+DefaultStrip 0|1
+
+Enables or disables the default --strip setting for Executable, SharedLib and SharedObject.
+This is useful to avoid explicitly setting the --strip option for each target.
+Sets the define: STRIP_DEFAULT
+} {
+	show-this-rule
+
+	define STRIP_DEFAULT $on
 }
 
 rule DefaultTarget {name} {
