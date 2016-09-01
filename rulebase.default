@@ -1972,15 +1972,7 @@ DistClean .makecache
 
 # Invoked manually
 Phony clean-orphans -do {
-	# Note, this duplicates the code from tmake
-	# Consider creating a proc in tmake for this
-	set orphans [get-orphan-targets]
-	if {[llength $orphans]} {
-		delete-orphan-files {*}[file-build $orphans]
-		note Clean removing [llength $orphans] orphan target(s)
-		dputs C $orphans
-		discard-orphan-targets
-	}
+	do-delete-orphans [get-orphan-targets]
 	# Now remove the trash
 	if {[file exists .trash]} {
 		note Clean .trash
