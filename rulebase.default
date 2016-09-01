@@ -45,6 +45,8 @@ proc rulebase-init {} {
 	define? AR ar
 	define? RANLIB ranlib
 	define? STRIP strip
+	define? STRIPFLAGS ""
+	define? STRIPLIBFLAGS ""
 	define? ARFLAGS cr
 	define? CFLAGS ""
 	define? CXXFLAGS ""
@@ -61,6 +63,7 @@ proc rulebase-init {} {
 	define? SH_SOEXT .so
 	define? SHOBJ_CFLAGS ""
 	define? SHOBJ_LDFLAGS ""
+	define? LD_LIBRARY_PATH ""
 
 	define? CC_FOR_BUILD gcc
 	define? HOST_CFLAGS ""
@@ -403,19 +406,26 @@ proc publish-shared-lib {names source alias} {
 	add-clean [make-local distclean] $published
 }
 
-# @install-shared-lib dest names source flags
+# @install-shared-lib ?--striplib? dest names source flags
 #
 # Creates a rule to install a shared library, $source, to install directory $dest
 # This includes creating appropriate symlinks.
 # $flags are passed to install-file and should either be empty, or "striplib".
-proc install-shared-lib {dest names source flags} {
+proc install-shared-lib {args} {
+	getopt {--striplib dest names source} args
+
 	set installed [prefix [make-prefix [get-define DESTDIR]$dest] $names]
 
+	set installopts {}
+	lappend installopts --bin
+	if {$striplib} {
+		lappend installopts "--strip=[get-define STRIP] [get-define STRIPLIBFLAGS]"
+	}
 	target $installed -nocache -inputs $source -msg {note Install $libname} -do {
 		file delete {*}$target
-		install-file [lindex $target 0] $inputs $flags
+		install-file {*}$installopts [lindex $target 0] $inputs
 		make-shlib-symlinks {*}$target
-	} -vars flags $flags libname [file-join $dest [lindex $names 0]]
+	} -vars installopts $installopts libname [file-join $dest [lindex $names 0]]
 
 	target install -depends {*}$installed
 	add-clean uninstall $installed
@@ -535,19 +545,16 @@ proc load-config-file {filename} {
 # @setup-test-env
 #
 # Prepares the environment for running tests.
-# Currently appends (the absolute path of) $PUBLISH/lib to LD_LIBRARY_PATH
-# in the environment to allow published shared libraries to be loaded
+# Given the (absolute path of) $PUBLISH/lib and the name of the LD_LIBRARY_PATH variable,
+# appends the publish lib $LD_LIBRARY_PATH in the environment to allow published shared libraries to be loaded
 # Also sets TMAKE_LIBPATH to the same value for script helpers on Mac OS X
 # since DYLD_LIBRARY_PATH can't be passed to scripts
 # (See https://forums.developer.apple.com/message/31148)
-proc setup-test-env {} {
-	set ldlibpath [get-define LD_LIBRARY_PATH]
-	# Must use a full path here since some tests do chdir
-	set addlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
-	setenv TMAKE_LIBPATH $addlib
+proc setup-test-env {publishlib ldlibpath} {
+	setenv TMAKE_LIBPATH $publishlib
 	if {$ldlibpath ne ""} {
 		set path [getenv $ldlibpath ""]
-		append-with-space path $addlib $::tcl_platform(pathSeparator)
+		append-with-space path $publishlib $::tcl_platform(pathSeparator)
 		setenv $ldlibpath $path
 	}
 
@@ -571,8 +578,6 @@ proc get-test-id {} {
 # stdout, stderr and errok are checked from the caller to determine
 # how output/errors are handled/checked
 proc run-test-command {testcommand} {
-	setup-test-env
-
 	upvar stdout stdout
 	upvar stderr stderr
 	upvar errok errok
@@ -659,21 +664,27 @@ proc hard-link {args} {
 	add-clean [make-local distclean] $dest
 }
 
-# @install-file target source flags
+# @install-file ?--strip=$STRIPCMD? ?--bin? target source
 #
 # Helper for installing files
 # Copies the file from $source to $target, then performs zero or more actions
 # depending upon the flags (which is a list)
 #
-# bin      - make the target executable with chmodx-file
-# strip    - strips the target with strip-file $STRIPFLAGS
-# striplib - strips the target with strip-file $STRIPLIBFLAGS
-proc install-file {target source flags} {
+# --bin                 - make the target executable with chmodx-file
+# --strip=$STRIPCMD     - If specified, strips the target with the given strip command
+#
+proc install-file {args} {
+	getopt {--strip: --bin target source} args
+
 	vputs "Copy $source $target"
 	file copy -force $source $target
-	if {"bin" in $flags} { chmodx-file $target }
-	if {"strip" in $flags} { strip-file [get-define STRIPFLAGS {}] $target }
-	if {"striplib" in $flags} { strip-file [get-define STRIPLIBFLAGS {}] $target }
+	if {$bin} {
+		chmodx-file $target
+	}
+	if {[exists strip]} {
+		vputs "Strip $target"
+		exec {*}$strip $target
+	}
 }
 
 # @chmodx-file target
@@ -690,8 +701,6 @@ proc chmodx-file {target} {
 #
 # If $STRIP is not set, does nothing
 proc strip-file {flags target} {
-	vputs "Strip $target $flags"
-	exec {*}[get-define STRIP true] {*}$flags $target
 }
 
 # @remove-empty-directories filename-list
@@ -860,11 +869,12 @@ The following options are supported:
   --nobuild           Don't make this executable dependent on phony 'all', which is otherwise the default
   --publish           Publishes the executable (see PublishBin)
   --install=<dir>     Install the executable to the given directory (see InstallFile)
-  --no|strip          Marks the executable to be stripped when installed (see InstallFile)
+  --strip[=full|dynamic|none]  Sets the strip type on installation. --strip means full. omitted means none. (see InstallFile)
 } {
 	add-default-opts args
 	show-this-rule
-	getopt {--test --chdir --nobuild --publish --no|strip --install: target args} args
+	set strip none
+	getopt {--test --chdir --nobuild --publish --strip:full --install: target args} args
 
 	set localtarget [make-local $target]
 	set targetexe $target[get-define EXEEXT]
@@ -886,11 +896,16 @@ The following options are supported:
 	}
 
 	if {[info exists install]} {
-		set flags bin
-		if {$strip} {
-			lappend flags strip
+		set opts --bin
+		if {$strip ni {none full dynamic}} {
+			build-error [warning-location "Unknown --strip option $strip"]
 		}
-		InstallFile [file-join $install $targetexe] $localtargetexe $flags
+		if {$strip eq "full"} {
+			lappend opts --strip
+		} elseif {$strip eq "dynamic"} {
+			lappend opts --striplib
+		}
+		InstallFile {*}$opts [file-join $install $targetexe] $localtargetexe
 	}
 	if {$test} {
 		if {$chdir} {
@@ -1026,10 +1041,12 @@ The following options are supported:
   --no|strip          Marks the library to be stripped when installed (see InstallFile)
   --version=<ver>     A version for the shared library of the form n.n.n (1-3 parts)
   --soversion=<ver>   Override the soname version. Otherwise the first part of the version is used.
+  --strip[=dynamic|none]   Sets the strip type on installation. --strip means dynamic. omitted means none. (see InstallFile)
 } {
 	show-this-rule
 	add-default-opts args
-	getopt {--publish --no|strip --version: --soversion: --install: basename args} args
+	set strip none
+	getopt {--publish --strip:dynamic --version: --soversion: --install: basename args} args
 
 	if {![info exists version]} {
 		set version 0
@@ -1124,12 +1141,15 @@ The following options are supported:
 		UseLibs $basename
 	}
 	if {[info exists install]} {
-		set flags bin
-		if {$strip} {
-			lappend flags striplib
+		if {$strip ni {none dynamic}} {
+			build-error [warning-location "Unknown --strip option $strip"]
+		}
+		set opts {}
+		if {$strip eq "dynamic"} {
+			lappend opts --striplib
 		}
 
-		install-shared-lib $install $names $locallibname $flags
+		install-shared-lib {*}$opts $install $names $locallibname
 	}
 }
 
@@ -1150,13 +1170,14 @@ Used variables: LDFLAGS, SHOBJ_CFLAGS (must be set appropriately)
 Note that sources are marked to be built with SHOBJ_CFLAGS via ObjectCFlags.
 
 The following options are supported:
-  --install=<dir>     Install the shared object to the given directory (see InstallFile)
-  --no|strip          Marks the shared object to be stripped when installed (see InstallFile)
+  --install=<dir>              Install the shared object to the given directory (see InstallFile)
+  --strip[=dynamic|none]       Sets the strip type on installation. --strip means dynamic. omitted means none. (see InstallFile)
 } {
 	show-this-rule
 	add-default-opts args
 
-	getopt {--install: --strip target args} args
+	set strip none
+	getopt {--install: --strip:dynamic target args} args
 
 	set srcs [join $args]
 
@@ -1174,11 +1195,14 @@ The following options are supported:
 	Phony all $localtarget
 
 	if {[info exists install]} {
-		set flags bin
-		if {$strip} {
-			lappend flags striplib
+		set opts --bin
+		if {$strip ni {none dynamic}} {
+			build-error [warning-location "Unknown --strip option $strip"]
 		}
-		InstallFile [file-join $install $target] $localtarget $flags
+		if {$strip eq "dynamic"} {
+			lappend opts --striplib
+		}
+		InstallFile {*}$opts [file-join $install $target] $localtarget
 	}
 }
 
@@ -1483,7 +1507,6 @@ If it doesn't match, the test fails.
 		if {$dep ne ""} {
 			lappend deps $dep
 		}
-
 	} else {
 		# Find the local or published command and add it to the command and deps
 		lassign [find-project-bin $command -chdir $chdir -optional 0] dep filename
@@ -1516,9 +1539,13 @@ If it doesn't match, the test fails.
 		}
 	}
 
+	lappend vars publishlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
+
 	target [make-local $testid] -phony -depends $deps -vars {*}$vars {*}$opts -do {
+		setup-test-env $publishlib $LD_LIBRARY_PATH
 		run-test-command $testcommand
-	}
+	} -getvars LD_LIBRARY_PATH
+
 	Phony test [make-local $testid]
 
 	return $testid
@@ -1537,32 +1564,55 @@ Copies the source file to the destination file
 	Clean $dest
 }
 
-rule InstallFile {dest src {flags {}}} {
-InstallFile dest source ?flags?
+# @install-file ?--strip=$STRIPCMD? ?--bin? target source
+#
+# Helper for installing files
+# Copies the file from $source to $target, then performs zero or more actions
+# depending upon the flags (which is a list)
+#
+# --bin                 - make the target executable with chmodx-file
+# --strip=$STRIPCMD     - If specified, strips the target with the given strip command
+#
+rule InstallFile {args} {
+InstallFile ?--strip|--striplib? ?--bin? dest source
 
 Installs the given source file to the destination (file) relative to $DESTDIR
-'flags'  is a list of zero or more of the following:
+The following options are supported:
 
-	bin      - make the target executable
-	strip    - strips the target with $STRIP $STRIPFLAGS
-	striplib - strips the target with $STRIP $STRIPLIBFLAGS
+	--bin      - make the target executable
+	--strip    - strips the target with $STRIP $STRIPFLAGS
+	--striplib - strips the target with $STRIP $STRIPLIBFLAGS
 
 Adds the rule to the global 'install' target and adds the file the list of files
 to be uninstalled with 'uninstall'
 } {
 	show-this-rule
 
+	getopt {--strip --striplib --bin dest src} args
+
 	#puts "InstallFile $dest $src"
 
 	set destfile [get-define DESTDIR]$dest
+	if {$strip && $striplib} {
+		build-error "Only one of --strip and --striplib can be specified"
+	}
+	set installopts {}
+	if {$strip} {
+		lappend installopts "--strip=[get-define STRIP] [get-define STRIPFLAGS]"
+	} elseif {$striplib} {
+		lappend installopts "--strip=[get-define STRIP] [get-define STRIPLIBFLAGS]"
+	}
+	if {$bin} {
+		lappend installopts --bin
+	}
 
 	if {[is-target? $destfile]} {
 		user-notice purple [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
 		return
 	}
 	# Note that we pass variable $dest purely so we can show a nice path in the message
-	target $destfile -nocache -inputs $src -vars dest $dest flags $flags -msg {note Install $dest} -do {
-		install-file $target $inputs $flags
+	target $destfile -nocache -inputs $src -vars dest $dest installopts $installopts -msg {note Install $dest} -do {
+		install-file {*}$installopts $target $inputs
 	}
 	target install -depends $destfile
 
@@ -1573,7 +1623,7 @@ to be uninstalled with 'uninstall'
 }
 
 rule Install {args} {
-Install ?--bin? ?--strip? ?--keepdir? destdir file-spec...
+Install ?--bin? ?--strip|--striplib? ?--keepdir? destdir file-spec...
 
 A convenience wrapper around InstallFile to allow multiple files to be installed at once.
 See InstallFile for more details.
@@ -1587,20 +1637,23 @@ The following arguments are supported:
 } {
 	show-this-rule
 
-	getopt {--bin --strip --keepdir destdir args} args
+	getopt {--bin --strip --striplib --keepdir destdir args} args
 	set args [join $args]
-	set flags {}
+	set opts {}
 	if {$bin} {
-		lappend flags bin
+		lappend opts --bin
 	}
 	if {$strip} {
-		lappend flags strip
+		lappend opts --strip
+	}
+	if {$striplib} {
+		lappend opts --striplib
 	}
 
 	set srcs {}
 	foreach {dest src} [expand-filespec $destdir $args $keepdir] {
 		lappend srcs $src
-		InstallFile $dest $src $flags
+		InstallFile {*}$opts $dest $src
 	}
 	return $srcs
 }
@@ -1726,7 +1779,7 @@ rule DefaultOptions {rule args} {
 DefaultOptions <command> options...
 
 e.g. DefaultOptions Executable --strip
-e.g. DefaultOptions SharedObject --nostrip
+e.g. DefaultOptions SharedObject --strip=dynamic
 
 Allows default options to be supplied for commands.
 Note that currently only Executable, SharedObject and SharedLib are supported.
