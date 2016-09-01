@@ -86,7 +86,6 @@ proc rulebase-init {} {
 	define LD_FLAGS ""
 
 	define PUBLISH publish
-	define? STRIP_DEFAULT 0
 
 	define PROJLIBS ""
 	define SYSLIBS ""
@@ -841,7 +840,7 @@ add-deferred-action {
 # ==================================================================
 
 rule Executable {args} {
-Executable --test --chdir --nobuild --publish --strip --install=<dir> target sources...
+Executable --test --chdir --nobuild --publish --no|strip --install=<dir> target sources...
 
 Builds an executable from one or more source files. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are linked (along with any libraries) to create the executable.
@@ -855,10 +854,11 @@ The following options are supported:
   --nobuild           Don't make this executable dependent on phony 'all', which is otherwise the default
   --publish           Publishes the executable (see PublishBin)
   --install=<dir>     Install the executable to the given directory (see InstallFile)
-  --strip             Marks the executable to be stripped when installed (see InstallFile)
+  --no|strip          Marks the executable to be stripped when installed (see InstallFile)
 } {
+	add-default-opts args
 	show-this-rule
-	getopt {--test --chdir --nobuild --publish --strip --install: target args} args
+	getopt {--test --chdir --nobuild --publish --no|strip --install: target args} args
 
 	set localtarget [make-local $target]
 	set targetexe $target[get-define EXEEXT]
@@ -1006,7 +1006,7 @@ The following options are supported:
 }
 
 rule SharedLib {args} {
-SharedLib ?--publish? ?--strip? ?--version=<vers>? ?--install=<dir> basename source...
+SharedLib ?--publish? ?--no|strip? ?--version=<vers>? ?--install=<dir> basename source...
 
 Creates a shared library from the given sources. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are linked (along with any libraries) to create the shared library.
@@ -1017,12 +1017,13 @@ Used variables: SH_LDFLAGS, LDFLAGS, SH_SOEXT, SH_SOEXTVER, SH_SOPREFIX
 The following options are supported:
   --publish           For compatibility. Note that shared libraries are always published. (see PublishLib)
   --install=<dir>     Install the shared library to the given directory (see InstallFile)
-  --strip             Marks the library to be stripped when installed (see InstallFile)
+  --no|strip          Marks the library to be stripped when installed (see InstallFile)
   --version=<ver>     A version for the shared library of the form n.n.n (1-3 parts)
   --soversion=<ver>   Override the soname version. Otherwise the first part of the version is used.
 } {
 	show-this-rule
-	getopt {--publish --strip --version: --soversion: --install: basename args} args
+	add-default-opts args
+	getopt {--publish --no|strip --version: --soversion: --install: basename args} args
 
 	if {![info exists version]} {
 		set version 0
@@ -1118,7 +1119,7 @@ The following options are supported:
 	}
 	if {[info exists install]} {
 		set flags bin
-		if {$strip || [get-define STRIP_DEFAULT 0]} {
+		if {$strip} {
 			lappend flags striplib
 		}
 
@@ -1130,7 +1131,7 @@ The following options are supported:
 alias Lib ArchiveLib
 
 rule SharedObject {args} {
-SharedObject ?--install=<dir>? ?--strip? target sources...
+SharedObject ?--install=<dir>? ?--no|strip? target sources...
 
 Builds a dynamically loadable shared object from the given sources.
 For each source, the appropriate ObjectRule is used to generate the object file,
@@ -1144,8 +1145,10 @@ Note that sources are marked to be built with SHOBJ_CFLAGS via ObjectCFlags.
 
 The following options are supported:
   --install=<dir>     Install the shared object to the given directory (see InstallFile)
+  --no|strip          Marks the shared object to be stripped when installed (see InstallFile)
 } {
 	show-this-rule
+	add-default-opts args
 
 	getopt {--install: --strip target args} args
 
@@ -1166,7 +1169,7 @@ The following options are supported:
 
 	if {[info exists install]} {
 		set flags bin
-		if {$strip || [get-define STRIP_DEFAULT 0]} {
+		if {$strip} {
 			lappend flags striplib
 		}
 		InstallFile [file-join $install $target] $localtarget $flags
@@ -1713,16 +1716,16 @@ proc LocalMakefile {name} {
 	user-notice purple [warning-location "Warning: LocalMakefile is deprecated and ignored"]
 }
 
-rule DefaultStrip {on} {
-DefaultStrip 0|1
+rule DefaultOptions {rule args} {
+DefaultOptions <command> options...
 
-Enables or disables the default --strip setting for Executable, SharedLib and SharedObject.
-This is useful to avoid explicitly setting the --strip option for each target.
-Sets the define: STRIP_DEFAULT
+e.g. DefaultOptions Executable --strip
+e.g. DefaultOptions SharedObject --nostrip
+
+Allows default options to be supplied for commands.
+Note that currently only Executable, SharedObject and SharedLib are supported.
 } {
-	show-this-rule
-
-	define STRIP_DEFAULT $on
+	set-default-opts $rule $args
 }
 
 rule DefaultTarget {name} {
