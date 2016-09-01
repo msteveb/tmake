@@ -537,15 +537,21 @@ proc load-config-file {filename} {
 # Prepares the environment for running tests.
 # Currently appends (the absolute path of) $PUBLISH/lib to LD_LIBRARY_PATH
 # in the environment to allow published shared libraries to be loaded
+# Also sets TMAKE_LIBPATH to the same value for script helpers on Mac OS X
+# since DYLD_LIBRARY_PATH can't be passed to scripts
+# (See https://forums.developer.apple.com/message/31148)
 proc setup-test-env {} {
 	set ldlibpath [get-define LD_LIBRARY_PATH]
+	# Must use a full path here since some tests do chdir
+	set addlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
+	setenv TMAKE_LIBPATH $addlib
 	if {$ldlibpath ne ""} {
 		set path [getenv $ldlibpath ""]
-		# Must use a full path here since some tests do chdir
-		set addlib [file-join [get-define TOPBUILDDIR] [publish-dir lib]]
 		append-with-space path $addlib $::tcl_platform(pathSeparator)
 		setenv $ldlibpath $path
 	}
+
+
 }
 
 # @get-test-id
