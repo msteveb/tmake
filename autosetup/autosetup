@@ -5,7 +5,7 @@
 # \
 dir=`dirname "$0"`; exec "`$dir/find-tclsh`" "$0" "$@"
 
-set autosetup(version) 0.6.5
+set autosetup(version) 0.6.6
 
 # Can be set to 1 to debug early-init problems
 set autosetup(debug) 0
@@ -61,7 +61,7 @@ proc main {argv} {
 		set autosetup(srcdir) [pwd]
 	} else {
 		# Invoked via the configure wrapper
-		set autosetup(srcdir) [file dirname $autosetup(exe)]
+		set autosetup(srcdir) [file-normalize [file dirname $autosetup(exe)]]
 	}
 	set autosetup(autodef) [relative-path $autosetup(srcdir)/auto.def]
 
@@ -204,6 +204,8 @@ proc main {argv} {
 #
 # Check each of the named, boolean options and return 1 if any of them have
 # been set by the user.
+# If the option was specified more than once, the last value wins.
+# e.g. With --enable-foo --disable-foo, [opt-bool foo] will return 0
 #
 proc opt-bool {args} {
 	option-check-names {*}$args
@@ -1098,6 +1100,7 @@ set modsource(getopt) {
 # Parse everything out of the argv list which looks like an option
 # Knows about --enable-thing and --disable-thing as alternatives for --thing=0 or --thing=1
 # Everything which doesn't look like an option, or is after --, is left unchanged
+#
 proc getopt {argvname} {
 	upvar $argvname argv
 	set nargv {}
@@ -1162,7 +1165,8 @@ proc opt_bool {optarrayname args} {
 
 	foreach o $args {
 		if {[info exists opts($o)]} {
-			if {"1" in $opts($o) || "yes" in $opts($o)} {
+			# For boolean options, the last value wins
+			if {[lindex $opts($o) end] in {"1" "yes"}} {
 				return 1
 			}
 		}
