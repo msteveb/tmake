@@ -3,26 +3,19 @@
 
 # Simple getopt module
 
-# optdef looks something like:
-# --test --install: --excludes:: dest source args
+# Implements the core of getopt
+# Returns a list of {vars newargv}
+# Where $vars is a list of {name value ...} corresponding to the set options
+# and $newargv contains any unused args (always {} unless 'args' is given)
 #
-# Sets variables in the caller's scope with the names given in optdef, except
-# any remaining args are left in the original argv
-#
-# If --test is set, then test=1, otherwise test=0
-# If --install is specified, it is stored in $install, otherwise $install is left unset
-# If --excludes is specified (multiple times, each value is stored in the list $install
-
-proc getopt {optdef argvname} {
-	upvar $argvname argv
-	if {![exists argv]} {
-		parse-error "getopt called with $argvname that does not exist in parent context"
-	}
+proc getopt-core {optdef argv} {
 	set nargv {}
 	set boolopts {}
-	set valopts {}
+	set stropts {}
 
-	# Parse the options
+	set vars {}
+
+	# Parse the option definition
 	set haveargs 0
 	set named {}
 	foreach i $optdef {
@@ -30,14 +23,21 @@ proc getopt {optdef argvname} {
 			#puts "$i -> $name, [string length $colon]"
 			switch [string length $colon] {
 				0 {
-					set boolopts($name) 0
+					if {[string match *|* $name]} {
+						lassign [split $name |] prefix name
+						set boolopts($prefix$name) [list $name 0]
+					}
+					# boolopts($name) stores a list of the actual option name and the
+					# value to set
+					set boolopts($name) [list $name 1]
+					set vars($name) 0
 				}
 				1 {
-					set valopts($name) 1
+					set stropts($name) 1
 				}
 				2 {
-					set valopts($name) 2
-					uplevel 1 [list set $name {}]
+					set stropts($name) 2
+					set vars($name) {}
 				}
 				default {
 					parse-error "Bad getopt specification: $i"
@@ -51,8 +51,9 @@ proc getopt {optdef argvname} {
 			lappend named $i
 		}
 	}
-	#parray valopts
+	#parray stropts
 	#parray boolopts
+	#parray vars
 	#puts named=$named
 	#puts haveargs=$haveargs
 	#puts args=$argv
@@ -71,45 +72,77 @@ proc getopt {optdef argvname} {
 
 		if {[regexp {^--([^=]+)=(.*)} $arg -> name value]} {
 			# --abc=def
-			if {![info exists valopts($name)]} {
+			if {![info exists stropts($name)]} {
 				if {[info exists boolopts($name)]} {
 					parse-error "Option --$name does not accept a parameter"
 				}
 				parse-error "Unknown option: --$name"
 			}
-			if {$valopts($name) == 1} {
+			if {$stropts($name) == 1} {
 				if {[info exists seen($name)]} {
 					parse-error "Option --$name given more than once"
 				}
 				incr seen($name)
-				uplevel 1 [list set $name $value]
+				set vars($name) $value
 			} else {
-				uplevel 1 [list lappend $name $value]
+				lappend vars($name) $value
 			}
 		} elseif {[regexp {^--(.*)} $arg -> name]} {
 			# --abc
 			if {![info exists boolopts($name)]} {
-				if {[info exists valopts($name)]} {
+				if {[info exists stropts($name)]} {
 					parse-error "Option --$name requires a parameter"
 				}
 				parse-error "Unknown option: --$name"
 			}
-			set boolopts($name) 1
+			lassign $boolopts($name) optname optval
+			set vars($optname) $optval
 		} else {
 			lappend nargv {*}[lrange $argv $i end]
 			break
 		}
 	}
 
-	foreach i [dict keys $boolopts] {
-		uplevel 1 set $i $boolopts($i)
+	#puts nargv=$nargv
+
+	if {[llength $nargv] < [llength $named]} {
+		parse-error "No value supplied for [lindex $named [llength $nargv]]"
 	}
 	if {!$haveargs && [llength $nargv] > [llength $named]} {
-		parse-error "Too many parameters"
+		parse-error "Too many parameters supplied"
 	}
-	if {[llength $named]} {
-		set argv [uplevel 1 [list lassign $nargv {*}$named]]
-	} else {
-		set argv $nargv
+
+	# Assign named args
+	set i 0
+	foreach name $named {
+		set vars($name) [lindex $nargv $i]
+		incr i
+	}
+	# Store any leftovers in $remaining
+	set remaining [lrange $nargv $i end]
+
+	list $vars $remaining
+}
+
+# @getopt optdef &argvn
+#
+# optdef looks something like:
+# --test --install: --no|strip --excludes:: dest source args
+#
+# Sets variables in the caller's scope with the names given in optdef, except
+# any remaining args are left in the original argv
+# Extra args are only valid if 'args' is given as the last option.
+#
+# If --test is set, then test=1, otherwise test=0
+# If --install is specified, it is stored in $install, otherwise $install is left unset
+# If --excludes is specified (multiple times, each value is stored in the list $install
+# Either --strip or --nostrip can be specified as a boolean option. --strip will set strip=1,
+# while --nostrip will set strip=0
+# If a boolean option is specified multiple times, the last one wins
+proc getopt {optdef &argv} {
+	#puts [list getopt-test $optdef $argv]
+	lassign [getopt-core $optdef $argv] vars argv
+	foreach {name val} $vars {
+		uplevel 1 [list set $name $val]
 	}
 }

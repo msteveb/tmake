@@ -1,0 +1,64 @@
+package require tcltest
+
+source ../lib/getopt.tcl
+
+set tests {
+	{--no|stage --install: extraargs} {--stage --nostage --install=abc def} {stage 0 install abc extraargs def}
+	{--no|stage --install:} {--stage --nostage --installx=abc} {stage 0 install abc}
+}
+
+proc parse-error {msg} {
+	return -code error $msg
+}
+
+proc dict-sort {dict} {
+	set result {}
+	foreach k [lsort [dict keys $dict]] {
+		lappend result $k [dict get $dict $k]
+	}
+	return $result
+}
+
+proc getopt-test {opts argv} {
+	lassign [getopt-core $opts $argv] vars nargv
+	list [dict-sort $vars] $nargv
+}
+
+test getopt-1.1 {bool, val, extra} {
+	getopt-test {--no|stage --install: filename args} {--stage --nostage --install=abc test.c extra1 extra2}
+} {{filename test.c install abc stage 0} {extra1 extra2}}
+
+test getopt-1.2 {simpl bool options} {
+	getopt-test {--stage --foo --bar} {--stage --bar}
+} {{bar 1 foo 0 stage 1} {}}
+
+test getopt-1.3 {bool options} {
+	getopt-test {--no|stage --no|foo --bar} {--stage --nostage --stage --foo}
+} {{bar 0 foo 1 stage 1} {}}
+
+test getopt-1.4 {error - too few named options} -body {
+	getopt-test {foo bar} {}
+} -returnCodes error -result {No value supplied for foo}
+
+test getopt-1.5 {error - too many options} -body {
+	getopt-test {foo bar} {FOO BAR BAZ}
+} -returnCodes error -result {Too many parameters supplied}
+
+test getopt-1.6 {extra options with args} {
+	getopt-test {foo bar args} {FOO BAR BAZ}
+} {{bar BAR foo FOO} BAZ}
+
+test getopt-1.7 {list options} {
+	getopt-test {--foo:: --bar::} {--foo=1 --foo=2}
+} {{bar {} foo {1 2}} {}}
+
+test getopt-1.8 {list options with args} {
+	getopt-test {--foo:: --bar:: args} {--foo=1 --foo=2 baz}
+} {{bar {} foo {1 2}} baz}
+
+test getopt-1.9 {list options with args} {
+	getopt-test {--warn --dirs --all --recursive --exclude:: args} {--dirs test[0-9a]}
+} {{all 0 dirs 1 exclude {} recursive 0 warn 0} {{test[0-9a]}}}
+
+
+testreport

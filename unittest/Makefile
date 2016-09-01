@@ -1,2 +1,2 @@
-all:
-	jimsh runtests
+test:
+	@for i in *.test; do jimsh $$i; done
