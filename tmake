@@ -71,6 +71,7 @@ set tmake(defaulttarget) all
 set tmake(loadedprojectspec) 0
 set tmake(current) {}
 set tmake(rules) {}
+set tmake(ruledefaultopts) {}
 set tmake(aliases) {}
 set tmake(rulestatus) {}
 set tmake(targetstatus) {}
@@ -1664,15 +1665,19 @@ proc get-rule-status {ruletarget} {
 
 proc show-this-rule {args} {
 	if {[debug-is-set p]} {
+		global tmake
 		set extra ""
 		set where "[find-source-location] "
 		if {$where eq "unknown "} {
 			set where ""
 		}
-		if {[llength $args]} {
-			set extra " [join $args]"
+		# We wan't to include any default options
+		set ruleargs [lassign [info level -1] rule]
+		if {[dict exists $tmake(ruledefaultopts) $rule]} {
+			set ruleargs [list \[[dict get $tmake(ruledefaultopts) $rule]\] {*}$ruleargs]
 		}
-		dputs p "$where[info level -1]$extra" 0
+		lappend ruleargs {*}$args
+		dputs p "$where$rule [join $ruleargs]" 0
 	}
 }
 
@@ -1701,6 +1706,21 @@ proc rule {cmdname arglist {helptext {}} body} {
 	}
 	dict set tmake(commands) $cmdname [list [info source $cmdname] $helptext]
 	proc $cmdname $arglist $body
+}
+
+# Should be called as the very first command in a rule that supports default option setting
+proc add-default-opts {&arglist} {
+	global tmake
+	set rule [lindex [info level -1] 0]
+	if {[dict exists $tmake(ruledefaultopts) $rule]} {
+		# Prepend any default options to the arglist
+		set arglist [list {*}[dict get $tmake(ruledefaultopts) $rule] {*}$arglist]
+	}
+}
+
+# Sets default options, to be prepended to the given rule
+proc set-default-opts {rule options} {
+	dict set ::tmake(ruledefaultopts) $rule $options
 }
 
 proc rule-overview {text} {
