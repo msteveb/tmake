@@ -11,7 +11,7 @@ Depends {settings.conf jimautoconf.h jim-config.h} auto.def -do {
 }
 Clean config.out
 
-DefaultOptions Executable --nostrip
+DefaultOptions Executable --strip=none --install=/tmp
 DefaultOptions SharedLib --strip
 DefaultOptions SharedObject --strip
 
