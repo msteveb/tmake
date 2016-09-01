@@ -76,6 +76,7 @@ set tmake(aliases) {}
 set tmake(rulestatus) {}
 set tmake(targetstatus) {}
 set tmake(targets) {}
+set tmake(parsedone) 0
 set tmake(numtargets) 0
 set tmake(subdirs) {}
 set tmake(prefix) ""
@@ -495,6 +496,8 @@ proc make {argv} {
 	} else {
 		lappend targets [file-join $tmake(subdir) $tmake(defaulttarget)]
 	}
+
+	set tmake(parsedone) 1
 
 	# Build each target, resetting the status and possibly reloading every time
 	while {[llength $targets] && $tmake(exitcode) == 0} {
@@ -1435,6 +1438,9 @@ proc define-append {name args} {
 # if not set. If not specified, $default is ""
 #
 proc get-define {name {default ""}} {
+	if {$::tmake(parsedone)} {
+		build-fatal-error "get-define $name called during build phase"
+	}
 	if {[dict exists $::tmake(defines) $name]} {
 		#dputs v "get-define $name => [dict get $::tmake(defines) $name]"
 		dict get $::tmake(defines) $name
