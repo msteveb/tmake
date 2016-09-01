@@ -92,9 +92,6 @@ proc getopt-core {optdef argv} {
 		} elseif {[exists stropts($name)]} {
 			lassign $stropts($name) type extra
 			if {$type == 1} {
-				if {[exists vars($name)]} {
-					parse-error "Option --$name given more than once"
-				}
 				if {[exists value]} {
 					set vars($name) $value
 				} elseif {$extra ne ""} {
@@ -175,7 +172,7 @@ proc getopt-core {optdef argv} {
 # If --excludes is specified (multiple times, each value is stored in the list $excludes
 # Either --strip or --nostrip can be specified as a boolean option. --strip will set strip=1,
 # while --nostrip will set strip=0
-# If a boolean option is specified multiple times, the last one wins
+# If a boolean or single string option is specified multiple times, the last one wins
 proc getopt {optdef &argv} {
 	#puts [list getopt-test $optdef $argv]
 	lassign [getopt-core $optdef $argv] vars argv

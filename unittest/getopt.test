@@ -60,9 +60,9 @@ test getopt-1.9 {list options with args} {
 	getopt-test {--warn --dirs --all --recursive --exclude:: args} {--dirs test[0-9a]}
 } {{all 0 dirs 1 recursive 0 warn 0} {{test[0-9a]}}}
 
-test getopt-1.10 {list option given twice} -body {
+test getopt-1.10 {list option given twice, last one wins} {
 	getopt-test {--single: --multi::} {--single=a --single=b --multi=c --multi=d}
-} -returnCodes error -result {Option --single given more than once}
+} {{multi {c d} single b} {}}
 
 test getopt-1.11 {list options omitted} {
 	getopt-test {--single: --multi::} {}
