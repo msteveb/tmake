@@ -710,7 +710,7 @@ proc load-build-description {loadcache} {
 			foreach dep [get-rule-attr $ruletarget depends] {
 				if {[is-target? $dep]} {
 					if {[dict get [get-target-rule $dep] phony]} {
-						user-notice purple "Non phony target $ruletarget @[make-source-location $ruletarget] depends on phony $dep"
+						user-notice purple "Non phony target $ruletarget [make-source-location $ruletarget @] depends on phony $dep"
 						tmake-exit 1
 					}
 				}
@@ -1650,7 +1650,7 @@ proc update-rule {ruledict} {
 		# Haven't seen this rule before so individual target pointers
 		foreach t $ruletarget {
 			if {[dict exists $::tmake(targets) $t]} {
-				parse-error "Rule for $t was already specified at [make-source-location $t]"
+				parse-error "Rule for $t was already specified [make-source-location $t @]"
 			}
 			dict set ::tmake(targets) $t $ruletarget
 		}
@@ -2200,10 +2200,11 @@ proc subst-do {__target __vardict __do_list} {
 
 	# Return a list of substituted '-do' scripts
 	lmap __each_do $__do_list {
+		set source [info source $__each_do]
 		# Note: It is an error if the subst fails
 		if {[catch {subst -nob -noc $__each_do} __result __opts]} {
 			# subst failed -- most likely because a variable was referenced that didn't exist.
-			user-notice lred "[make-source-location $__target "" ": "]$__result while building $__target"
+			user-notice lred "[join $source :]:Error: $__result while building $__target"
 			tmake-exit 1
 		}
 		set __result
@@ -2279,7 +2280,7 @@ proc build {target} {
 		}
 		checking {
 			set current [list {*}$tmake(current) $target]
-			build-fatal-error "[make-source-location $ruletarget "" :] Error: Recursive definition for [join [lreverse $current] { <= }]"
+			build-fatal-error "[make-source-location $ruletarget]:Error: Recursive definition for [join [lreverse $current] { <= }]"
 		}
 		failed {
 			dputs b "$target has previously failed to build"
@@ -2335,7 +2336,7 @@ proc build {target} {
 		set rc [build $i]
 		if {$rc < 0} {
 			if {$tmake(exitcode) == 0} {
-				build-error "[make-source-location $ruletarget "" ": "]Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }]"
+				build-error "[make-source-location $ruletarget]: Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }]"
 			}
 			set result -1
 			if {$tmake(quickstop)} {
