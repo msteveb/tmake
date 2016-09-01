@@ -1027,7 +1027,7 @@ The following options are supported:
 }
 
 rule SharedLib {args} {
-SharedLib ?--publish? ?--no|strip? ?--version=<vers>? ?--install=<dir> basename source...
+SharedLib ?--publish? ?--strip=<type>? ?--version=<ver>? ?--soversion=<ver>? ?--install=<dir> basename source...
 
 Creates a shared library from the given sources. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are linked (along with any libraries) to create the shared library.
@@ -1038,7 +1038,6 @@ Used variables: SH_LDFLAGS, LDFLAGS, SH_SOEXT, SH_SOEXTVER, SH_SOPREFIX
 The following options are supported:
   --publish           For compatibility. Note that shared libraries are always published. (see PublishLib)
   --install=<dir>     Install the shared library to the given directory (see InstallFile)
-  --no|strip          Marks the library to be stripped when installed (see InstallFile)
   --version=<ver>     A version for the shared library of the form n.n.n (1-3 parts)
   --soversion=<ver>   Override the soname version. Otherwise the first part of the version is used.
   --strip[=dynamic|none]   Sets the strip type on installation. --strip means dynamic. omitted means none. (see InstallFile)
@@ -1070,7 +1069,7 @@ The following options are supported:
 	if {$n > 1} {
 		# If more that one part is given, the first one is the defaul soversion
 		lassign [split $version .] default_soversion
-		set default_soversion $version
+		lappend nameinfo [get-define SH_SOEXTVER] $version
 		lappend nameinfo [get-define SH_SOEXTVER] $default_soversion
 	}
 
