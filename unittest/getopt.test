@@ -2,11 +2,6 @@ package require tcltest
 
 source ../lib/getopt.tcl
 
-set tests {
-	{--no|stage --install: extraargs} {--stage --nostage --install=abc def} {stage 0 install abc extraargs def}
-	{--no|stage --install:} {--stage --nostage --installx=abc} {stage 0 install abc}
-}
-
 proc parse-error {msg} {
 	return -code error $msg
 }
@@ -111,5 +106,17 @@ test getopt-1.21 {bool with default} {
 test getopt-1.22 {bool with default} {
 	getopt-test {--no|foo=1} {--nofoo}
 } {{foo 0} {}}
+
+test getopt-1.23 {list option with alternatives} {
+	getopt-test {--strip --striplib} {--strip}
+} {{strip 1 striplib 0} {}}
+
+test getopt-1.24 {list option with alternatives} {
+	getopt-test {--strip --striplib} {--striplib}
+} {{strip 0 striplib 1} {}}
+
+test getopt-1.25 {list option with alternatives} {
+	getopt-test {--strip --striplib} {}
+} {{strip 0 striplib 0} {}}
 
 testreport
