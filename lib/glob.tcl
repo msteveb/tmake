@@ -53,6 +53,7 @@ proc glob-recursive {patterns type {exclude {}}} {
 proc Glob {args} {
 	show-this-rule
 
+	set exclude {}
 	getopt {--warn --dirs --all --recursive --exclude:: args} args
 
 	# Any args which are already absolute paths shouldn't have make-local-src applied

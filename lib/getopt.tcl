@@ -19,10 +19,14 @@ proc getopt-core {optdef argv} {
 	set haveargs 0
 	set named {}
 	foreach i $optdef {
-		if {[regexp {^--([^:]*)(:*)$} $i -> name colon]} {
-			#puts "$i -> $name, [string length $colon]"
+		if {[regexp {^--([^:]*)(:*)(.*)$} $i -> name colon extra]} {
+			#puts "$i -> $name, [string length $colon], $extra"
 			switch [string length $colon] {
 				0 {
+					set default 0
+					if {[string match *=* $name]} {
+						lassign [split $name =] name default
+					}
 					if {[string match *|* $name]} {
 						lassign [split $name |] prefix name
 						set boolopts($prefix$name) [list $name 0]
@@ -30,14 +34,13 @@ proc getopt-core {optdef argv} {
 					# boolopts($name) stores a list of the actual option name and the
 					# value to set
 					set boolopts($name) [list $name 1]
-					set vars($name) 0
+					set vars($name) $default
 				}
 				1 {
-					set stropts($name) 1
+					set stropts($name) [list 1 $extra]
 				}
 				2 {
-					set stropts($name) 2
-					set vars($name) {}
+					set stropts($name) [list 2 $extra]
 				}
 				default {
 					parse-error "Bad getopt specification: $i"
@@ -70,36 +73,46 @@ proc getopt-core {optdef argv} {
 			break
 		}
 
+		unset -nocomplain value
 		if {[regexp {^--([^=]+)=(.*)} $arg -> name value]} {
 			# --abc=def
-			if {![info exists stropts($name)]} {
-				if {[info exists boolopts($name)]} {
-					parse-error "Option --$name does not accept a parameter"
-				}
-				parse-error "Unknown option: --$name"
-			}
-			if {$stropts($name) == 1} {
-				if {[info exists seen($name)]} {
-					parse-error "Option --$name given more than once"
-				}
-				incr seen($name)
-				set vars($name) $value
-			} else {
-				lappend vars($name) $value
-			}
 		} elseif {[regexp {^--(.*)} $arg -> name]} {
 			# --abc
-			if {![info exists boolopts($name)]} {
-				if {[info exists stropts($name)]} {
-					parse-error "Option --$name requires a parameter"
-				}
-				parse-error "Unknown option: --$name"
-			}
-			lassign $boolopts($name) optname optval
-			set vars($optname) $optval
 		} else {
 			lappend nargv {*}[lrange $argv $i end]
 			break
+		}
+
+		if {[exists boolopts($name)]} {
+			if {[exists value]} {
+				parse-error "Option --$name does not accept a parameter"
+			}
+			lassign $boolopts($name) optname optval
+			set vars($optname) $optval
+		} elseif {[exists stropts($name)]} {
+			lassign $stropts($name) type extra
+			if {$type == 1} {
+				if {[exists vars($name)]} {
+					parse-error "Option --$name given more than once"
+				}
+				if {[exists value]} {
+					set vars($name) $value
+				} elseif {$extra ne ""} {
+					set vars($name) $extra
+				} else {
+					parse-error "Option --$name requires a parameter"
+				}
+			} else {
+				if {[exists value]} {
+					lappend vars($name) $value
+				} elseif {$extra ne ""} {
+					lappend vars($name) $extra
+				} else {
+					parse-error "Option --$name requires a parameter"
+				}
+			}
+		} else {
+			parse-error "Unknown option: --$name"
 		}
 	}
 
@@ -129,13 +142,37 @@ proc getopt-core {optdef argv} {
 # optdef looks something like:
 # --test --install: --no|strip --excludes:: dest source args
 #
+# Boolean options:
+#  --test
+#  --no|test
+#  --test=1
+#  --no|test=1
+#
+# Single string options:
+#
+#  --install:
+#  --install:default
+#
+# Multi string options:
+#
+#   --exclude::
+#   --exclude::default
+#
+# Named arguments:
+#
+#   dest
+#
+# Remaining arguments:
+#
+#  args
+#
 # Sets variables in the caller's scope with the names given in optdef, except
 # any remaining args are left in the original argv
 # Extra args are only valid if 'args' is given as the last option.
 #
 # If --test is set, then test=1, otherwise test=0
 # If --install is specified, it is stored in $install, otherwise $install is left unset
-# If --excludes is specified (multiple times, each value is stored in the list $install
+# If --excludes is specified (multiple times, each value is stored in the list $excludes
 # Either --strip or --nostrip can be specified as a boolean option. --strip will set strip=1,
 # while --nostrip will set strip=0
 # If a boolean option is specified multiple times, the last one wins

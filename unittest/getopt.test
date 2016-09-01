@@ -50,15 +50,66 @@ test getopt-1.6 {extra options with args} {
 
 test getopt-1.7 {list options} {
 	getopt-test {--foo:: --bar::} {--foo=1 --foo=2}
-} {{bar {} foo {1 2}} {}}
+} {{foo {1 2}} {}}
 
 test getopt-1.8 {list options with args} {
 	getopt-test {--foo:: --bar:: args} {--foo=1 --foo=2 baz}
-} {{bar {} foo {1 2}} baz}
+} {{foo {1 2}} baz}
 
 test getopt-1.9 {list options with args} {
 	getopt-test {--warn --dirs --all --recursive --exclude:: args} {--dirs test[0-9a]}
-} {{all 0 dirs 1 exclude {} recursive 0 warn 0} {{test[0-9a]}}}
+} {{all 0 dirs 1 recursive 0 warn 0} {{test[0-9a]}}}
 
+test getopt-1.10 {list option given twice} -body {
+	getopt-test {--single: --multi::} {--single=a --single=b --multi=c --multi=d}
+} -returnCodes error -result {Option --single given more than once}
+
+test getopt-1.11 {list options omitted} {
+	getopt-test {--single: --multi::} {}
+} {{} {}}
+
+test getopt-1.12 {list options, omitted} -body {
+	getopt-test {--single: --multi::} {--multi}
+} -returnCodes error -result {Option --multi requires a parameter}
+
+test getopt-1.13 {default value for multi} {
+	getopt-test {--strip::none} {--strip --strip=bin --strip=lib}
+} {{strip {none bin lib}} {}}
+
+test getopt-1.14 {list option with default} {
+	getopt-test {--single:set} {--single}
+} {{single set} {}}
+
+test getopt-1.15 {list option with default, overridden} {
+	getopt-test {--single:set} {--single=other}
+} {{single other} {}}
+
+test getopt-1.16 {multi list option with default} {
+	getopt-test {--multi::set} {}
+} {{} {}}
+
+test getopt-1.17 {multi list option with default} {
+	getopt-test {--multi::set} {--multi}
+} {{multi set} {}}
+
+test getopt-1.18 {multi list option with default} {
+	getopt-test {--multi::set} {--multi=a --multi --multi=b}
+} {{multi {a set b}} {}}
+
+test getopt-1.19 {bool with default} {
+	getopt-test {--foo=1} {}
+} {{foo 1} {}}
+
+test getopt-1.20 {bool with default} {
+	getopt-test {--foo=1} {--foo}
+} {{foo 1} {}}
+
+test getopt-1.21 {bool with default} {
+	getopt-test {--no|foo=1} {}
+} {{foo 1} {}}
+
+test getopt-1.22 {bool with default} {
+	getopt-test {--no|foo=1} {--nofoo}
+} {{foo 0} {}}
 
 testreport
