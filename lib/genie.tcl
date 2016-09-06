@@ -6,7 +6,13 @@
 proc tmake-genie {argv} {
 	use getopt
 
-	getopt {--force --genie argv} argv
+	# Ignore any options we don't understand
+	set force 0
+	argparse argv {
+		--force {
+			incr force
+		}
+	}
 
 	if {[file exists build.spec] && !$force} {
 		puts "Warning: build.spec already exists - remove it first or use --force to overwrite"
