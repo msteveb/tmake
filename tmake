@@ -13,7 +13,7 @@ set tmake(cacheversion) 3
 # Turn on debugging as early as possible
 set tmake(debug) $("--debug" in $argv)
 
-set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 l 0 D 0 C 0 T 0 B 0 v 0 x 0}
+set tmake(debugtypes) {d 0 n 0 r 0 b 0 t 0 c 0 g 0 G 0 p 0 m 0 l 0 D 0 C 0 T 0 B 0 v 0 x 0 j 0}
 set tmake(debughelp) {
 	* "Enable all debug"
 	? "Display help for debug types"
@@ -32,6 +32,7 @@ set tmake(debughelp) {
 	C "Cache handling"
 	T "Timing (add --delta for delta times)"
 	v "Variable definition"
+	j "Parallel (job-based) builds"
 }
 set tmake(verbose) 0
 set tmake(showdelta) 0
@@ -66,6 +67,7 @@ set tmake(cli-options) {}
 set tmake(clean-targets) {clean distclean clean-orphans}
 
 set tmakecache $tmake(emptycache)
+set tmakeprecache {}
 
 set tmake(defaulttarget) all
 set tmake(loadedprojectspec) 0
@@ -82,6 +84,8 @@ set tmake(subdirs) {}
 set tmake(prefix) ""
 set tmake(localdir) .
 set tmake(warningmsgs) {}
+set tmake(running) {}
+set tmake(pending) {}
 
 if {$tmake(debug)} {
 	dict set tmake(debugtypes) A 1
@@ -117,6 +121,9 @@ proc make-parse-options {argv} {
 		{--findall --findall=*} {
 			set tmake(findtarget) [argparam $arg]
 			set tmake(findall) 1
+		}
+		{--jobs=*} {
+			define! MAXJOBS [argparam $arg]
 		}
 		--delta {
 			incr tmake(showdelta)
@@ -529,14 +536,14 @@ proc make {argv} {
 					continue
 				}
 				set rc [build $t]
-				if {$rc < 0} {
+				if {$rc eq "failed"} {
 					if {$tmake(exitcode) == 0} {
 						build-error "Error: Don't know how to build $t"
 						tmake-exit 1
 					}
 					break
 				}
-				if {$rc > 0} {
+				if {$rc eq "built"} {
 					dputs m "$t has changed, reloading..."
 					set reload 1
 				}
@@ -564,7 +571,8 @@ proc make {argv} {
 
 		dputs {b T} "Building target $target"
 
-		if {[build $target] < 0} {
+		set status [build-sync $target]
+		if {$status eq "failed"} {
 			if {$tmake(exitcode) == 0} {
 				build-error "Error: Don't know how to build $target"
 			}
@@ -685,6 +693,9 @@ proc load-build-description {loadcache} {
 	}
 
 	dputs T "Parsed project.spec"
+
+	# Note that MAXJOBS is global, not per-directory, so get it now
+	set tmake(maxjobs) [get-define MAXJOBS 8]
 
 	# Loaded in the global scope 
 
@@ -1126,8 +1137,16 @@ proc parse-warning {msg} {
 }
 
 proc tmake-exit {code} {
+	global tmake
+
 	# Write the cache before exiting
 	write-cache
+
+	# And kill off any running jobs
+	foreach pid [dict keys $tmake(running)] {
+		dputs j "Killing background child $pid"
+		catch {kill $pid}
+	}
 	dputs T Done
 	exit $code
 }
@@ -1247,7 +1266,7 @@ proc show-rule {target} {
 						puts @[join $v {, }]
 					}
 				}
-				phony - nofail - chdir - nocache - fatal {
+				phony - nofail - chdir - nocache - fatal - slow {
 					if {$v} {
 						lappend flags $n
 					}
@@ -1778,7 +1797,7 @@ proc target {ruletarget args} {
 		return $ruletarget
 	} else {
 		set identical 1
-		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror phony target vars fatal} {
+		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror phony target vars fatal slow} {
 			if {$info($i) ne $orig($i)} {
 				set identical 0
 				break
@@ -1817,6 +1836,7 @@ proc target {ruletarget args} {
 	incr orig(chdir) $info(chdir)
 	incr orig(nocache) $info(nocache)
 	incr orig(fatal) $info(fatal)
+	incr orig(slow) $info(slow)
 	append-with-space orig(onerror) $info(onerror) \n
 	# Only one of these will be non-blank
 	lappend orig(do) {*}$info(add-do)
@@ -1896,7 +1916,7 @@ proc parse-rule-args {&arglist &opt} {
 proc parse-rule {target arglist} {
 	set info {
 		inputs {} depends {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
-		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0
+		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0
 	}
 
 	set info(source) [find-source-location *build.spec]
@@ -1913,7 +1933,7 @@ proc parse-rule {target arglist} {
 	while {[llength $arglist]} {
 		set optargs [parse-rule-args arglist opt]
 		switch -exact -- $opt {
-			phony - nofail - add - chdir - nocache - fatal {
+			phony - nofail - add - chdir - nocache - fatal - slow {
 				if {[llength $optargs]} {
 					parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
@@ -2156,7 +2176,26 @@ proc tmake-require-version {needversion} {
 	}
 }
 
+proc fork-job-if-required {} {
+	global tmake
+
+	if {$tmake(maxjobs) > 1 && $tmake(sync) == 0 && $tmake(jobpid) == -1} {
+		wait-for-job-slots
+		set pid [add-new-job $tmake(currentruletarget) $tmake(currentnotifytarget)]
+		set tmake(jobpid) $pid
+	}
+	return $tmake(jobpid)
+}
+
 proc run {args} {
+	global tmake
+
+	if {[fork-job-if-required] > 0} {
+		# can't just [return] here since we need to ensure that the rest of
+		# the -do doesn't run in the parent, but only in the child
+		return -code break
+	}
+
 	set cmdline [join $args]
 	set cmd [lindex $cmdline 0]
 	#puts "run: do we need to convert $cmd to a path from [pwd]?"
@@ -2286,17 +2325,174 @@ proc enter-new-dir {dirname} {
 	}
 }
 
+proc wait-for-one-job {} {
+	global tmake
+	while 1 {
+		lassign [os.wait -1] pid status code
+		if {$pid == -1} {
+			dputs j "All jobs have finished"
+			return 0
+		}
+		if {[dict exists $tmake(running) $pid]} {
+			set job [dict get $tmake(running) $pid]
+			dict unset tmake(running) $pid
+
+			dputs j "Job $pid has finished with $status\($code) for {$job}"
+			lassign $job ruletarget notifytarget
+			if {$status eq "exit" && $code == 0} {
+				set rc 0
+			} else {
+				set rc 1
+			}
+
+			# Set the status, update the cache, delete any files on error, etc.
+			target-post-build $ruletarget $rc
+
+			if {$rc == 0} {
+				dict incr tmake(pending) $notifytarget -1
+				if {[dict get $tmake(pending) $notifytarget] == 0} {
+					if {[get-rule-status $notifytarget] eq "waiting"} {
+						dputs j "Status of $notifytarget set to unknown"
+						set-rule-status $notifytarget unknown
+					}
+				}
+			} else {
+				dputs j "Status of $notifytarget set to failed"
+				set-rule-status $notifytarget failed
+			}
+			return 1
+		}
+		dputs j "Ignoring unknown pid $pid"
+	}
+	return 1
+}
+
+proc wait-for-job-slots {} {
+	global tmake
+
+	while {[dict size $tmake(running)] >= $tmake(maxjobs)} {
+		dputs j "Waiting for a job slot to be available"
+		wait-for-one-job
+	}
+}
+
+proc add-new-job {ruletarget notifytarget} {
+	global tmake
+	set pid [os.fork]
+	if {$pid > 0} {
+		dputs j "Adding job $pid for $ruletarget"
+		# Insert the job in the slot
+		set-rule-status $ruletarget running
+		dict set tmake(running) $pid [list $ruletarget $notifytarget]
+		if {$notifytarget eq ""} {
+			error "add-new-job - no notfytarget"
+		}
+		dict incr tmake(pending) $notifytarget
+	}
+	return $pid
+}
+
+# Runs [build $target] until it either fails or succeeds
+proc build-sync {target} {
+	while 1 {
+		set status [build $target]
+		if {$status eq "waiting"} {
+			dputs j "Waiting for $target to complete..."
+			wait-for-one-job
+			continue
+		}
+		return $status
+	}
+}
+
+proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
+	global tmake tmakeprecache tmakecache
+
+	# Pick up the info from the precache
+
+	set info $tmakeprecache($ruletarget)
+
+	set t $info(rule)
+	set target $info(target)
+	set dyndeps $info(dyndeps)
+	set vardict $info(vardict)
+
+	set status built
+
+	# Did the rule make the targets?
+	if {$rc == 0 && !$t(phony) && ![is-cleaning?]} {
+		set now [clock seconds]
+		foreach f $ruletarget {
+			if {![file exists [file-build $f]]} {
+				# XXX: Should onerror run here if --quickstop is set?
+				# XXX: Should the cache still be updated?
+				build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f ([file-build $f])"
+				# Use break to indicate that we have already output the message
+				set rc 3
+			} elseif {!$t(nocache)} {
+				# Record the time that this target was created, along with the real mtime
+				dict set tmakecache(file) $f [list $now [file-real-mtime $f]]
+				#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
+				# Remember the rule which built this target
+				dict set tmakecache(target) $f $ruletarget
+			}
+		}
+
+		# Save the commands in the command cache and the list of dyndeps
+		# and any warning messages
+		dict set tmakecache(cmd) $ruletarget [subst-do $ruletarget $vardict $t(do)]
+		dict set tmakecache(deps) $ruletarget [lsort $dyndeps]
+		dict set tmakecache(warnings) $ruletarget $tmake(warningmsgs)
+		mark-cache-dirty "Targets built"
+	}
+
+	if {$rc == 0} {
+		if {!$t(phony)} {
+			incr tmake(numtargets)
+		}
+	} else {
+		# On failure, delete the target(s)
+		file delete {*}$ruletarget
+
+		# Try to run onerror
+		lassign [run-do $vardict $t(onerror)] frc fmsg fopts
+		if {$frc} {
+			# Hmmm. Is the stack trace going to be useful if this is a background job?
+			# We really want the subprocess to collect that as part of its error output
+			build-error [error-stacktrace $fmsg $fopts(-errorinfo)]
+		} elseif {$rc == 1} {
+			if {$msg ne ""} {
+				# failed background task will supply it's own error message
+				build-error [error-stacktrace $msg $opts(-errorinfo)]
+			}
+		}
+		set status failed
+	}
+
+	set-rule-status $ruletarget $status
+
+	# No longer need this
+	unset tmakeprecache($ruletarget)
+
+	if {($tmake(quickstop) || $t(fatal)) && $tmake(exitcode)} {
+		user-notice lred "*** Error: Targets failed to build"
+		tmake-exit $tmake(exitcode)
+	}
+}
+
 # ==================================================================
 # build
 #
 # This is the workhorse of tmake.
-# If possible, it builds $target, including and required dependencies
-# Returns  0 if nothing to do,
-#         -1 if unabled to be built
-#          1 if built
+# If possible, it builds $target, including any required dependencies
+# Returns the target status (also stored as targetstatus):
+#          uptodate    if nothing to do,
+#          failed      if unable to be built
+#          built       if built
+#          waiting     if waiting for dependencies to build
 # ==================================================================
 
-proc build {target} {
+proc build {target {notifytarget {}}} {
 	global tmake tmakecache
 	if {![is-target? $target]} {
 		# Cache the result here, mostly to avoid excess messages
@@ -2306,10 +2502,10 @@ proc build {target} {
 			dputs-G "build $target"
 			if {[file exists $target]} {
 				dputs-n "$target is not a target, but exists"
-				set ret 0
+				set ret uptodate
 			} else {
 				dputs b "$target is not a target and does not exist"
-				set ret -1
+				set ret failed
 			}
 			dict set tmake(targetstatus) $target $ret
 		}
@@ -2317,14 +2513,28 @@ proc build {target} {
 	}
 
 	set ruletarget [get-rule-target $target]
-	set status [get-rule-status $ruletarget]
-	switch $status {
+	set oldstatus [get-rule-status $ruletarget]
+
+	if {$notifytarget eq ""} {
+		while {$oldstatus eq "waiting"} {
+			if {[wait-for-one-job] == 0} {
+				break
+			}
+			set oldstatus [get-rule-status $ruletarget]
+		}
+	}
+
+	switch $oldstatus {
+		running {
+			dputs j "$ruletarget is still running"
+			return running
+		}
 		uptodate {
-			return 0
+			return uptodate
 		}
 		built {
 			#dputs b "$target has previously been built"
-			return 1
+			return uptodate
 		}
 		checking {
 			set current [list {*}$tmake(current) $target]
@@ -2332,13 +2542,13 @@ proc build {target} {
 		}
 		failed {
 			dputs b "$target has previously failed to build"
-			return -1
+			return failed
 		}
-		unknown {
+		unknown - waiting {
 			dputs-G "build $target"
 		}
 		default {
-			error "Bad status: $status"
+			error "Bad status: $oldstatus"
 		}
 	}
 
@@ -2353,24 +2563,24 @@ proc build {target} {
 	if {$t(phony)} {
 		dputs b "$target is phony, so rebuilding"
 		lappend reason phony
-		set result 1
+		set status built
 	} elseif {![file-exists-all $ruletarget missing]} {
 		dputs b "$missing doesn't exist, so rebuilding"
 		lappend reason noexist
-		set result 1
+		set status built
 	} else {
 		#dputs b "$ruletarget exists, so checking dependencies"
-		set result 0
+		set status uptodate
 	}
 
 	# Here is the plan to build $target
 	# 1. Run 'build' for each static dependency
-	#    - If 'build' returns -1 (fails) and --quickstop is specified, we are done
-	#    - If 'build' returns 1, the target needs to be built
+	#    - If 'build' returns failed and --quickstop is specified, we are done
+	#    - If 'build' returns built, the target needs to be built
 	# 2. Calculate any dynamic dependencies for $target and run 'build' for each one
-	#    - If 'build' returns -1 (fails) and --quickstop is specified, we are done
-	#    - If 'build' returns 1, the target needs to be built
-	# 3. If nothing was built ($result is 0), check each static+dynamic dependency for time
+	#    - If 'build' returns failed and --quickstop is specified, we are done
+	#    - If 'build' returns built, the target needs to be built
+	# 3. If nothing was built ($result is ok), check each static+dynamic dependency for time
 	#    - If needbuild? returns 1, the target needs to be built
 	# 4. If build not forced, check substituted '-do' against any cached value
 	#    - If cached commands exists and they are different, the target needs to be built
@@ -2380,28 +2590,39 @@ proc build {target} {
 
 	# 1. Static dependencies
 	foreach i $depends {
-		# XXX: Recursive call to build here
-		set rc [build $i]
-		if {$rc < 0} {
-			if {$tmake(exitcode) == 0} {
-				build-error "[make-source-location $ruletarget]: Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }]"
+		set rc [build $i $ruletarget]
+		switch $rc {
+			uptodate {
+				# nothing to do
 			}
-			set result -1
-			if {$tmake(quickstop)} {
-				break
+			failed {
+				if {$tmake(exitcode) == 0} {
+					build-error "[make-source-location $ruletarget]: Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }]"
+				}
+				set status failed
+				if {$tmake(quickstop)} {
+					break
+				}
 			}
-		} elseif {$rc > 0} {
-			lappend reason depend $i
-			if {$result == 0} {
-				dputs b "Rebuilding $target because $i was built"
-				set result 1
+			built {
+				lappend reason depend $i
+				if {$status ni {failed waiting running}} {
+					dputs b "Rebuilding $target because $i was built"
+					set status built
+				}
+			}
+			waiting - running {
+				if {$status ni {failed waiting}} {
+					dputs j "$target has dependency on $rc target $i"
+					set status waiting
+				}
 			}
 		}
 	}
 
 	set vardict [make-var-dict $t]
 
-	if {$result >= 0} {
+	if {$status in {uptodate built}} {
 		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
 		# Need to set target vars before doing this
 
@@ -2409,13 +2630,13 @@ proc build {target} {
 
 		# Even before we do anything else, if the list of dependencies has changed,
 		# the target needs to be built
-		if {$result == 0 && [llength $t(do)]} {
+		if {$status eq "uptodate" && [llength $t(do)]} {
 			if {$t(phony)} {
 				# Phony target isn't going to get rebuild regardless
 			} elseif {![dict exists $tmakecache(deps) $ruletarget]} {
 				if {[llength $t(depends)]} {
 					dputs b "No previous dyndeps for $ruletarget"
-					set result 1
+					set status built
 					lappend reason nocache
 				}
 			} elseif {[lsort $dyndeps] ne [dict get $tmakecache(deps) $ruletarget]} {
@@ -2428,7 +2649,7 @@ proc build {target} {
 					puts [join [lsort $dyndeps] \n]
 					puts "-----------"
 				}
-				set result 1
+				set status built
 				lappend reason dyndeps
 			}
 		}
@@ -2437,25 +2658,36 @@ proc build {target} {
 			lappend depends $i
 
 			if {[check-signal]} {
-				set result -1
+				set status failed
 				break
 			}
 
 			# XXX: Recursive call to build here
-			set rc [build $i]
-			if {$rc < 0} {
-				if {$tmake(exitcode) == 0} {
-					build-error "Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget @]"
+			# Note that this duplicates code above
+			set rc [build $i $ruletarget]
+			switch -exact $rc {
+				failed {
+					if {$tmake(exitcode) == 0} {
+						build-error "Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget @]"
+					}
+					set status failed
+					if {$tmake(quickstop)} {
+						break
+					}
 				}
-				set result -1
-				if {$tmake(quickstop)} {
-					break
+				built {
+					lappend reason depend $i
+					if {$status eq "uptodate"} {
+						dputs b "Rebuilding $ruletarget because $i was built"
+						set status built
+					}
 				}
-			} elseif {$rc > 0} {
-				lappend reason depend $i
-				if {$result == 0} {
-					dputs b "Rebuilding $ruletarget because $i was built"
-					set result 1
+				waiting {
+					lappend reason waiting $i
+					if {$status eq "uptodate"} {
+						dputs j "$ruletarget has dependency on waiting target $i"
+						set status waiting
+					}
 				}
 			}
 		}
@@ -2466,33 +2698,33 @@ proc build {target} {
 		tmake-exit $tmake(exitcode)
 	}
 
-	if {$result == 0 && [llength $depends]} {
+	if {$status eq "uptodate" && [llength $depends]} {
 		# 3.  Target exists but no dependencies were built so check time dependencies
 		if {[needbuild? $ruletarget $depends depfile]} {
 			lappend reason older $depfile
-			set result 1
+			set status built
 		}
 	}
 
 	# If this target belongs to a different rule than previously...
-	if {$result == 0 && [llength $t(do)] && [dict exists $tmakecache(target) $target]} {
+	if {$status eq "uptodate" && [llength $t(do)] && [dict exists $tmakecache(target) $target]} {
 		if {$ruletarget ne [dict get $tmakecache(target) $target]} {
 			dputs b "Target $target is built by a different rule"
 			dputs B "Was [dict get $tmakecache(target) $target] but is now $ruletarget"
 			lappend reason newrule
-			set result 1
+			set status built
 		}
 	}
 
 	# 4. Compare previous '-do' commands with current commands
-	if {$result == 0 && [llength $t(do)]} {
+	if {$status eq "uptodate" && [llength $t(do)]} {
 		if {![dict exists $tmakecache(cmd) $ruletarget]} {
 			# If there are no dependencies, changed commands don't cause a rebuild by themselves
 			# XXX: Should there be a special flag for this sort of rule?
 			if {[llength $t(depends)]} {
 				dputs b "No cached commands for $ruletarget, so forcing rebuild"
 				lappend reason nocache
-				set result 1
+				set status built
 			}
 		} else {
 			set do [subst-do $ruletarget $vardict $t(do)]
@@ -2511,25 +2743,33 @@ proc build {target} {
 					puts "-----------"
 				}
 				lappend reason commands
-				set result 1
+				set status built
 			} else {
 				dputs-n "Commands for $ruletarget are unchanged"
 			}
 		}
 	}
 
-	if {$result == 0 && $tmake(force) && !$tmake(ignoreforce)} {
+	if {$status eq "uptodate" && $tmake(force) && !$tmake(ignoreforce)} {
 		dputs b "Rebuilding $target because of --force"
 		lappend reason force
-		set result 1
+		set status built
 	}
 
-	if {$result > 0 && [llength $t(do)]} {
+	if {$status eq "built" && [llength $t(do)]} {
 		dputs g "[join $tmake(current) { --> }] ($reason)" 0
 	}
 
-	if {$result > 0 && [llength $t(do)]} {
+	if {$status eq "built" && [llength $t(do)]} {
+		# Stash info for this rule that can be used in target-post-build either
+		# immediately, or when the background job finishes
+		global tmakeprecache
+
+		set tmakeprecache($ruletarget) [dict create rule $t target $target dyndeps $dyndeps vardict $vardict]
+
 		#puts "Running rules for $ruletarget"
+		set tmake(sync) 1
+
 		dputs b "Building [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget "with rule @"]"
 		lassign [run-do $vardict $t(msg)] rc msg opts
 		if {$rc != 0} {
@@ -2557,6 +2797,21 @@ proc build {target} {
 			}
 			set rc 0
 		} else {
+			if {$notifytarget eq ""} {
+				set tmake(sync) 1
+				if {$tmake(maxjobs) > 1} {
+					dputs j "$ruletarget: notifytarget is empty, so building synchronously"
+				}
+			} else {
+				set tmake(sync) 0
+			}
+
+			# XXX: Check the 'slow' flag of the target to see if we should fork
+			set tmake(currentnotifytarget) $notifytarget
+			set tmake(currentruletarget) $ruletarget
+			# No jobs yet
+			set tmake(jobpid) -1
+
 			# Create all the target directories as required
 			set dirlist {}
 			foreach i $ruletarget {
@@ -2574,89 +2829,74 @@ proc build {target} {
 				dputs m "cd $chdir"
 				cd $chdir
 			}
-			foreach do $t(do) {
-				set oldenv [env-save]
-				set tmake(warningmsgs) {}
-				lassign [run-do $vardict $do] rc msg opts
-				env-restore $oldenv
-				if {$rc} {
-					# XXX: Check for signal?
-					if {$t(nofail)} {
-						user-notice cyan "\[ignored\] $msg"
-						set rc 0
-					} else {
+
+			if {$t(slow)} {
+				fork-job-if-required
+			}
+			if {$tmake(jobpid) <= 0} {
+				# child process or sync, so run the jobs
+				foreach do $t(do) {
+					set oldenv [env-save]
+					set tmake(warningmsgs) {}
+					lassign [run-do $vardict $do] rc msg opts
+					env-restore $oldenv
+					if {$tmake(jobpid) > 0} {
+						# run has forked and this is the parent
 						break
+					}
+					if {$rc} {
+						# XXX: Check for signal?
+						if {$t(nofail)} {
+							user-notice cyan "\[ignored\] $msg"
+							set rc 0
+						} else {
+							break
+						}
 					}
 				}
 			}
+
 			# Always restore the current dir afterwards
 			cd $tmake(topsrcdir)
-		}
 
-		if {[check-signal 1]} {
-			pputs ""
-			set tmake(exitcode) 2
-			set rc 5
-		}
-
-		# Did the rule make the targets?
-		if {$rc == 0 && !$t(phony) && !$tmake(norun) && ![is-cleaning?]} {
-			set now [clock seconds]
-			foreach f $ruletarget {
-				if {![file exists [file-build $f]]} {
-					# XXX: Should onerror run here if --quickstop is set?
-					# XXX: Should the cache still be updated?
-					build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f ([file-build $f])"
-					# Use break to indicate that we have already output the message
-					set rc 3
-				} elseif {!$t(nocache)} {
-					# Record the time that this target was created, along with the real mtime
-					dict set tmakecache(file) $f [list $now [file-real-mtime $f]]
-					#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
-					# Remember the rule which built this target
-					dict set tmakecache(target) $f $ruletarget
+			if {$tmake(jobpid) > 0} {
+				set status running
+			} else {
+				# Now the child is done
+				if {[check-signal 1]} {
+					# Caught a signal
+					dputs j "Got signal while building $ruletarget"
+					pputs ""
+					if {$tmake(jobpid) != 0} {
+						user-notice lred "*** Build cancelled"
+					}
+					tmake-exit 2
 				}
+				if {$rc != 0} {
+					if {$tmake(jobpid) == 0} {
+						dputs j "Job [pid] ($ruletarget) failed with rc=$rc, msg=$msg, opts=$opts"
+						# Must output the failure here since it's the only place we have the strack trace
+						dputs b "BUILD ERROR: $msg"
+						puts stderr [colerr lred [error-stacktrace $msg $opts(-errorinfo)]]
+						exit 1
+					}
+					set status failed
+				}
+				if {$tmake(jobpid) == 0} {
+					dputs j "Job [pid] ($ruletarget) succeeded"
+					exit 0
+				}
+				set status built
 			}
-			# Save the commands in the command cache and the list of dyndeps
-			# and any warning messages
-			dict set tmakecache(cmd) $ruletarget [subst-do $ruletarget $vardict $t(do)]
-			dict set tmakecache(deps) $ruletarget [lsort $dyndeps]
-			dict set tmakecache(warnings) $ruletarget $tmake(warningmsgs)
-			mark-cache-dirty "Targets built"
+			set tmake(sync) 1
 		}
 
-		if {$rc == 0} {
-			if {!$t(phony)} {
-				incr tmake(numtargets)
-			}
-		} else {
-			# On failure, delete the target(s)
-			file delete {*}$ruletarget
-
-			# Try to run onerror
-			lassign [run-do $vardict $t(onerror)] frc fmsg fopts
-			if {$frc} {
-				build-error [error-stacktrace $fmsg $fopts(-errorinfo)]
-			} elseif {$rc == 1} {
-				build-error [error-stacktrace $msg $opts(-errorinfo)]
-			}
-			set result -1
-		}
-
-		if {$rc == 5 || (($tmake(quickstop) || $t(fatal)) && $tmake(exitcode))} {
-			user-notice lred "*** Error: Targets failed to build"
-			tmake-exit $tmake(exitcode)
+		if {$status ne "running" && !$t(phony) && !$tmake(norun)} {
+			target-post-build $ruletarget $rc $msg $opts
 		}
 	}
 
-	set oldstatus $status
-	if {$result < 0} {
-		set status failed
-	} elseif {$result > 0} {
-		set status built
-	} else {
-		# Target was up-to-date.
-		set status uptodate
+	if {$status eq "uptodate"} {
 		# If --warnings is set, show any cached warnings
 		if {$tmake(showwarnings)} {
 			if {[dict exists $tmakecache(warnings) $ruletarget]} {
@@ -2677,11 +2917,12 @@ proc build {target} {
 			}
 		}
 	}
-	#puts "status changed for $ruletarget from $oldstatus => $status ($result)"
+
+	#puts "status changed for $ruletarget from $oldstatus => $status ($reason)"
 	set-rule-status $ruletarget $status
 
 	set tmake(current) $oldcurrent
-	return $result
+	return $status
 }
 
 # ==================================================================
@@ -2724,7 +2965,8 @@ proc find-file-on-path {filename path} {
 	if {[is-target? $f]} {
 		dputs-D "$f is a target, so building first"
 		# Even if it fails to build, it is needed
-		if {[build $f] >= 0} {
+		set status [build-sync $f]
+		if {$status in {built uptodate}} {
 			# with tmake -n, the file may not have actually been built
 			set filepath [file-build $f]
 			if {[file exists $filepath]} {
@@ -2734,6 +2976,10 @@ proc find-file-on-path {filename path} {
 			}
 		} else {
 			dputs-D "failed to build $f"
+			build-error "Error: Failed to build $f"
+			if {$::tmake(quickstop)} {
+				tmake-exit 1
+			}
 		}
 	} else {
 		if {[file exists $f]} {
