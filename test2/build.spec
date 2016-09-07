@@ -3,6 +3,8 @@ ifconfig CONFIGURED
 
 IncludePaths .
 
+PrecompiledHeader jim-pch.h
+
 ifconfig JIM_SHAREDLIB {
 	# Get the version from jim.h into version.conf
 	# It is of the form: #define JIM_VERSION 71
@@ -81,3 +83,4 @@ Install $prefix/docs Tcl.html README.jim=README
 Phony docs Tcl.html
 
 DistClean jim-config.h jimautoconf.h config.log settings.conf
+

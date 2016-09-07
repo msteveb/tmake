@@ -1,3 +1,6 @@
 .makecache
 config.log
 _install
+*.o
+lib*.a
+objdir/

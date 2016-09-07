@@ -93,6 +93,7 @@ proc rulebase-init {} {
 	define PROJLIBS ""
 	define SYSLIBS ""
 	define HOST_SYSLIBS ""
+	define PRECOMPILED_HEADER ""
 
 	# Default header pattern for C and C++ dynamic dependencies
 	#
@@ -202,7 +203,7 @@ Used variables: CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 			run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 		} -dyndep {
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
-		}
+		} -depends [get-define PRECOMPILED_HEADER]
 	}
 	return $obj
 }
@@ -221,7 +222,7 @@ Used variables: CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation
 			run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
 		} -dyndep {
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
-		}
+		} -depends [get-define PRECOMPILED_HEADER]
 	}
 	return $obj
 }
@@ -1468,6 +1469,32 @@ Shorthand for:
 	} else {
 		Publish include {*}$args
 	}
+}
+
+rule PrecompiledHeader {header} {
+PrecompiledHeader headerfile.h
+
+Arranges for the given header file to be precompiled and included
+when compiling subsequent C/C++ sources.
+} {
+	show-this-rule
+
+	set local [make-local $header]
+
+	# Build the precompiled header
+	ObjectRule.c $local.gch $local
+	Clean $local.gch
+	# Need to publish both of these to the same directory
+	PublishIncludes $header $header.gch
+
+	# Now add this as an included for for subsequent compilation
+	# Should we be using -include $header or -include-pch?
+	# Is the latter only a clang thing?
+	CFlags -include $header
+	#CFlags -include-pch [publish-path include]/$header.gch
+
+	# And we need to make sources depend on this too
+	define PRECOMPILED_HEADER [publish-dir include]/$header.gch
 }
 
 rule Test {args} {
