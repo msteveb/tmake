@@ -2282,6 +2282,8 @@ proc subst-do {__target __vardict __do_list} {
 
 	# Return a list of substituted '-do' scripts
 	lmap __each_do $__do_list {
+		# Force __each_do to be copied so that we don't lose source info in the original
+		set __each_do [string cat $__each_do ""]
 		set source [info source $__each_do]
 		# Note: It is an error if the subst fails
 		if {[catch {subst -nob -noc $__each_do} __result __opts]} {
