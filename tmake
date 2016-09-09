@@ -530,7 +530,7 @@ proc make {argv} {
 					dputs-n "Load --nocare $t, not a target"
 					continue
 				}
-				set rc [build $t]
+				set rc [build-sync $t]
 				if {$rc eq "failed"} {
 					if {$tmake(exitcode) == 0} {
 						build-error "Error: Don't know how to build $t"
@@ -1133,6 +1133,10 @@ proc parse-warning {msg} {
 
 proc tmake-exit {code} {
 	global tmake
+
+	if {$code == 0 && [dict size $tmake(running)]} {
+		user-notice "Warning: background jobs still running upon successful exit"
+	}
 
 	# Write the cache before exiting
 	write-cache
