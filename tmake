@@ -87,10 +87,6 @@ set tmake(warningmsgs) {}
 set tmake(running) {}
 set tmake(pending) {}
 
-if {$tmake(debug)} {
-	dict set tmake(debugtypes) A 1
-}
-
 # ==================================================================
 # Argument Processing
 # ==================================================================
@@ -187,7 +183,6 @@ proc make-parse-options {argv} {
 					dict set tmake(debugtypes) $i 1
 				}
 			}
-			set tmake(debug) 1
 		}
 		{--install=* --install} {
 			use install
