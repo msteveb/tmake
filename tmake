@@ -2223,6 +2223,13 @@ proc run {args} {
 
 proc run-tmake {args} {
 	global tmake
+
+	if {[fork-job-if-required] > 0} {
+		# can't just [return] here since we need to ensure that the rest of
+		# the -do doesn't run in the parent, but only in the child
+		return -code break
+	}
+
 	set cmdline [list tmake {*}$tmake(cli-options) {*}$args]
 
 	dputs m $cmdline
