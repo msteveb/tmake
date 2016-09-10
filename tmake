@@ -2586,12 +2586,26 @@ proc build {target {notifytarget {}}} {
 	# 4. If build not forced, check substituted '-do' against any cached value
 	#    - If cached commands exists and they are different, the target needs to be built
 
-	# First check dynamic dependencies
+	set vardict [make-var-dict $t]
+
+	# First get that static dependencies
 	set depends $t(depends)
 
-	# 1. Static dependencies
+	# And add the dynamic dependencies
+	# Note: Only targets or existing files are returned by calc-dyndeps.
+	set dyndeps [calc-dyndeps $vardict $ruletarget]
+
+	lappend depends {*}$dyndeps
+
+	# Build/check each dependencies
 	foreach i $depends {
 		set rc [build $i $ruletarget]
+
+		if {[check-signal]} {
+			user-notice lred "*** Build cancelled"
+			tmake-exit 2
+		}
+
 		switch $rc {
 			uptodate {
 				# nothing to do
@@ -2607,7 +2621,7 @@ proc build {target {notifytarget {}}} {
 			}
 			built {
 				lappend reason depend $i
-				if {$status ni {failed waiting running}} {
+				if {$status ni {built failed waiting running}} {
 					dputs b "Rebuilding $target because $i was built"
 					set status built
 				}
@@ -2621,76 +2635,28 @@ proc build {target {notifytarget {}}} {
 		}
 	}
 
-	set vardict [make-var-dict $t]
+	if {$status eq "uptodate" && !$t(phony) && [llength $t(do)]} {
+		# If the list of dependencies has changed, the target needs to be built
 
-	if {$status in {uptodate built}} {
-		# 2. Dynamic dependencies. Only targets or existing files are returned by calc-dyndeps.
-		# Need to set target vars before doing this
-
-		set dyndeps [calc-dyndeps $vardict $ruletarget]
-
-		# Even before we do anything else, if the list of dependencies has changed,
-		# the target needs to be built
-		if {$status eq "uptodate" && [llength $t(do)]} {
-			if {$t(phony)} {
-				# Phony target isn't going to get rebuild regardless
-			} elseif {![dict exists $tmakecache(deps) $ruletarget]} {
-				if {[llength $t(depends)]} {
-					dputs b "No previous dyndeps for $ruletarget"
-					set status built
-					lappend reason nocache
-				}
-			} elseif {[lsort $dyndeps] ne [dict get $tmakecache(deps) $ruletarget]} {
-				dputs b "dyndeps for $ruletarget have changed, so forcing build"
-				if {[debug-is-set d] && [debug-is-set b]} {
-					set olddeps [dict get $tmakecache(deps) $ruletarget]
-					puts "=== old ==="
-					puts [join [lsort $olddeps] \n]
-					puts "=== new ==="
-					puts [join [lsort $dyndeps] \n]
-					puts "-----------"
-				}
+		if {![dict exists $tmakecache(deps) $ruletarget]} {
+			# XXX why are we checking llength $t(depends) here?
+			if {[llength $t(depends)]} {
+				dputs b "No previous dyndeps for $ruletarget"
 				set status built
-				lappend reason dyndeps
+				lappend reason nocache
 			}
-		}
-
-		foreach i $dyndeps {
-			lappend depends $i
-
-			if {[check-signal]} {
-				set status failed
-				break
+		} elseif {[lsort $dyndeps] ne [dict get $tmakecache(deps) $ruletarget]} {
+			dputs b "dyndeps for $ruletarget have changed, so forcing build"
+			if {[debug-is-set d] && [debug-is-set b]} {
+				set olddeps [dict get $tmakecache(deps) $ruletarget]
+				puts "=== old ==="
+				puts [join [lsort $olddeps] \n]
+				puts "=== new ==="
+				puts [join [lsort $dyndeps] \n]
+				puts "-----------"
 			}
-
-			# XXX: Recursive call to build here
-			# Note that this duplicates code above
-			set rc [build $i $ruletarget]
-			switch -exact $rc {
-				failed {
-					if {$tmake(exitcode) == 0} {
-						build-error "Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget @]"
-					}
-					set status failed
-					if {$tmake(quickstop)} {
-						break
-					}
-				}
-				built {
-					lappend reason depend $i
-					if {$status eq "uptodate"} {
-						dputs b "Rebuilding $ruletarget because $i was built"
-						set status built
-					}
-				}
-				waiting {
-					lappend reason waiting $i
-					if {$status eq "uptodate"} {
-						dputs j "$ruletarget has dependency on waiting target $i"
-						set status waiting
-					}
-				}
-			}
+			set status built
+			lappend reason dyndeps
 		}
 	}
 
@@ -2878,7 +2844,11 @@ proc build {target {notifytarget {}}} {
 						dputs j "Job [pid] ($ruletarget) failed with rc=$rc, msg=$msg, opts=$opts"
 						# Must output the failure here since it's the only place we have the strack trace
 						dputs b "BUILD ERROR: $msg"
-						puts stderr [colerr lred [error-stacktrace $msg $opts(-errorinfo)]]
+						if {[exists opts(-errorinfo)]} {
+							puts stderr [colerr lred [error-stacktrace $msg $opts(-errorinfo)]]
+						} else {
+							puts stderr [colerr lred $msg]
+						}
 						exit 1
 					}
 					set status failed
