@@ -3,6 +3,8 @@
 
 # Module which provides auto-generation of build.spec files
 
+# Implements tmake --genie ?--force?
+#
 proc tmake-genie {argv} {
 	use getopt
 

@@ -30,6 +30,10 @@ proc do_ifconfig {name expr exprargs} {
 	parse-error "ifconfig: should be $name {expr} ?{code}? ?else {code}?"
 }
 
+# @is-defined? name
+#
+# Returns 1 if the define exists as is not set to "" or 0
+
 proc is-defined? {name} {
 	if {[get-define $name] ni {"" 0}} {
 		return 1
@@ -37,6 +41,9 @@ proc is-defined? {name} {
 	return 0
 }
 
+# @ifconfig expr ?code? ?else code?
+#
+# XXX
 proc ifconfig {expr args} {
 	# convert the simple expression into something we can evaluate
 	regsub -all {([A-Z][A-Z0-9_]*)} $expr {[is-defined? \1]} tclexpr

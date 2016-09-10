@@ -1,11 +1,11 @@
 # Simple command line argument parser
 
-# Usage: argparse argv { patterns code patterns code ... }
+# @argparse argv { patterns code patterns code ... }
 #
 # The code is evaluated if the arg matches a correponding glob pattern
 # The current argument is available as $arg
 # Call [argnext argv] to get the next arg.
-# Call [argparse $arg] to get the next arg.
+# Call [argparam $arg] to extract the value from a parameter like --option=value
 # Leaves $argv with unconsumed args.
 
 proc argparse {&argv spec} {
@@ -30,7 +30,7 @@ proc argparse {&argv spec} {
 		if {[regexp {^(-+[^=]*)(=)?(.*)?} $arg -> option equals value]} {
 			return $value
 		}
-		error "Can't find parameter from $arg"
+		parse-error "Can't find parameter from $arg"
 	}
 
 	set done 0

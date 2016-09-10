@@ -85,7 +85,17 @@ proc apply-template {infile outfile mapping target} {
 #
 # Depends all [Template target src ...]
 #
-proc Template {args} {
+rule Template {args} {
+Template ?--nowarn? target src ?var1 var2 var3=value ...?
+
+Creates 'target' from 'src' substituting @var1@, @var2@, etc. with
+the value of the corresponding defined variables, or the given value.
+
+Also supports conditionals, @if, @else and @endif. See 'apply-template' in the tmake reference.
+
+Note: If no variables are specified, all defined variables will be mapped but this is not recommended
+and produces a warning unless '--warn' is given.
+} {
 	show-this-rule
 
 	getopt {--nowarn target src args} args

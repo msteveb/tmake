@@ -3,8 +3,6 @@
 
 # Module which provides text formatting
 
-use formatting
-
 proc wordwrap {text length {firstprefix ""} {nextprefix ""}} {
     set len 0
     set space $firstprefix

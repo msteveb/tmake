@@ -20,7 +20,6 @@ proc getopt-core {optdef argv} {
 	set named {}
 	foreach i $optdef {
 		if {[regexp {^--([^:]*)(:*)(.*)$} $i -> name colon extra]} {
-			#puts "$i -> $name, [string length $colon], $extra"
 			switch [string length $colon] {
 				0 {
 					set default 0
@@ -54,17 +53,9 @@ proc getopt-core {optdef argv} {
 			lappend named $i
 		}
 	}
-	#parray stropts
-	#parray boolopts
-	#parray vars
-	#puts named=$named
-	#puts haveargs=$haveargs
-	#puts args=$argv
 
 	for {set i 0} {$i < [llength $argv]} {incr i} {
 		set arg [lindex $argv $i]
-
-		#dputs arg=$arg
 
 		if {$arg eq "--"} {
 			# End of options
@@ -112,8 +103,6 @@ proc getopt-core {optdef argv} {
 			parse-error "Unknown option: --$name"
 		}
 	}
-
-	#puts nargv=$nargv
 
 	if {[llength $nargv] < [llength $named]} {
 		parse-error "No value supplied for [lindex $named [llength $nargv]]"

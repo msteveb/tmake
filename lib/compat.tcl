@@ -54,6 +54,11 @@ if {[iswin]} {
 	}
 }
 
+# @lunique list
+#
+# Returns a copy of $list with any duplicates removed.
+# The order of the returned list is random.
+#
 proc lunique {list} {
 	set a {}
 	foreach i $list {
@@ -212,7 +217,7 @@ proc relative-path {path {pwd {}}} {
 # If everything is working properly, the only errors which occur
 # should be generated in user code (e.g. auto.def).
 # By default, we only want to show the error location in user code.
-# We use [info frame] to achieve this, but it works differently on Tcl and Jim.
+# We use [info frame] to achieve this.
 #
 # This is designed to be called for incorrect usage, via parse-error
 #
@@ -318,18 +323,14 @@ proc init-compat {} {
 	}
 
 	# How to eval a script and provide source info?
+	# Older versions of Jim Tcl didn't support this
 	if {[catch {info source {} t.tcl 1}] == 0} {
 		# Have [info source]
 		proc eval-source {script filename line} {
 			tailcall eval [info source $script $filename $line]
 		}
-	} elseif {[catch {source filename {}}] == 0} {
-		# Have [source script loc]
-		proc eval-source {script filename line} {
-			tailcall source $script $filename $line
-		}
 	} else {
-		# Have neither, so just use [eval]
+		# No, so just use [eval]
 		proc eval-source {script filename args} {
 			tailcall eval $script
 		}
