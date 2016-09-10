@@ -2375,7 +2375,7 @@ proc add-new-job {ruletarget notifytarget} {
 proc build-sync {target} {
 	while 1 {
 		set status [build $target]
-		if {$status eq "waiting"} {
+		if {$status in {waiting running}} {
 			dputs j "Waiting for $target to complete..."
 			wait-for-one-job
 			continue
@@ -2469,6 +2469,7 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 #          failed      if unable to be built
 #          built       if built
 #          waiting     if waiting for dependencies to build
+#          running     if job is running in the background
 # ==================================================================
 
 proc build {target {notifytarget {}}} {
@@ -2493,15 +2494,6 @@ proc build {target {notifytarget {}}} {
 
 	set ruletarget [get-rule-target $target]
 	set oldstatus [get-rule-status $ruletarget]
-
-	if {$notifytarget eq ""} {
-		while {$oldstatus eq "waiting"} {
-			if {[wait-for-one-job] == 0} {
-				break
-			}
-			set oldstatus [get-rule-status $ruletarget]
-		}
-	}
 
 	switch $oldstatus {
 		running {
