@@ -2534,8 +2534,8 @@ proc build {target {notifytarget {}}} {
 			return uptodate
 		}
 		built {
-			#dputs b "$target has previously been built"
-			return uptodate
+			dputs b "$target has previously been built"
+			return built
 		}
 		checking {
 			set current [list {*}$tmake(current) $target]
