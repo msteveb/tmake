@@ -2226,8 +2226,8 @@ proc wait-for-one-job {} {
 			set job [dict get $tmake(running) $pid]
 			dict unset tmake(running) $pid
 
-			dputs j "Job $pid has finished with $status\($code) for {$job}"
 			lassign $job ruletarget notifytarget chdir outfile errfile
+			dputs j "Job $pid has finished with $status\($code) for {$ruletarget $notifytarget}"
 			if {$status eq "exit" && $code == 0} {
 				set rc 0
 			} else {
