@@ -87,6 +87,7 @@ set tmake(warningmsgs) {}
 set tmake(running) {}
 set tmake(pending) {}
 set tmake(jobpid) -1
+set tmake(resetstatus) 0
 
 # ==================================================================
 # Argument Processing
@@ -508,9 +509,10 @@ proc make {argv} {
 			break
 		}
 
-		if {$tmake(cleaning)} {
-			# Reset the status of every rule to "unknown" after cleaning
+		if {$tmake(cleaning) || $tmake(resetstatus)} {
+			# Reset the status of every rule to "unknown" after cleaning or if reset-target-status was called
 			set tmake(cleaning) 0
+			set tmake(resetstatus) 0
 			foreach ruletarget [dict keys $tmake(rules)] {
 				set-rule-status $ruletarget unknown
 			}
@@ -548,6 +550,14 @@ proc get-rulebase {} {
 proc add-build-targets {args} {
 	global tmake
 	lappend tmake(addtargets) {*}$args
+}
+
+# If files have been manually changed (e.g. in a phony rule),
+# reset-target-status causes the status of all targets to be reset
+# to unknown for any new build targets added with add-build-targets
+proc reset-target-status {} {
+	global tmake
+	set tmake(resetstatus) 1
 }
 
 proc add-project-file {filename nocare} {
