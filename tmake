@@ -281,7 +281,7 @@ proc make {argv} {
 		use compat
 	}
 
-	use colour
+	use colour util fileutil
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
@@ -1218,12 +1218,9 @@ proc dbg-msg-indent {{autoindent 1}} {
 	return [format %5dms $time]$indent
 }
 
-proc pad {text width {char { }}} {
-	if {[string length $text] >= $width} {
-		return $text
-	}
-	return $text[string repeat $char [expr {$width - [string length $text]}]]
-}
+# ==================================================================
+# Show rules, targets, aliases, etc.
+# ==================================================================
 
 # Pretty-print the commands for a rule
 #
@@ -1501,123 +1498,6 @@ proc define-exists {name} {
 	dict exists $::tmake(defines) $name
 }
 
-# If the given var is not set or is "", sets it to $value
-# Otherise appends $value with a space separator (or $space)
-#
-proc append-with-space {varname value {space " "}} {
-	upvar $varname n
-	if {[info exists n] && $n ne ""} {
-		append n $space $value
-	} else {
-		set n $value
-	}
-}
-
-# Takes a list and returns a new list with $suf appended
-# to each element
-# 
-# suffix .c a b c => a.c b.c c.c
-#
-proc suffix {suf args} {
-	set result {}
-	foreach p [join $args] {
-		lappend result $p$suf
-	}
-	return $result
-}
-
-# Takes a list and returns a new list with $pre prepended
-# to each element
-# 
-# prefix jim- a.c b.c => jim-a.c jim-b.c
-#
-proc prefix {pre args} {
-	set result {}
-	foreach p [join $args] {
-		lappend result $pre$p
-	}
-	return $result
-}
-
-# @omit list elements..
-#
-# Returns a list with the given elements removed
-proc omit {list args} {
-	lmap p $list {
-		if {$p in $args} {
-			continue
-		}
-		lindex $p
-	}
-}
-
-# Takes a list of filenames and returns a new list with
-# the extension of each filename changed to $ext
-# 
-# change-ext .c a.o b.o c => a.c b.c c.c
-#
-proc change-ext {ext args} {
-	set result {}
-	foreach p [join $args] {
-		lappend result [file rootname $p]$ext
-	}
-	return $result
-}
-
-# Merges target variables.
-# These are stored in dictionaries, where $dict1 is the current vars
-# and the new vars $dict2 need to be merged.
-# Where there is no overlap, the dictionaries are simply merged.
-# Where a var exists in both, the values are combined with a space separator.
-proc merge-vars {dict1 dict2} {
-	if {[dict size $dict2]} {
-		if {[dict size $dict1] == 0} {
-			return $dict2
-		}
-		set d1 $dict1
-		foreach {n v} $dict2 {
-			append-with-space d1($n) $v
-		}
-		return $d1
-	}
-	return $dict1
-}
-
-# ==================================================================
-# File Utilities
-# ==================================================================
-
-# @readfile filename ?default?
-#
-# Return the contents of the file, without the trailing newline.
-# If the file doesn't exist or can't be read, returns $default.
-# If no default is given, it is an error. 
-#
-proc readfile {filename args} {
-	try {
-		set f [open $filename]
-		set result [read -nonewline $f]
-		close $f
-	} on error {msg opts} {
-		if {[llength $args] != 1} {
-			return -code error $msg
-		}
-		lassign $args result
-	}
-	return $result
-}
-
-# @writefile filename value
-#
-# Creates the given file containing $value.
-# Does not add an extra newline.
-#
-proc writefile {filename value} {
-	file mkdir [file dirname $filename]
-	set f [open $filename w]
-	puts -nonewline $f $value
-	close $f
-}
 
 # ==================================================================
 # Rule Handling
@@ -2098,14 +1978,6 @@ proc locate-files {files} {
 	}
 	#puts "locate-files $files => $result"
 	return $result
-}
-
-proc set-global {name value} {
-	if {[info exists ::$name] && [set ::$name] eq $value} {
-		return
-	}
-	dputs v "! $name=$value"
-	set ::$name $value
 }
 
 # Returns a dictionary with the bound and rule-specific variables
