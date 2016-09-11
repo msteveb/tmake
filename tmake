@@ -2337,6 +2337,47 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 	}
 }
 
+proc build-deps {target ruletarget status depends &reason} {
+	foreach dep $depends {
+		set ret [build $dep $ruletarget]
+
+		if {[check-signal]} {
+			user-notice lred "*** Build cancelled"
+			tmake-exit 2
+		}
+
+		switch $ret {
+			uptodate {
+				# nothing to do
+			}
+			failed {
+				if {$tmake(exitcode) == 0} {
+					build-error "[make-source-location $ruletarget]: Error: Don't know how to build $dep: [join [lreverse $tmake(current)] { <= }]"
+				}
+				set status failed
+				if {$tmake(quickstop)} {
+					break
+				}
+			}
+			built {
+				lappend reason depend $dep
+				if {$status ni {built failed waiting running}} {
+					dputs b "Rebuilding $target because $dep was built"
+					set status built
+				}
+			}
+			waiting - running {
+				if {$status ni {failed waiting}} {
+					dputs j "$target has dependency on $ret target $dep"
+					set status waiting
+				}
+			}
+		}
+	}
+	return $status
+}
+
+
 # ==================================================================
 # build
 #
@@ -2429,58 +2470,22 @@ proc build {target {notifytarget {}}} {
 	# 2. Calculate any dynamic dependencies for $target and run 'build' for each one
 	#    - If 'build' returns failed and --quickstop is specified, we are done
 	#    - If 'build' returns built, the target needs to be built
-	# 3. If nothing was built ($result is ok), check each static+dynamic dependency for time
+	# 3. If nothing was built ($result is uptodate), check each static+dynamic dependency for time
 	#    - If needbuild? returns 1, the target needs to be built
 	# 4. If build not forced, check substituted '-do' against any cached value
 	#    - If cached commands exists and they are different, the target needs to be built
 
 	set vardict [make-var-dict $t]
 
-	# First get that static dependencies
+	# 1. First build static dependencies
 	set depends $t(depends)
-
-	# And add the dynamic dependencies
-	# Note: Only targets or existing files are returned by calc-dyndeps.
-	set dyndeps [calc-dyndeps $vardict $ruletarget]
-
-	lappend depends {*}$dyndeps
-
-	# Build/check each dependencies
-	foreach i $depends {
-		set rc [build $i $ruletarget]
-
-		if {[check-signal]} {
-			user-notice lred "*** Build cancelled"
-			tmake-exit 2
-		}
-
-		switch $rc {
-			uptodate {
-				# nothing to do
-			}
-			failed {
-				if {$tmake(exitcode) == 0} {
-					build-error "[make-source-location $ruletarget]: Error: Don't know how to build $i: [join [lreverse $tmake(current)] { <= }]"
-				}
-				set status failed
-				if {$tmake(quickstop)} {
-					break
-				}
-			}
-			built {
-				lappend reason depend $i
-				if {$status ni {built failed waiting running}} {
-					dputs b "Rebuilding $target because $i was built"
-					set status built
-				}
-			}
-			waiting - running {
-				if {$status ni {failed waiting}} {
-					dputs j "$target has dependency on $rc target $i"
-					set status waiting
-				}
-			}
-		}
+	set status [build-deps $target $ruletarget $status $t(depends) reason]
+	if {$status in {uptodate built}} {
+		# 2. Build dynamic dependencies
+		# Note: Only targets or existing files are returned by calc-dyndeps.
+		set dyndeps [calc-dyndeps $vardict $ruletarget]
+		lappend depends {*}$dyndeps
+		set status [build-deps $target $ruletarget $status $dyndeps reason]
 	}
 
 	if {$status eq "uptodate" && !$t(phony) && [llength $t(do)]} {
@@ -2573,16 +2578,7 @@ proc build {target {notifytarget {}}} {
 
 	if {$status eq "built" && [llength $t(do)]} {
 		dputs g "[join $tmake(current) { --> }] ($reason)" 0
-	}
 
-	if {$status eq "built" && [llength $t(do)]} {
-		# Stash info for this rule that can be used in target-post-build either
-		# immediately, or when the background job finishes
-		global tmakeprecache
-
-		set tmakeprecache($ruletarget) [dict create rule $t target $target dyndeps $dyndeps vardict $vardict]
-
-		#puts "Running rules for $ruletarget"
 		set tmake(sync) 1
 
 		dputs b "Building [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget "with rule @"]"
@@ -2621,12 +2617,6 @@ proc build {target {notifytarget {}}} {
 				set tmake(sync) 0
 			}
 
-			# XXX: Check the 'slow' flag of the target to see if we should fork
-			set tmake(currentnotifytarget) $notifytarget
-			set tmake(currentruletarget) $ruletarget
-			# No jobs yet
-			set tmake(jobpid) -1
-
 			# Create all the target directories as required
 			set dirlist {}
 			foreach i $ruletarget {
@@ -2645,6 +2635,18 @@ proc build {target {notifytarget {}}} {
 				cd $chdir
 			}
 
+			# Stash info for this rule that can be used in target-post-build either
+			# immediately, or when the background job finishes
+			global tmakeprecache
+
+			set tmakeprecache($ruletarget) [dict create rule $t target $target dyndeps $dyndeps vardict $vardict]
+
+			# Set these in case the job needs to be forked into the background
+			set tmake(currentnotifytarget) $notifytarget
+			set tmake(currentruletarget) $ruletarget
+			set tmake(jobpid) -1
+
+			# Check the 'slow' flag of the target to see if we should fork
 			if {$t(slow)} {
 				fork-job-if-required
 			}
@@ -2710,8 +2712,12 @@ proc build {target {notifytarget {}}} {
 			set tmake(sync) 1
 		}
 
-		if {$status ne "running" && !$t(phony) && !$tmake(norun)} {
-			target-post-build $ruletarget $rc $msg $opts
+		if {$status ne "running"} {
+			if {$tmake(norun)} {
+				unset tmakeprecache($ruletarget)
+			} else {
+				target-post-build $ruletarget $rc $msg $opts
+			}
 		}
 	}
 
