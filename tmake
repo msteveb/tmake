@@ -2424,6 +2424,14 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 proc build-deps {target ruletarget status depends &reason} {
 	global tmake
 
+	set count {
+		failed 0
+		waiting 0
+		running 0
+		built 0
+		uptodate 0
+	}
+
 	foreach dep $depends {
 		set ret [build $dep $ruletarget]
 
@@ -2431,34 +2439,37 @@ proc build-deps {target ruletarget status depends &reason} {
 			tmake-exit 2 "*** Build cancelled"
 		}
 
+		incr count($ret)
+
 		switch $ret {
-			uptodate {
-				# nothing to do
-			}
 			failed {
 				if {$tmake(exitcode) == 0} {
 					build-error "[make-source-location $ruletarget]: Error: Don't know how to build $dep: [join [lreverse $tmake(current)] { <= }]"
 				}
-				set status failed
+				if {$tmake(quickstop)} {
+					tmake-exit 1 "*** Error: Targets failed to build"
+				}
 			}
 			built {
 				lappend reason depend $dep
-				if {$status ni {built failed waiting running}} {
-					dputs b "Rebuilding $target because $dep was built"
-					set status built
-				}
 			}
-			waiting - running {
-				if {$status ni {failed waiting}} {
-					dputs j "$target has dependency on $ret target $dep"
-					set status waiting
-				}
-			}
-		}
-		if {$status eq "failed" && $tmake(quickstop)} {
-			tmake-exit 1 "*** Error: Targets failed to build"
 		}
 	}
+
+	if {$count(running) || $count(waiting)} {
+		dputs {b j} "$target has $($count(running) + $count(waiting)) outstanding jobs - waiting"
+		return waiting
+	}
+	if {$count(failed)} {
+		dputs b "$target has failed dependencies - failed"
+		return failed
+	}
+	if {$count(built)} {
+		dputs b "$target has built dependencies - built"
+		return built
+	}
+
+	#dputs n "$target dependencies are all uptodate - $status"
 	return $status
 }
 
@@ -2508,7 +2519,7 @@ proc build {target {notifytarget {}}} {
 			return uptodate
 		}
 		built {
-			dputs b "$target has previously been built"
+			#dputs b "$target has previously been built"
 			return built
 		}
 		checking {
