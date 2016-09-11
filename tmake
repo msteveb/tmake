@@ -421,58 +421,12 @@ proc make {argv} {
 		show-all-targets $tmake(listtargets)
 		tmake-exit 0
 	}
-	# XXX These should move out into separate procs
-	# to reduce clutter here
 	if {[info exists tmake(listcommands)]} {
-		foreach info $tmake(commands-overview) {
-			lassign $info loc helptext
-			set lines [split [string trim $helptext] \n]
-			set lines [string trim [join $lines \n]]
-			pputs $lines
-			pputs [string repeat - 60]
-		}
-
-		set commands $tmake(commands)
-		foreach cmd [lsort [dict keys $commands]] {
-			lassign $commands($cmd) loc helptext
-			set otherlines [lassign [split [string trim $helptext] \n] firstline]
-			set otherlines [string trim [join $otherlines \n]]
-			regexp {^([^ ]*) +(.*)$} $firstline -> cmdname cmdargs
-			pputs "\n[colout purple $cmdname] [colout yellow $cmdargs]"
-			pputs \n$otherlines
-			#puts [string repeat - 60]
-		}
+		show-all-commands
 		tmake-exit 0
 	}
 	if {[info exists tmake(findtarget)]} {
-		if {$tmake(findall) == 0} {
-			# Prefer a local exact match
-			foreach try [list [file-join $tmake(subdir) $tmake(findtarget)] $tmake(findtarget)] {
-				if {[is-target? $try]} {
-					dputs r "find: Found exact match for $try"
-					show-rule $try
-					# Are there any non-exact matches?
-					set count 0
-					foreach target [dict keys $tmake(targets)] {
-						if {[string match *$tmake(findtarget)* $target]} {
-							incr count
-						}
-					}
-					if {$count > 1} {
-						incr count -1
-						pputs cyan "Note: $count non-exact matches also exist, use --findall to show them"
-					}
-					tmake-exit 0
-				}
-			}
-		}
-		dputs r "find: Showing all targets that match *$tmake(findtarget)*"
-		foreach target [lsort [dict keys $tmake(targets)]] {
-			if {[string match *$tmake(findtarget)* $target]} {
-				show-rule $target
-				pputs ""
-			}
-		}
+		show-find-results $tmake(findtarget) $tmake(findall)
 		tmake-exit 0
 	}
 
@@ -1381,6 +1335,58 @@ proc show-all-targets {detailed} {
 	}
 	if {$shown == 0 && $detailed eq ""} {
 		puts "Note: All targets are phony. Use --targets=all to show all targets"
+	}
+}
+
+proc show-all-commands {} {
+	foreach info $tmake(commands-overview) {
+		lassign $info loc helptext
+		set lines [split [string trim $helptext] \n]
+		set lines [string trim [join $lines \n]]
+		pputs $lines
+		pputs [string repeat - 60]
+	}
+
+	set commands $tmake(commands)
+	foreach cmd [lsort [dict keys $commands]] {
+		lassign $commands($cmd) loc helptext
+		set otherlines [lassign [split [string trim $helptext] \n] firstline]
+		set otherlines [string trim [join $otherlines \n]]
+		regexp {^([^ ]*) +(.*)$} $firstline -> cmdname cmdargs
+		pputs "\n[colout purple $cmdname] [colout yellow $cmdargs]"
+		pputs \n$otherlines
+		#puts [string repeat - 60]
+	}
+}
+
+proc show-find-results {findtarget findall} {
+	if {!$findall} {
+		# Prefer a local exact match
+		foreach try [list [file-join $tmake(subdir) $findtarget] $findtarget] {
+			if {[is-target? $try]} {
+				dputs r "find: Found exact match for $try"
+				show-rule $try
+				# Are there any non-exact matches?
+				set count 0
+				foreach target [dict keys $tmake(targets)] {
+					if {[string match *$findtarget* $target]} {
+						incr count
+					}
+				}
+				if {$count > 1} {
+					incr count -1
+					pputs cyan "Note: $count non-exact matches also exist, use --findall to show them"
+				}
+				tmake-exit 0
+			}
+		}
+	}
+	dputs r "find: Showing all targets that match *$findtarget*"
+	foreach target [lsort [dict keys $tmake(targets)]] {
+		if {[string match *$findtarget* $target]} {
+			show-rule $target
+			pputs ""
+		}
 	}
 }
 
