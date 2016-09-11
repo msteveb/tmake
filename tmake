@@ -507,6 +507,10 @@ proc make {argv} {
 			if {$tmake(exitcode) == 0} {
 				build-error "Error: Don't know how to build $target"
 			}
+			if {$tmake(quickstop)} {
+				wait-for-background-jobs
+				tmake-exit $tmake(exitcode)
+			}
 			break
 		}
 
@@ -1094,24 +1098,41 @@ proc parse-warning {msg} {
 	user-notice purple [warning-location "Warning: $msg"]
 }
 
-proc tmake-exit {code} {
+proc wait-for-background-jobs {} {
+	global tmake
+	if {$tmake(jobpid)} {
+		while {[wait-for-one-job] != 0} {
+			dputs j "Waiting for background jobs to finish"
+		}
+	}
+}
+
+proc tmake-exit {code {msg {}}} {
 	global tmake
 
 	if {$tmake(jobpid) == 0} {
 		exit $code
 	}
 
-	if {$code == 0 && [dict size $tmake(running)]} {
-		user-notice "Warning: background jobs still running upon successful exit"
+	if 0 {
+		if {$code != $tmake(exitcode)} {
+			puts "Got tmake-exit $code, but exitcode=$tmake(exitcode)"
+		}
 	}
 
-	# Kill off any running jobs
-	foreach pid [dict keys $tmake(running)] {
-		dputs j "[pid] Killing background child $pid"
-		catch {kill $pid}
+	wait-for-background-jobs
+	if {$msg ne ""} {
+		user-notice lred $msg
 	}
-	while {[wait-for-one-job] != 0} {
-		dputs j "Waiting for all background jobs to finish"
+
+	if 0 {
+		# Kill off any running jobs
+		foreach pid [dict keys $tmake(running)] {
+			dputs j "[pid] Killing background child $pid"
+			catch {kill $pid}
+		}
+
+		wait-for-background-jobs
 	}
 
 	# Write the cache before exiting
@@ -2160,8 +2181,7 @@ proc subst-do {__target __vardict __do_list} {
 		# Note: It is an error if the subst fails
 		if {[catch {subst -nob -noc $__each_do} __result __opts]} {
 			# subst failed -- most likely because a variable was referenced that didn't exist.
-			user-notice lred "[join $source :]:Error: $__result while building $__target"
-			tmake-exit 1
+			tmake-exit 1 "[join $source :]:Error: $__result while building $__target"
 		}
 		set __result
 	}
@@ -2228,7 +2248,11 @@ proc wait-for-one-job {} {
 				set errmsg [readfile $errfile]
 				if {$errmsg ne ""} {
 					enter-new-dir $chdir
-					pputs lred $errmsg
+					if {$rc} {
+						build-error $errmsg
+					} else {
+						pputs lred $errmsg
+					}
 				}
 				file delete $errfile
 			}
@@ -2247,6 +2271,10 @@ proc wait-for-one-job {} {
 			} else {
 				dputs j "Status of $notifytarget set to failed"
 				set-rule-status $notifytarget failed
+
+				if {$tmake(quickstop)} {
+					tmake-exit $tmake(exitcode) "*** Error: Targets failed to build"
+				}
 			}
 			return 1
 		}
@@ -2391,11 +2419,6 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 	unset tmakeprecache($ruletarget)
 
 	cd $savepwd
-
-	if {($tmake(quickstop) || $t(fatal)) && $tmake(exitcode)} {
-		user-notice lred "*** Error: Targets failed to build"
-		tmake-exit $tmake(exitcode)
-	}
 }
 
 proc build-deps {target ruletarget status depends &reason} {
@@ -2405,8 +2428,7 @@ proc build-deps {target ruletarget status depends &reason} {
 		set ret [build $dep $ruletarget]
 
 		if {[check-signal]} {
-			user-notice lred "*** Build cancelled"
-			tmake-exit 2
+			tmake-exit 2 "*** Build cancelled"
 		}
 
 		switch $ret {
@@ -2418,9 +2440,6 @@ proc build-deps {target ruletarget status depends &reason} {
 					build-error "[make-source-location $ruletarget]: Error: Don't know how to build $dep: [join [lreverse $tmake(current)] { <= }]"
 				}
 				set status failed
-				if {$tmake(quickstop)} {
-					break
-				}
 			}
 			built {
 				lappend reason depend $dep
@@ -2435,6 +2454,9 @@ proc build-deps {target ruletarget status depends &reason} {
 					set status waiting
 				}
 			}
+		}
+		if {$status eq "failed" && $tmake(quickstop)} {
+			tmake-exit 1 "*** Error: Targets failed to build"
 		}
 	}
 	return $status
@@ -2577,8 +2599,7 @@ proc build {target {notifytarget {}}} {
 	}
 
 	if {$tmake(quickstop) && $tmake(exitcode)} {
-		user-notice lred "*** Error: Targets failed to build"
-		tmake-exit $tmake(exitcode)
+		tmake-exit $tmake(exitcode) "*** Error: Targets failed to build"
 	}
 
 	if {$status eq "uptodate" && [llength $depends]} {
@@ -2751,11 +2772,10 @@ proc build {target {notifytarget {}}} {
 						exit 2
 					}
 					pputs ""
-					user-notice lred "*** Build cancelled"
-					tmake-exit 2
+					tmake-exit 2 "*** Build cancelled"
 				}
-				if {$rc != 0} {
-					if {$tmake(jobpid) == 0} {
+				if {$tmake(jobpid) == 0} {
+					if {$rc} {
 						dputs j "Job [pid] ($ruletarget) failed with rc=$rc, msg=$msg, opts=$opts"
 						# Must output the failure here since it's the only place we have the strack trace
 						dputs b "BUILD ERROR: $msg"
@@ -2765,14 +2785,16 @@ proc build {target {notifytarget {}}} {
 							puts stderr [colerr lred $msg]
 						}
 						exit 1
+					} else {
+						dputs j "Job [pid] ($ruletarget) succeeded"
+						exit 0
 					}
+				}
+				if {$rc} {
 					set status failed
+				} else {
+					set status built
 				}
-				if {$tmake(jobpid) == 0} {
-					dputs j "Job [pid] ($ruletarget) succeeded"
-					exit 0
-				}
-				set status built
 			}
 			set tmake(sync) 1
 		}
@@ -2781,6 +2803,10 @@ proc build {target {notifytarget {}}} {
 			if {$status ne "running"} {
 				target-post-build $ruletarget $rc $msg $opts
 			}
+		}
+
+		if {($tmake(quickstop) || $t(fatal)) && $tmake(exitcode)} {
+			tmake-exit $tmake(exitcode) "*** Error: Targets failed to build"
 		}
 	}
 
@@ -2864,9 +2890,10 @@ proc find-file-on-path {filename path} {
 			}
 		} else {
 			dputs-D "failed to build $f"
-			build-error "Error: Failed to build $f"
 			if {$::tmake(quickstop)} {
-				tmake-exit 1
+				tmake-exit 1 "Error: Failed to build $f"
+			} else {
+				build-error "Error: Failed to build $f"
 			}
 		}
 	} else {
@@ -3046,9 +3073,10 @@ proc colerr {colour string} {
 set rc [catch -signal {
 	set rc [catch {make $argv} msg opts]
 	if {$rc} {
-		if {[exists -command error-stacktrace]} {
+		if {$rc == 1 && [exists -command error-stacktrace]} {
+			stderr puts "[info source {}]: opts=$opts"
 			user-notice lred [error-stacktrace $msg $opts(-errorinfo)]
-		} else {
+		} elseif {$msg ne ""} {
 			user-notice lred $msg
 		}
 		set tmake(exitcode) 1
@@ -3066,7 +3094,7 @@ set rc [catch -signal {
 		fake-an-error
 	}
 	if {$tmake(exitcode)} {
-		user-notice lred "*** Error: Targets failed to build"
+		tmake-exit $tmake(exitcode) "*** Error: Targets failed to build"
 	}
 } msg opts]
 
