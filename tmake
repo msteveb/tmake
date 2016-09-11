@@ -88,6 +88,7 @@ set tmake(running) {}
 set tmake(pending) {}
 set tmake(jobpid) -1
 set tmake(resetstatus) 0
+set tmake(pid) [pid]
 
 # ==================================================================
 # Argument Processing
@@ -648,6 +649,7 @@ proc load-build-description {loadcache} {
 
 	# Note that MAXJOBS is global, not per-directory, so get it now
 	set tmake(maxjobs) [get-define MAXJOBS 8]
+	set tmake(sepjobio) [get-define SEPJOBIO 1]
 
 	# Loaded in the global scope 
 
@@ -2039,7 +2041,7 @@ proc fork-job-if-required {} {
 
 	if {$tmake(maxjobs) > 1 && $tmake(sync) == 0 && $tmake(jobpid) == -1} {
 		wait-for-job-slots
-		set pid [add-new-job $tmake(currentruletarget) $tmake(currentnotifytarget)]
+		set pid [add-new-job $tmake(currentruletarget) $tmake(currentnotifytarget) $tmake(chdir)]
 		set tmake(jobpid) $pid
 	}
 	return $tmake(jobpid)
@@ -2069,7 +2071,7 @@ proc run {args} {
 		add-warning-msg $msg
 		pputs grey $msg
 	}
-	if {$rc == 1} {
+	if {$rc} {
 		pputs \n\t$cmdline\n
 		# On error, display the command and the error and return break
 		if {$msg ne ""} {
@@ -2205,11 +2207,30 @@ proc wait-for-one-job {} {
 			dict unset tmake(running) $pid
 
 			dputs j "Job $pid has finished with $status\($code) for {$job}"
-			lassign $job ruletarget notifytarget
+			lassign $job ruletarget notifytarget chdir outfile errfile
 			if {$status eq "exit" && $code == 0} {
 				set rc 0
 			} else {
 				set rc 1
+			}
+
+			# If job I/O was captured in separate files, display it now
+			if {$outfile ne ""} {
+				set stdmsg [readfile $outfile]
+				if {$stdmsg ne ""} {
+					add-warning-msg $stdmsg
+					enter-new-dir $chdir
+					pputs grey $stdmsg
+				}
+				file delete $outfile
+			}
+			if {$errfile ne ""} {
+				set errmsg [readfile $errfile]
+				if {$errmsg ne ""} {
+					enter-new-dir $chdir
+					pputs lred $errmsg
+				}
+				file delete $errfile
 			}
 
 			# Set the status, update the cache, delete any files on error, etc.
@@ -2243,18 +2264,35 @@ proc wait-for-job-slots {} {
 	}
 }
 
-proc add-new-job {ruletarget notifytarget} {
+proc add-new-job {ruletarget notifytarget chdir} {
 	global tmake
+	if {$tmake(sepjobio)} {
+		# Capture job I/O to temporary files so that it doesn't interleave
+		set fout [open [file tempfile] w]
+		set ferr [open [file tempfile] w]
+	} else {
+		set fout ""
+		set ferr ""
+	}
 	set pid [os.fork]
 	if {$pid > 0} {
 		dputs j "Adding job $pid for $ruletarget"
 		# Insert the job in the slot
 		set-rule-status $ruletarget running
-		dict set tmake(running) $pid [list $ruletarget $notifytarget]
-		if {$notifytarget eq ""} {
-			error "add-new-job - no notfytarget"
+		if {$tmake(sepjobio)} {
+			dict set tmake(running) $pid [list $ruletarget $notifytarget $chdir [$fout filename] [$ferr filename]]
+			$fout close
+			$ferr close
+		} else {
+			dict set tmake(running) $pid [list $ruletarget $notifytarget $chdir "" ""]
 		}
 		dict incr tmake(pending) $notifytarget
+	} elseif {$tmake(sepjobio)} {
+		# This is the child. Redirect stdout and stderr to temporary files.
+		rename stdout ""
+		rename $fout stdout
+		rename stderr ""
+		rename $ferr stderr
 	}
 	return $pid
 }
@@ -2297,6 +2335,13 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 			if {![file exists [file-build $f]]} {
 				# XXX: Should onerror run here if --quickstop is set?
 				# XXX: Should the cache still be updated?
+				puts "pwd=[pwd]: Rule for $target failed to build target(s) $f ([file-build $f]), waiting..."
+				exec >@stdout ls -l objdir/uweb
+				sleep 0.5
+				if {[file exists [file-build $f]]} {
+					file stat [file-build $f]
+					parray stat
+				}
 				build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f ([file-build $f])"
 				# Use break to indicate that we have already output the message
 				set rc 3
@@ -2354,6 +2399,8 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 }
 
 proc build-deps {target ruletarget status depends &reason} {
+	global tmake
+
 	foreach dep $depends {
 		set ret [build $dep $ruletarget]
 
@@ -2610,10 +2657,9 @@ proc build {target {notifytarget {}}} {
 
 		if {$t(chdir)} {
 			# Note that -chdir uses the *first* target to determine the directory
-			set chdir [file-build [file dirname [lindex $ruletarget 0]]]
-			enter-new-dir [file-normalize $chdir]
+			set tmake(chdir) [file-normalize [file-build [file dirname [lindex $ruletarget 0]]]]
 		} else {
-			enter-new-dir $tmake(topsrcdir)
+			set tmake(chdir) $tmake(topsrcdir)
 		}
 
 		if {$tmake(norun)} {
@@ -2645,10 +2691,13 @@ proc build {target {notifytarget {}}} {
 				dputs m "mkdir [join $dirlist]"
 				file mkdir {*}$dirlist
 			}
+
+			enter-new-dir $tmake(chdir)
+
 			# If necessary, chdir now
 			if {$t(chdir)} {
-				dputs m "cd $chdir"
-				cd $chdir
+				dputs m "cd $tmake(chdir)"
+				cd $tmake(chdir)
 			}
 
 			# Stash info for this rule that can be used in target-post-build either
@@ -2678,8 +2727,7 @@ proc build {target {notifytarget {}}} {
 						break
 					}
 					if {$rc} {
-						# XXX: Check for signal?
-						if {$t(nofail)} {
+						if {$t(nofail) && [info return $rc] eq "error"} {
 							user-notice cyan "\[ignored\] $msg"
 							set rc 0
 						} else {
@@ -2699,10 +2747,11 @@ proc build {target {notifytarget {}}} {
 				if {[check-signal 1]} {
 					# Caught a signal
 					dputs j "Got signal while building $ruletarget"
-					if {$tmake(jobpid) != 0} {
-						pputs ""
-						user-notice lred "*** Build cancelled"
+					if {$tmake(jobpid) == 0} {
+						exit 2
 					}
+					pputs ""
+					user-notice lred "*** Build cancelled"
 					tmake-exit 2
 				}
 				if {$rc != 0} {
@@ -2728,10 +2777,8 @@ proc build {target {notifytarget {}}} {
 			set tmake(sync) 1
 		}
 
-		if {$status ne "running"} {
-			if {$tmake(norun)} {
-				unset tmakeprecache($ruletarget)
-			} else {
+		if {!$tmake(norun)} {
+			if {$status ne "running"} {
 				target-post-build $ruletarget $rc $msg $opts
 			}
 		}
