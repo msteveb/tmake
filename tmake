@@ -2286,6 +2286,10 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 
 	set status built
 
+	# These needs to be run from topsrcdir
+	set savepwd [pwd]
+	cd $tmake(topsrcdir)
+
 	# Did the rule make the targets?
 	if {$rc == 0 && !$t(phony) && ![is-cleaning?]} {
 		set now [clock seconds]
@@ -2340,6 +2344,8 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 
 	# No longer need this
 	unset tmakeprecache($ruletarget)
+
+	cd $savepwd
 
 	if {($tmake(quickstop) || $t(fatal)) && $tmake(exitcode)} {
 		user-notice lred "*** Error: Targets failed to build"
