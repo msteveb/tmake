@@ -83,6 +83,9 @@ proc rulebase-init {} {
 	define? OBJCFLAGS ""
 	define? INCPATHS ""
 
+	# Default header pattern for C and C++ dynamic dependencies
+	define? CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
+
 	# These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
 	define C_FLAGS ""
 	define CXX_FLAGS ""
@@ -95,8 +98,6 @@ proc rulebase-init {} {
 	define HOST_SYSLIBS ""
 	define PRECOMPILED_HEADER ""
 
-	# Default header pattern for C and C++ dynamic dependencies
-	#
 	# All globals variables for rulebase.default are kept in the $::tmakedrb array
 	set ::tmakedrb {
 		testruncount 0
@@ -154,8 +155,6 @@ Note that by default, Lib is an alias for ArchiveLib. This can be changed with:
 # ==================================================================
 # BUILT-IN Object Rules
 # ==================================================================
-
-define CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
 proc is-duplicate-obj-rule {obj src vars} {
 	global tmakedrb
@@ -1590,15 +1589,6 @@ Copies the source file to the destination file
 	Clean $dest
 }
 
-# @install-file ?--strip=$STRIPCMD? ?--bin? target source
-#
-# Helper for installing files
-# Copies the file from $source to $target, then performs zero or more actions
-# depending upon the flags (which is a list)
-#
-# --bin                 - make the target executable with chmodx-file
-# --strip=$STRIPCMD     - If specified, strips the target with the given strip command
-#
 rule InstallFile {args} {
 InstallFile ?--strip|--striplib? ?--bin? dest source
 
@@ -2018,7 +2008,7 @@ proc delete-orphan-files {args} {
 	foreach file $args {
 		if {[file exists $file]} {
 			set trashfile .trash/[string map {/ _} $file]
-			# Can't simple use file rename -force in case the files hard hard links
+			# Can't simple use file rename -force in case the files are hard links
 			file delete $trashfile
 			file rename $file $trashfile
 		}
