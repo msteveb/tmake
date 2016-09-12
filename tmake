@@ -1338,7 +1338,7 @@ proc show-cache {} {
 	puts "-------------------------------------------"
 	# Commands
 	foreach i [lsort [dict keys $tmakecache(cmd)]] {
-		puts $i
+		puts $i:
 		foreach do [dict get $tmakecache(cmd) $i] {
 			show-rule-commands $do
 		}
@@ -2303,6 +2303,17 @@ proc add-new-job {ruletarget notifytarget chdir} {
 		set ferr ""
 	}
 	set pid [os.fork]
+	if {$pid == 0} {
+		# Turn off debugging in the child unless --debug is set to avoid confusion
+		if {!$tmake(debug)} {
+			foreach t [dict keys $tmake(debugtypes)] {
+				dict set tmake(debugtypes) $t 0
+			}
+		}
+		# And turn off colour output
+		set tmake(colout) 0
+		set tmake(colerr) 0
+	}
 	if {$pid > 0} {
 		dputs j "Adding job $pid for $ruletarget"
 		# Insert the job in the slot
@@ -2364,8 +2375,6 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 				# XXX: Should onerror run here if --quickstop is set?
 				# XXX: Should the cache still be updated?
 				puts "pwd=[pwd]: Rule for $target failed to build target(s) $f ([file-build $f]), waiting..."
-				exec >@stdout ls -l objdir/uweb
-				sleep 0.5
 				if {[file exists [file-build $f]]} {
 					file stat [file-build $f]
 					parray stat
