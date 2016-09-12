@@ -2427,6 +2427,9 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 	# No longer need this
 	unset tmakeprecache($ruletarget)
 
+	# Reset warnings
+	set tmake(warningmsgs) {}
+
 	cd $savepwd
 }
 
@@ -2751,6 +2754,7 @@ proc build {target {notifytarget {}}} {
 			set tmake(currentnotifytarget) $notifytarget
 			set tmake(currentruletarget) $ruletarget
 			set tmake(jobpid) -1
+			set tmake(warningmsgs) {}
 
 			# Check the 'slow' flag of the target to see if we should fork
 			if {$t(slow)} {
@@ -2760,7 +2764,6 @@ proc build {target {notifytarget {}}} {
 				# child process or sync, so run the jobs
 				foreach do $t(do) {
 					set oldenv [env-save]
-					set tmake(warningmsgs) {}
 					lassign [run-do $vardict $do] rc msg opts
 					env-restore $oldenv
 					if {$tmake(jobpid) > 0} {
