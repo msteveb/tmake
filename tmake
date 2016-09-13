@@ -1372,6 +1372,8 @@ proc show-all-targets {detailed} {
 }
 
 proc show-all-commands {} {
+	global tmake
+
 	foreach info $tmake(commands-overview) {
 		lassign $info loc helptext
 		set lines [split [string trim $helptext] \n]
