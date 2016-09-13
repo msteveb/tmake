@@ -1393,6 +1393,7 @@ proc show-all-commands {} {
 }
 
 proc show-find-results {findtarget findall} {
+	global tmake
 	if {!$findall} {
 		# Prefer a local exact match
 		foreach try [list [file-join $tmake(subdir) $findtarget] $findtarget] {
@@ -3097,7 +3098,6 @@ set rc [catch -signal {
 	set rc [catch {make $argv} msg opts]
 	if {$rc} {
 		if {$rc == 1 && [exists -command error-stacktrace]} {
-			stderr puts "[info source {}]: opts=$opts"
 			user-notice lred [error-stacktrace $msg $opts(-errorinfo)]
 		} elseif {$msg ne ""} {
 			user-notice lred $msg
