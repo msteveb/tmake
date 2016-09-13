@@ -241,7 +241,7 @@ Generates an object file from a lexer source file
 	Clean $targets
 
 	# And create the object through Object
-	Object $base.lex.o $base.lex.c
+	Object [make-unlocal $base.lex.o] [make-unlocal $base.lex.c]
 }
 
 rule ObjectRule.y {obj src} {
@@ -259,7 +259,7 @@ Generates an object file from a yacc source file
 	Clean $targets
 
 	# And create the object through Object
-	Object $base.tab.o $base.tab.c
+	Object [make-unlocal $base.tab.o] [make-unlocal $base.tab.c]
 }
 
 # ==================================================================
