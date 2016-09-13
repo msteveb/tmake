@@ -2684,6 +2684,13 @@ proc build {target {notifytarget {}}} {
 		set status built
 	}
 
+	if {$t(chdir)} {
+		# Note that -chdir uses the *first* target to determine the directory
+		set tmake(chdir) [file-normalize [file-build [file dirname [lindex $ruletarget 0]]]]
+	} else {
+		set tmake(chdir) $tmake(topsrcdir)
+	}
+
 	if {$status eq "built" && [llength $t(do)]} {
 		dputs g "[join $tmake(current) { --> }] ($reason)" 0
 
@@ -2698,13 +2705,6 @@ proc build {target {notifytarget {}}} {
 		if {[debug-is-set r]} {
 			dputs r "Rule for $ruletarget"
 			show-rule $ruletarget
-		}
-
-		if {$t(chdir)} {
-			# Note that -chdir uses the *first* target to determine the directory
-			set tmake(chdir) [file-normalize [file-build [file dirname [lindex $ruletarget 0]]]]
-		} else {
-			set tmake(chdir) $tmake(topsrcdir)
 		}
 
 		if {$tmake(norun)} {
@@ -2840,6 +2840,8 @@ proc build {target {notifytarget {}}} {
 			if {[dict exists $tmakecache(warnings) $ruletarget]} {
 				set warnings [dict get $tmakecache(warnings) $ruletarget]
 				if {[llength $warnings]} {
+					enter-new-dir $tmake(chdir)
+
 					# In verbose mode, the 'run' cmdline won't be shown.
 					# The best we can do is output the complete cached command
 					if {$tmake(verbose)} {
