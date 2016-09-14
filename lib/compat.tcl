@@ -355,8 +355,12 @@ proc init-compat {} {
 		}
 	}
 
-	# Check these signals with check-signal
-	signal ignore SIGINT SIGTERM
+	# Check SIGINT and SIGTERM with check-signal
 	# SIGPIPE is caught in main
-	signal handle SIGPIPE
+	# Only changes signals that exist and are set to default
+	foreach {sig disp} {SIGINT ignore SIGTERM ignore SIGPIPE handle} {
+		if {$sig in [signal default]} {
+			signal $disp $sig
+		}
+	}
 }
