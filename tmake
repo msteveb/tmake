@@ -88,7 +88,6 @@ set tmake(running) {}
 set tmake(pending) {}
 set tmake(jobpid) -1
 set tmake(resetstatus) 0
-set tmake(pid) [pid]
 
 # ==================================================================
 # Argument Processing
@@ -2220,11 +2219,11 @@ proc enter-new-dir {dirname} {
 
 proc wait-for-one-job {} {
 	global tmake
-	while 1 {
+	while {[dict size $tmake(running)]} {
 		lassign [os.wait -1] pid status code
 		if {$pid == -1} {
-			dputs j "All jobs have finished"
-			return 0
+			user-notice purple "Warning: No child processes, but tmake(running) is not empty"
+			break
 		}
 		if {[dict exists $tmake(running) $pid]} {
 			set job [dict get $tmake(running) $pid]
@@ -2284,7 +2283,8 @@ proc wait-for-one-job {} {
 		}
 		dputs j "Ignoring unknown pid $pid"
 	}
-	return 1
+	dputs j "All jobs have finished"
+	return 0
 }
 
 proc wait-for-job-slots {} {
