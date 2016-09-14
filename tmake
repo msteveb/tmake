@@ -651,8 +651,9 @@ proc load-build-description {loadcache} {
 
 	dputs T "Parsed project.spec"
 
-	# Note that MAXJOBS is global, not per-directory, so get it now
-	set tmake(maxjobs) [get-define MAXJOBS 8]
+	# Note that these are global, not per-directory, so fetch the values now
+	set tmake(maxjobs) [get-define MAXJOBS [get-num-cpus]]
+	dputs m "Setting maxjobs=$tmake(maxjobs)"
 	set tmake(sepjobio) [get-define SEPJOBIO 1]
 
 	# Loaded in the global scope 

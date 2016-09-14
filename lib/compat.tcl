@@ -313,6 +313,25 @@ proc check-signal {{clear 0}} {
 	return 0
 }
 
+# returns the number of cpus/cores if possible, or 1 if unknown
+proc get-num-cpus {} {
+	set numcpus 1
+	catch {
+		if {[iswin]} {
+			# Actually, we always return 1 on Windows since without os.fork
+			# we can't support concurrent jobs
+			return 1
+
+			# https://msdn.microsoft.com/en-us/library/aa394531(v=vs.85).aspx
+			#set numcpus [lindex [exec wmic cpu get NumberOfCores] end]
+		} else {
+			# http://pubs.opengroup.org/onlinepubs/009604499/utilities/getconf.html
+			set numcpus [exec getconf _NPROCESSORS_ONLN]
+		}
+	}
+	return $numcpus
+}
+
 proc init-compat {} {
 	# Do we have the signal command?
 	if {![exists -command signal]} {
