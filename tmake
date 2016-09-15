@@ -2220,7 +2220,7 @@ proc enter-new-dir {dirname} {
 proc wait-for-one-job {} {
 	global tmake
 	while {[dict size $tmake(running)]} {
-		lassign [os.wait -1] pid status code
+		lassign [wait -1] status pid code
 		if {$pid == -1} {
 			user-notice purple "Warning: No child processes, but tmake(running) is not empty"
 			break
@@ -2231,7 +2231,7 @@ proc wait-for-one-job {} {
 
 			lassign $job ruletarget notifytarget chdir outfile errfile
 			dputs j "Job $pid has finished with $status\($code) for {$ruletarget $notifytarget}"
-			if {$status eq "exit" && $code == 0} {
+			if {$status eq "CHILDSTATUS" && $code == 0} {
 				set rc 0
 			} else {
 				set rc 1

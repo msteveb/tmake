@@ -163,6 +163,27 @@ if {"mtimens" in [file -commands]} {
 	alias file-mtime file mtime
 }
 
+if {![exists -command wait]} {
+	proc wait {args} {
+		lassign [os.wait {*}$args] pid status rc
+		switch -exact -- $status {
+			error - none {
+				set status NOPROCESS
+			}
+			exit {
+				set status CHILDSTATUS
+			}
+			signal {
+				set status CHILDKILLED
+			}
+			other {
+				set status CHILDSUSP
+			}
+		}
+		list $status $pid $rc
+	}
+}
+
 ##################################################################
 #
 # Directory/path handling
