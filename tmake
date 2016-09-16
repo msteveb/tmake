@@ -264,6 +264,11 @@ proc make-parse-options {argv} {
 	return $argv
 }
 
+proc callmake {__argv} {
+	# This stack frame is designed specifically to hold 'define' variables
+	return [make $__argv]
+}
+
 proc make {argv} {
 	global tmake
 
@@ -484,6 +489,7 @@ proc make {argv} {
 			if {$reload} {
 				# Restore the state
 				set tmake $tmake_save
+				tmake-reset-defines
 
 				# reinitialise the rulebase
 				rulebase-invoke init
@@ -885,12 +891,27 @@ proc file-src-relative {srcpath {builddir {}}} {
 	relative-path $there $here
 }
 
+# Restore all defines as local variables in stack frame #1
+proc tmake-reset-defines {} {
+	uplevel #1 {
+		foreach i [info vars] {
+			unset $i
+		}
+		foreach i [dict keys $::tmake(defines)] {
+			set $i [dict get $::tmake(defines) $i]
+		}
+		unset i
+	}
+}
+
 proc Scope {script} {
 	global tmake
 	# Save all defines
 	set defines $tmake(defines)
 	uplevel 1 $script
 	set tmake(defines) $defines
+	# Now need to reset/restore all the variables at frame #1
+	tmake-reset-defines
 }
 
 
@@ -3100,7 +3121,7 @@ proc colerr {colour string} {
 # ==================================================================
 
 set rc [catch -signal {
-	set rc [catch {make $argv} msg opts]
+	set rc [catch {callmake $argv} msg opts]
 	if {$rc} {
 		if {$rc == 1 && [exists -command error-stacktrace]} {
 			user-notice lred [error-stacktrace $msg $opts(-errorinfo)]
