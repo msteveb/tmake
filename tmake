@@ -1829,31 +1829,33 @@ proc target-add-var {ruletarget varname list} {
 	dict set ::tmake(rules) $ruletarget vars $varname $vars
 }
 
-proc parse-rule-args {&arglist &opt} {
-	set arglist [lassign $arglist opt]
+proc parse-rule-args {arglist} {
+	set info {}
 
-	if {![string match -* $opt]} {
-		parse-error "Unexpected parameter for rule: $opt"
-	}
-	if {$opt eq "-vars"} {
-		set incr 2
-	} else {
-		set incr 1
-	}
-
-	# Remove the leading dash
-	set opt [string range $opt 1 end]
-
-	for {set i 0} {$i < [llength $arglist]} {incr i $incr} {
-		if {[string match -* [lindex $arglist $i]]} {
-			incr i -1
-			break
+	set opt {}
+	set skip 1
+	set n 0
+	foreach arg $arglist {
+		if {($n % $skip == 0) && [string match -* $arg]} {
+			# Remove the leading dash
+			set opt [string range $arg 1 end]
+			if {![exists info($opt)]} {
+				set info($opt) {}
+			}
+			set n 0
+			set skip 1
+			if {$opt eq "vars"} {
+				set skip 2
+			}
+			continue
 		}
+		if {$opt eq ""} {
+			parse-error "Missing option: $arglist"
+		}
+		lappend info($opt) $arg
+		incr n
 	}
-	set optlist [lrange $arglist 0 $i]
-	incr i
-	set arglist [lrange $arglist $i end]
-	return $optlist
+	return $info
 }
 
 # Returns a dictionary (list) representing the parsed target rule
@@ -1873,10 +1875,11 @@ proc parse-rule {target arglist} {
 	}
 	set info(target) $target
 
-	# Parse an option followed by multiple non-options
-	set opt ""
-	while {[llength $arglist]} {
-		set optargs [parse-rule-args arglist opt]
+	# split the arglist into a dictionary
+	set arginfo [parse-rule-args $arglist]
+
+	# And check/post-process the options
+	foreach {opt optargs} $arginfo {
 		switch -exact -- $opt {
 			phony - nofail - add - chdir - nocache - fatal - slow {
 				if {[llength $optargs]} {
@@ -1885,9 +1888,13 @@ proc parse-rule {target arglist} {
 				set info($opt) 1
 			}
 			inputs - depends {
-				lappend info($opt) {*}[join $optargs]
+				set info($opt) [join $optargs]
 			}
-			do - msg - dyndep - onerror - alias {
+			msg {
+				# last one wins
+				set info($opt) [lindex $optargs end]
+			}
+			do - dyndep - onerror - alias {
 				if {[llength $optargs] > 1} {
 					parse-error "Rule for $target has more than one '-$opt' parameter"
 				}
@@ -1901,6 +1908,7 @@ proc parse-rule {target arglist} {
 				if {[llength $optargs] % 2} {
 					parse-error "Rule for $target has an odd number of parameters to '-vars'"
 				}
+				# Need to use lappend here so that they are combined with getvars
 				lappend info($opt) {*}$optargs
 			}
 			getvars {
