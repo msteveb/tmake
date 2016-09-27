@@ -2498,10 +2498,8 @@ proc build-deps {target ruletarget status depends &reason} {
 		dputs b "$target has failed dependencies - failed"
 		return failed
 	}
-	if {$count(built)} {
-		dputs b "$target has built dependencies - built"
-		return built
-	}
+	# Note that previously we returned "built" if a dependency was "built"
+	# but there is no need to do this. This allows commands to run but leave targets unchanged.
 
 	#dputs n "$target dependencies are all uptodate - $status"
 	return $status
