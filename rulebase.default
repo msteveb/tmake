@@ -1552,7 +1552,6 @@ If it doesn't match, the test fails.
 		set srcdir [file-src-relative [local-dir]]
 	} else {
 		set srcdir [local-dir]
-		lappend vars SRCDIR [local-dir]
 	}
 	lappend vars SRCDIR $srcdir
 

@@ -2234,7 +2234,7 @@ proc wait-for-one-job {} {
 	while {[dict size $tmake(running)]} {
 		lassign [wait -1] status pid code
 		if {$pid == -1} {
-			user-notice purple "Warning: No child processes, but tmake(running) is not empty"
+			#user-notice purple "Warning: No child processes, but tmake(running) is not empty"
 			break
 		}
 		if {[dict exists $tmake(running) $pid]} {
