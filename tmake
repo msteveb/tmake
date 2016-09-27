@@ -831,19 +831,19 @@ proc SubDirs {args} {
 	lappend ::tmake(subdirs) {*}$args
 }
 
-proc file-build {paths} {
-	set result {}
-	foreach path $paths {
+proc file-build {path} {
+	if {[string match <* $path]} {
+		# Special <lib>, <bin>, etc. are already build paths
+		# XXX But are all aliases build paths?
+		return $path
+	} else {
 		#puts "$::tmake(build) + $path => [file-join $::tmake(build) $path]"
-		if {[string match <* $path]} {
-			# Special <lib>, <bin>, etc. are already build paths
-			# XXX But are all aliases build paths?
-			lappend result $path
-		} else {
-			lappend result [file-join $::tmake(build) $path]
-		}
+		return [file-join $::tmake(build) $path]
 	}
-	return $result
+}
+
+proc file-build-list {paths} {
+	lmap p $paths { file-build $p }
 }
 
 proc build-prefix {} {
@@ -976,7 +976,7 @@ proc process-build-spec-file {dir {optional 0}} {
 
 proc do-delete-orphans {orphans} {
 	if {[llength $orphans]} {
-		delete-orphan-files {*}[file-build $orphans]
+		delete-orphan-files {*}[file-build-list $orphans]
 		note Clean removing [llength $orphans] orphan target(s)
 		dputs C $orphans
 		discard-orphan-targets
@@ -2049,7 +2049,7 @@ proc locate-files {files} {
 # Returns a dictionary with the bound and rule-specific variables
 proc make-var-dict {info} {
 	set vardict [dict get $info vars]
-	dict set vardict target [file-build [dict get $info target]]
+	dict set vardict target [file-build-list [dict get $info target]]
 	dict set vardict targetname [dict get $info target]
 	dict set vardict local [dict get $info local]
 	dict set vardict build [file-build [dict get $info local]]

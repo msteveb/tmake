@@ -496,7 +496,7 @@ proc expand-objects {objs} {
 			# XXX: How to guarantee that $SH_CFLAGS are set on these objects?
 			# (Either directly via ObjectCFlags or with a top-level CFlags)
 			#
-			lappend result {*}[file-build [dict get $::tmakedrb(objmap) $obj]]
+			lappend result {*}[file-build-list [dict get $::tmakedrb(objmap) $obj]]
 		} else {
 			lappend result $obj
 		}
@@ -769,7 +769,7 @@ proc clean-target {type msg} {
 proc add-clean {type filelist} {
 	# This could be done with Depends or target, but it is much
 	# faster to simply append to the rule variable directly
-	target-add-var $type cleanfiles [file-build $filelist]
+	target-add-var $type cleanfiles [file-build-list $filelist]
 }
 
 # @add-src-clean type filename-list
