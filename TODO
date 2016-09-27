@@ -17,6 +17,9 @@ It is hard to chain (e.g.) Objects, Link, Executable if the input is local but t
 Also, Depends and Phony currently use non-local specifications for -depends and -inputs.
 Is there some way to allow local names to be easily used?
 
+I think that all names should be considered local, unless explicitly qualified as /global.
+Needs some rethinking of how 'target' works'
+
 Cleaning files from the source tree
 -----------------------------------
 
@@ -24,6 +27,8 @@ Sometimes rules will create files in the source tree.
 e.g. a ctags rule
 
 There is no easy way to clean those files
+
+We can now do Clean/DisClean --source
 
 ** make clean/distclean should not require configure to be run
    - currently this is an ugly hack to check for known cleaning targets: clean, distclean, clean-orphans
@@ -45,6 +50,8 @@ which we need? We kind of want a "prebuild" dependency
 which will be built before any of the given targets.
 But what if we are just building clean or some local target?
 What is the scope of this external dependency?
+
+We have ExternalBuild so far
 
 Combining tmake-based projects
 ------------------------------

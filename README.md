@@ -59,7 +59,6 @@ TODO Items
 - Documentation, especially basic --help documentation, and developer docs (e.g. known rules)
 - Address known issues below, if possible
 - Do we need a -vars variant which completely replaces the var?
-- I don't think I have used define!, is it necessary?
 - Lots of windows support
 
 High Level vs Low Level Rules
@@ -563,11 +562,9 @@ This might be overkill...
 
 Parallel Builds
 ---------------
-tmake does not currently support parallel builds, but this is an implentation detail.
-With some (much!) restructuring, parallel builds should be possible.
-
-The primary issue here is that we need to be able to run each parallel command in the background
-and collect it's outputs and result when done. In Jim Tcl the only way to do this is either [exec ... &] and os.wait, or os.fork
+tmake now supports parallel builds on platforms with os.fork.
+--jobs
+define MAXJOBS
 
 More about cached state
 -----------------------
@@ -585,7 +582,6 @@ Jim Tcl vs Tcl
 --------------
 Downside of Tcl is that quitting the build with ^C fails to write the make cache.
 One approach is to write the cache after every change!
-
 Discuss required version of Jim Tcl
 
 Variables
@@ -776,7 +772,9 @@ include/polarssl/config.h
 => polarsslwrap does not work on Windows because of the lack of fork, exec, poll
 => Need to add all possible options to auto.def, including dependencies
 
-Build times?
+Build times:
+- About 2 seconds for tmake
+- About 4.5 seconds for cmake
 
 libgit2
 ~~~~~~~
@@ -793,7 +791,7 @@ Was waf, now cmake
 
 * Didn't do thread support
 * tmake currently doesn't support MSVC, but I left in as much support as possible
-* No pkg-config support for zlib searching
+* Now uses pkg-config support for zlib searching
 
 fossil
 ~~~~~~
@@ -806,6 +804,7 @@ Explain the use of Tcl.
 Then why not big Tcl?
 - no ^C support
 - array/dict problem
+- os.fork/wait
 
 Differences with make
 ---------------------
@@ -820,11 +819,9 @@ Differences with make
 
 Future Plans
 ------------
-While the proof-of-concept works very well, performance is an issue.
+While the proof-of-concept works very well, performance can be an issue for large projects.
 I expect that a production version will use a C/C++ implementation for the
 core build engine, with an embedded Jim Tcl interpreter for scripting.
-
-This should also make it easier to support parallel builds.
 
 Known Issues
 ------------
