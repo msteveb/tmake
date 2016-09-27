@@ -1287,7 +1287,7 @@ proc show-rule {target} {
 						lappend lines "  var $vn=$vv"
 					}
 				}
-				onerror {
+				onerror - finally {
 					if {$v ne ""} {
 						lappend lines "$n={[join [split [string trim $v] \n] {;}]}"
 					}
@@ -1742,7 +1742,7 @@ proc target {ruletarget args} {
 		return $ruletarget
 	} else {
 		set identical 1
-		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror phony target vars fatal slow} {
+		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror finally phony target vars fatal slow} {
 			if {$info($i) ne $orig($i)} {
 				set identical 0
 				break
@@ -1783,6 +1783,7 @@ proc target {ruletarget args} {
 	incr orig(fatal) $info(fatal)
 	incr orig(slow) $info(slow)
 	append-with-space orig(onerror) $info(onerror) \n
+	append-with-space orig(finally) $info(finally) \n
 	# Only one of these will be non-blank
 	lappend orig(do) {*}$info(add-do)
 	append-with-space orig(dyndep) $info(dyndep) \n
@@ -1862,7 +1863,7 @@ proc parse-rule-args {arglist} {
 #
 proc parse-rule {target arglist} {
 	set info {
-		inputs {} depends {} do {} onerror {} msg {} vars {} dyndep {} add-do {} alias {}
+		inputs {} depends {} do {} onerror {} finally {} msg {} vars {} dyndep {} add-do {} alias {}
 		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0
 	}
 
@@ -1894,7 +1895,7 @@ proc parse-rule {target arglist} {
 				# last one wins
 				set info($opt) [lindex $optargs end]
 			}
-			do - dyndep - onerror - alias {
+			do - dyndep - onerror - finally - alias {
 				if {[llength $optargs] > 1} {
 					parse-error "Rule for $target has more than one '-$opt' parameter"
 				}
@@ -2213,6 +2214,10 @@ proc subst-do {__target __vardict __do_list} {
 # Returns a list of {ret msg opts stacktrace} from catch
 #
 proc run-do {__vardict __script} {
+	if {[string length $__script] == 0} {
+		# Optimisation
+		return [list 0 {} {}]
+	}
 	dict with ::tmake(defines) {}
 	dict with __vardict {}
 	set result [list [catch $__script msg opts] $msg $opts]
@@ -2390,11 +2395,6 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 			if {![file exists [file-build $f]]} {
 				# XXX: Should onerror run here if --quickstop is set?
 				# XXX: Should the cache still be updated?
-				puts "pwd=[pwd]: Rule for $target failed to build target(s) $f ([file-build $f]), waiting..."
-				if {[file exists [file-build $f]]} {
-					file stat [file-build $f]
-					parray stat
-				}
 				build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f ([file-build $f])"
 				# Use break to indicate that we have already output the message
 				set rc 3
@@ -2435,6 +2435,12 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 				build-error [error-stacktrace $msg $opts(-errorinfo)]
 			}
 		}
+		set status failed
+	}
+
+	lassign [run-do $vardict $t(finally)] frc fmsg fopts
+	if {$frc} {
+		build-error [error-stacktrace $fmsg $fopts(-errorinfo)]
 		set status failed
 	}
 
