@@ -4,14 +4,14 @@
 
 # @readfile filename ?default?
 #
-# Return the contents of the file, without the trailing newline.
+# Return the contents of the file.
 # If the file doesn't exist or can't be read, returns $default.
 # If no default is given, it is an error. 
 #
 proc readfile {filename args} {
 	try {
 		set f [open $filename]
-		set result [read -nonewline $f]
+		set result [read $f]
 		close $f
 	} on error {msg opts} {
 		if {[llength $args] != 1} {
@@ -40,13 +40,17 @@ proc writefile {filename value} {
 proc write-if-changed {file buf {script {}}} {
 	set old [readfile $file ""]
 	if {$old ne $buf || ![file exists $file]} {
-		writefile $file $buf\n
+		writefile $file $buf
 		return 1
 	}
 	return 0
 }
 
 proc copy-if-changed {source dest} {
-	write-if-changed $dest [readfile $source]
+	if {[file exists $dest] && [file size $dest] == [file size $source]} {
+		write-if-changed $dest [readfile $source]
+	} else {
+		file copy -force $source $dest
+		return 1
+	}
 }
-
