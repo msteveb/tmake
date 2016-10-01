@@ -2454,7 +2454,7 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 	cd $savepwd
 }
 
-proc build-deps {target ruletarget status depends &reason} {
+proc build-deps {target ruletarget status depends phony &reason} {
 	global tmake
 
 	set count {
@@ -2498,7 +2498,7 @@ proc build-deps {target ruletarget status depends &reason} {
 		return failed
 	}
 
-	if {$tmake(norun) && $count(built)} {
+	if {!$phony && $tmake(norun) && $count(built)} {
 		# If running tmake -n, we can't rely on the actual target to be updated
 		# We need to assume that the target needs updating
 		dputs b "$target has built dependencies (-n) - built"
@@ -2614,13 +2614,13 @@ proc build {target {notifytarget {}}} {
 
 	# 1. First build static dependencies
 	set depends $t(depends)
-	set status [build-deps $target $ruletarget $status $t(depends) reason]
+	set status [build-deps $target $ruletarget $status $t(depends) $t(phony) reason]
 	if {$status in {uptodate built}} {
 		# 2. Build dynamic dependencies
 		# Note: Only targets or existing files are returned by calc-dyndeps.
 		set dyndeps [calc-dyndeps $vardict $ruletarget]
 		lappend depends {*}$dyndeps
-		set status [build-deps $target $ruletarget $status $dyndeps reason]
+		set status [build-deps $target $ruletarget $status $dyndeps $t(phony) reason]
 	}
 
 	if {$status eq "uptodate" && !$t(phony) && [llength $t(do)]} {
