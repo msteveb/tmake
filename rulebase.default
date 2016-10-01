@@ -670,8 +670,8 @@ proc hard-link {args} {
 # Copies the file from $source to $target, then performs zero or more actions
 # depending upon the flags (which is a list)
 #
-# --bin                 - make the target executable with chmodx-file
-# --strip=$STRIPCMD     - If specified, strips the target with the given strip command
+#- --bin                 - make the target executable with chmodx-file
+#- --strip=$STRIPCMD     - If specified, strips the target with the given strip command
 #
 proc install-file {args} {
 	getopt {--strip: --bin target source} args
@@ -783,11 +783,11 @@ proc add-src-clean {type filelist} {
 # @find-project-bin binfile ?-chdir 0|1? ?-optional 0|1?
 #
 # Searches for the given binary file as follows:
-# 1. If $binfile is a known target, the result is the target
-# 2. If $binfile is of the form <bin>name, the result is the published binary
-# 3. If the file exists in the local directory, the result is the file
-# 4. Otherwise, if optional=1, the file is assumed to be an external binary
-# 5. Otherwise an error is raised.
+#- If $binfile is a known target, the result is the target
+#- If $binfile is of the form <bin>name, the result is the published binary
+#- If the file exists in the local directory, the result is the file
+#- Otherwise, if optional=1, the file is assumed to be an external binary
+#- Otherwise an error is raised.
 #
 # The result is a list of two values: {dependency filename}
 #

@@ -126,42 +126,37 @@ proc getopt-core {optdef argv} {
 # @getopt optdef &argvn
 #
 # optdef looks something like:
-# --test --install: --no|strip --excludes:: dest source args
+## --test --install: --no|strip --excludes:: dest source args
 #
 # Boolean options:
-#  --test
-#  --no|test
-#  --test=1
-#  --no|test=1
+##  --test
+##  --no|test
+##  --test=1
+##  --no|test=1
 #
 # Single string options:
-#
-#  --install:
-#  --install:default
+##  --install:
+##  --install:default
 #
 # Multi string options:
-#
-#   --exclude::
-#   --exclude::default
+##   --exclude::
+##   --exclude::default
 #
 # Named arguments:
-#
-#   dest
+##   dest
 #
 # Remaining arguments:
-#
-#  args
+##  args
 #
 # Sets variables in the caller's scope with the names given in optdef, except
 # any remaining args are left in the original argv
 # Extra args are only valid if 'args' is given as the last option.
 #
-# If --test is set, then test=1, otherwise test=0
-# If --install is specified, it is stored in $install, otherwise $install is left unset
-# If --excludes is specified (multiple times, each value is stored in the list $excludes
-# Either --strip or --nostrip can be specified as a boolean option. --strip will set strip=1,
-# while --nostrip will set strip=0
-# If a boolean or single string option is specified multiple times, the last one wins
+#- If --test is set, then test=1, otherwise test=0
+#- If --install is specified, it is stored in $install, otherwise $install is left unset
+#- If --excludes is specified (multiple times, each value is stored in the list $excludes
+#- Either --strip or --nostrip can be specified as a boolean option. --strip will set strip=1, while --nostrip will set strip=0
+#- If a boolean or single string option is specified multiple times, the last one wins
 proc getopt {optdef &argv} {
 	#puts [list getopt-test $optdef $argv]
 	lassign [getopt-core $optdef $argv] vars argv
