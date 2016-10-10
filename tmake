@@ -787,7 +787,7 @@ proc invoke-spec-file {filename args} {
 
 	# If given, the argument is the contents of the file
 	if {[llength $args]} {
-		set cmd [list eval-source [lindex $args 0] $filename 1]]
+		set cmd [list eval-source [lindex $args 0] $filename 1]
 	} else {
 		set cmd [list source $filename]
 	}
