@@ -555,10 +555,10 @@ Reliability
 * Various things are cached to ensure that targets are rebuilt when required.
 
 Note that currently we only cache the script which generates targets, not
-how that script resolves (to either Tcl commands or external commands).
-We *could* have 'run' follow the PATH and record details of commands actually
-run in case those external programs change.
-This might be overkill...
+how that script resolves.
+
+However 'run' *does* cache the details of external programs (path, size, mtime) and will
+rebuild if the external program changes.
 
 Parallel Builds
 ---------------
@@ -578,11 +578,15 @@ Explain the various debugging "types" and how to use them when things go wrong.
 
 Explain tmake --find=rule
 
-Jim Tcl vs Tcl
---------------
-Downside of Tcl is that quitting the build with ^C fails to write the make cache.
-One approach is to write the cache after every change!
-Discuss required version of Jim Tcl
+Why Jim Tcl?
+------------
+Explain the use of Tcl.
+Then why not big Tcl? Originally tmake supported both Tcl and Jim Tcl, however Tcl had a number
+of issues so that now only Jim Tcl is supported. These include:
+- No signal handling, so quitting the build with ^C fails to write the make cache.
+- Tcl does not have the detailed source location support
+- No os.fork/wait
+- Tcl differentiates between array and dict, which makes code messier
 
 Variables
 ---------
@@ -798,14 +802,6 @@ fossil
 - A number of HostExecutable generators are used
 - Most of these could be easily replaced with Tcl commands or scripts
 
-Why Jim Tcl?
-------------
-Explain the use of Tcl.
-Then why not big Tcl?
-- no ^C support
-- array/dict problem
-- os.fork/wait
-
 Differences with make
 ---------------------
 - Differentiates between rule 'inputs' and 'dependencies'
@@ -832,3 +828,4 @@ No support for non-unix platforms, e.g. msvc
 Changing --build means that all orphans are forgotten since
 the cached targets only include the path relative to $BUILDDIR.
 
+The integration with autosetup works, but could be more seamless
