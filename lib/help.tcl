@@ -25,6 +25,7 @@ proc show-help {argv} {
    --targets[=all]       List all non-phony targets. If a parameter is given, include all targets and the rule location.
    -p|--print            Show all known rules
    --find=<target>       Show rules that contain the given substring as a target
+   --jobs=<n>            Limit parallel jobs to <n>. Defaults to the number of cpus, or $MAXJOBS if set.
    --genie               Generate an initial build.spec from sources in the current dir
    --commands            Show commands from the rulebase
    -d...                 Enable various debugging "types"
