@@ -2257,6 +2257,8 @@ proc wait-for-one-job {} {
 			if {$outfile ne ""} {
 				set stdmsg [readfile $outfile]
 				if {$stdmsg ne ""} {
+					# Remove any trailing newlines
+					set stdmsg [string trimright $stdmsg \n]
 					add-warning-msg $stdmsg
 					enter-new-dir $chdir
 					pputs grey $stdmsg
@@ -2266,6 +2268,7 @@ proc wait-for-one-job {} {
 			if {$errfile ne ""} {
 				set errmsg [readfile $errfile]
 				if {$errmsg ne ""} {
+					set stdmsg [string trimright $errmsg \n]
 					enter-new-dir $chdir
 					if {$rc} {
 						build-error $errmsg
