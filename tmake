@@ -59,7 +59,7 @@ set tmake(showaliases) 0
 set tmake(showwarnings) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
-set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} warnings {} version 0 writecache 0}
+set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} warnings {} exec {} version 0 writecache 0}
 set tmake(commands-overview) {}
 set tmake(commands) {}
 set tmake(cli-options) {}
@@ -1016,6 +1016,7 @@ proc discard-orphan-targets {} {
 				#puts "Discarding orphan target and deps $j"
 				dict unset tmakecache(targets) $j
 				dict unset tmakecache(deps) $j
+				dict unset tmakecache(exec) $j
 			}
 		}
 	}
@@ -1333,6 +1334,7 @@ proc show-cache {} {
 		user-notice purple "No .makecache"
 		return
 	}
+	set tmakecache $tmake(emptycache)
 	source $tmake(topbuilddir)/.makecache
 
 	# Files
@@ -2095,14 +2097,30 @@ proc fork-job-if-required {} {
 	return $tmake(jobpid)
 }
 
-proc run {args} {
-	global tmake
-
-	if {[fork-job-if-required] > 0} {
-		# can't just [return] here since we need to ensure that the rest of
-		# the -do doesn't run in the parent, but only in the child
-		return -code break
+# Searches for the command '$cmd' in the path and returns a string that combines:
+# - fullpath (or - if not found)
+# - mtime
+# - size
+# Thus is the external command changes, the returned key will change.
+proc stat-cmd-in-path {cmd} {
+	# Dummy stat
+	set stat {mtime 0 size 0 cmdpath -}
+	# At this point, before forking, determine if we need to cache the external
+	# command as a dependency
+	foreach path [split-path] {
+		set cmdpath [file join $path $cmd]
+		if {[file-isexec $cmdpath]} {
+			# Found in the path
+			file stat $cmdpath stat
+			set stat(cmdpath) $cmdpath
+			break
+		}
 	}
+	return $stat(cmdpath),$stat(mtime),$stat(size)
+}
+
+proc run {args} {
+	global tmake tmakecache
 
 	set cmdline [join $args]
 	set cmd [lindex $cmdline 0]
@@ -2110,7 +2128,17 @@ proc run {args} {
 	# Is cmd a file in the current dir?
 	if {![string match */* $cmd] && [file isfile $cmd]} {
 		set cmdline ./$cmdline
+	} else {
+		# Update the cache with the details of this command
+		dict set tmakecache exec $tmake(currentruletarget) $cmd [stat-cmd-in-path $cmd]
 	}
+
+	if {[fork-job-if-required] > 0} {
+		# can't just [return] here since we need to ensure that the rest of
+		# the -do doesn't run in the parent, but only in the child
+		return -code break
+	}
+
 	vputs [string trim $cmdline]
 	set rc [catch {
 		exec-save-stderr {*}$cmdline
@@ -2612,6 +2640,8 @@ proc build {target {notifytarget {}}} {
 	#    - If needbuild? returns 1, the target needs to be built
 	# 4. If build not forced, check substituted '-do' against any cached value
 	#    - If cached commands exists and they are different, the target needs to be built
+	# 5. If build not forced, check any cached 'exec' entries to see if external dependencies have changed
+	#    - If so, the target needs to be built
 
 	set vardict [make-var-dict $t]
 
@@ -2703,6 +2733,22 @@ proc build {target {notifytarget {}}} {
 				set status built
 			} else {
 				dputs-n "Commands for $ruletarget are unchanged"
+			}
+		}
+	}
+
+	# 5. Check any cached 'exec' entries to see if external dependencies have changed
+	if {$status eq "uptodate"} {
+		if {[dict exists $tmakecache(exec) $ruletarget]} {
+			set execinfo [dict get $tmakecache(exec) $ruletarget]
+			foreach {exec info} $execinfo {
+				set s [stat-cmd-in-path $exec]
+				if {$s ne $info} {
+					dputs b "External command '$exec' for $ruletarget has changed, so forcing rebuild"
+					set status built
+					lappend reason extcmd
+					break
+				}
 			}
 		}
 	}

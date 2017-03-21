@@ -10,6 +10,13 @@ If any of these change, dependent commands need to be re-run.
 This can be done in 'proc run', but means that we need to be able to interpret
 that PATH and determine if something is really executable.
 
+This is done. The result is stored in tmakecache under the 'exec' key.
+However it isn't perfect.
+
+- An external command may simply be a front end to another command that has actually changed.
+  (e.g. ccache which calls the actual compiler later in the path)
+- It only covers commands run via 'proc run'
+
 Local vs non-local
 ------------------
 It is hard to chain (e.g.) Objects, Link, Executable if the input is local but the result is non-local.
@@ -28,7 +35,7 @@ e.g. a ctags rule
 
 There is no easy way to clean those files
 
-We can now do Clean/DisClean --source
+We can now do Clean/DistClean --source
 
 ** make clean/distclean should not require configure to be run
    - currently this is an ugly hack to check for known cleaning targets: clean, distclean, clean-orphans
@@ -92,6 +99,7 @@ tmake TODO
     in build.spec and rulebase.
 * Alternatively, do it all in a namespace
 * Consider "real" getopt processing for the tmake command line
+  - actually, option handling has improved greatly
 * Load should probably load values into a ::tmake(config) dictionary and
   ifconfig should look there
   - Perhaps it is possible to also import certain of these settings (by glob)
