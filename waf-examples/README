@@ -1,2 +1,4 @@
 These directories contain equivalent tests to those in the waf book
 for comparison purposes
+
+And demos/ contains waf demos from 2.1.2
