@@ -1344,6 +1344,10 @@ The paths are added:
 
 If --reset is specified, INCPATHS, C_FLAGS, and CXX_FLAGS are reset to their default values,
 before any IncludePaths invocations. This can be useful to remove the implicit 'IncludePaths .'
+
+Note that normally only relative paths should be used, however adding an absolute
+path (e.g. /usr/local/include) is possible, in which case the path is added as-is
+and headers in that directory will then be included in dynamic dependency analysis.
 } {
 	show-this-rule
 
@@ -1380,7 +1384,10 @@ before any IncludePaths invocations. This can be useful to remove the implicit '
 			CFlags [prefix -I $srcpath]
 			C++Flags [prefix -I $srcpath]
 		}
-		if {$build} {
+		# Normally buildpath would not equal srcpath, but
+		# if an out-of-tree location is given (e.g. /usr/local/include)
+		# then it will. No need to include twice.
+		if {$build && $buildpath ne $srcpath} {
 			CFlags [prefix -I $buildpath]
 			C++Flags [prefix -I $buildpath]
 		}
