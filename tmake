@@ -43,6 +43,7 @@ set tmake(showrules) 0
 set tmake(exitcode) 0
 set tmake(modules) {}
 set tmake(autosubdirs) 1
+set tmake(checkexternalcmds) 0
 set tmake(deferred) {}
 set tmake(projfiles) {}
 set tmake(defines) {}
@@ -670,6 +671,12 @@ proc load-build-description {loadcache} {
 	# Now load the cache if it exists and it isn't the second time through
 	if {$loadcache} {
 		load-cache
+
+		if {!$tmake(checkexternalcmds) && [dict size $tmakecache(exec)]} {
+			# If disabled, discard any previously cached external command info
+			dict set tmakecache exec {}
+			mark-cache-dirty "external cmd cache discarded"
+		}
 	}
 
 	set tmake(loadedprojectspec) 1
@@ -808,6 +815,12 @@ proc invoke-spec-file {filename args} {
 	return $result
 }
 
+# @AutoSubDirs on|off
+#
+# If enabled (it is enabled by default), subdirectories containing
+# build.spec files are automatically entered.
+#
+# If not enabled, SubDirs must be used to specifically select project subdirs.
 proc AutoSubDirs {onoff} {
 	switch -- $onoff {
 		on {
@@ -822,6 +835,12 @@ proc AutoSubDirs {onoff} {
 	}
 }
 
+# @SubDirs dir ...
+#
+# If AutoSubDirs is set to off, SubDirs may be used to identify which directories
+# are entered.
+#
+# Can be used in any directory, but directory names are relative to the project top.
 proc SubDirs {args} {
 	foreach dir $args {
 		if {![file exists $dir/build.spec]} {
@@ -829,6 +848,27 @@ proc SubDirs {args} {
 		}
 	}
 	lappend ::tmake(subdirs) {*}$args
+}
+
+# @CheckExternalCommands on|off
+#
+# Normally disabled, it may be enabled in project.spec
+# If enabled, external commands run with 'run' are checked
+# (by path, mtime and size), and if the command changes, the corresponding target is rebuilt.
+#
+# Note that 'distclean' should be run if enabling this in an already-built project
+proc CheckExternalCommands {onoff} {
+	switch -- $onoff {
+		on {
+			set ::tmake(checkexternalcmds) 1
+		}
+		off {
+			set ::tmake(checkexternalcmds) 0
+		}
+		default {
+			parse-error "on or off expected"
+		}
+	}
 }
 
 proc file-build {path} {
@@ -2128,7 +2168,7 @@ proc run {args} {
 	# Is cmd a file in the current dir?
 	if {![string match */* $cmd] && [file isfile $cmd]} {
 		set cmdline ./$cmdline
-	} else {
+	} elseif {$tmake(checkexternalcmds)} {
 		# Update the cache with the details of this command
 		dict set tmakecache exec $tmake(currentruletarget) $cmd [stat-cmd-in-path $cmd]
 	}
@@ -2738,7 +2778,7 @@ proc build {target {notifytarget {}}} {
 	}
 
 	# 5. Check any cached 'exec' entries to see if external dependencies have changed
-	if {$status eq "uptodate"} {
+	if {$status eq "uptodate" && $tmake(checkexternalcmds)} {
 		if {[dict exists $tmakecache(exec) $ruletarget]} {
 			set execinfo [dict get $tmakecache(exec) $ruletarget]
 			foreach {exec info} $execinfo {
