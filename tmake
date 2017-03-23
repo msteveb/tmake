@@ -557,15 +557,20 @@ proc get-rulebase {} {
 	}
 }
 
-# Add the given targets to the list of targets that need to be built
+# @add-build-targets target ...
+#
+# May be called from a -do script to dynamically add build targets
+# to the list of targets to be built.
 proc add-build-targets {args} {
 	global tmake
 	lappend tmake(addtargets) {*}$args
 }
 
-# If files have been manually changed (e.g. in a phony rule),
-# reset-target-status causes the status of all targets to be reset
-# to unknown for any new build targets added with add-build-targets
+# @reset-target-status
+#
+# May be called from a -do script if files have been manually changed (e.g. in a phony rule)
+# reset-target-status indicates that any new targets added with add-build-targets
+# should have their build status set to unknown
 proc reset-target-status {} {
 	global tmake
 	set tmake(resetstatus) 1
