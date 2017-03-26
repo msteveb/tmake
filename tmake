@@ -2566,7 +2566,7 @@ proc build-deps {target ruletarget status depends phony &reason} {
 	}
 
 	if {$count(running) || $count(waiting)} {
-		dputs {b j} "$target has $($count(running) + $count(waiting)) outstanding jobs - waiting"
+		dputs j "$target has $($count(running) + $count(waiting)) outstanding jobs - waiting"
 		return waiting
 	}
 	if {$count(failed)} {
