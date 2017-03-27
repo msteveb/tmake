@@ -948,10 +948,11 @@ proc Scope {script} {
 	global tmake
 	# Save all defines
 	set defines $tmake(defines)
-	uplevel 1 $script
+	set result [uplevel 1 $script]
 	set tmake(defines) $defines
 	# Now need to reset/restore all the variables at frame #1
 	tmake-reset-defines
+	return $result
 }
 
 
