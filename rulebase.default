@@ -1729,7 +1729,8 @@ The arguments are as follows:
   --chdir    If specified, the generator runs from the local directory
   target     The target to generator. May be a list of one or more targets. Available as $target
   generator  The generator program or script. May be a local built target, a published built target
-             (in which case the <bin> prefix is used), or empty for none. Available as $script
+             (in which case the <bin> prefix is used), empty for none, or an external command (if none of the above).
+			 Unless empty, this is available as $script
   inputs     Local files that are inputs to the generator. Available as $inputs
   rules      A -do script that generates the target
   target-args  Additional arguments to 'target'
@@ -1766,7 +1767,7 @@ If 'mkindex.rb' were a script that used a locally built version of 'ruby' to run
 		lappend opts -depends $dep -vars interp $filename
 	}
 	if {$script ne ""} {
-		lassign [find-project-bin $script -chdir $chdir] dep filename
+		lassign [find-project-bin $script -chdir $chdir -optional 1] dep filename
 		lappend opts -depends $dep -vars script $filename
 	}
 	if {$chdir} {
