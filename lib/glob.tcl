@@ -48,8 +48,27 @@ proc glob-recursive {patterns type {exclude {}}} {
 	return $result
 }
 
-# Normally only returns files.
-# --dirs returns directories as well
+# @Glob ?--warn? ?--dirs? ?--all? ?--recursive? ?--exclude=filename? pattern ...
+#
+# Returns "local" filenames matching the given pattern(s).
+# The pattern may include a path/directory pattern.
+#
+## --warn       produces a warning if no files matched any pattern
+## --dirs       returns directories matching the given pattern(s). otherwise only files.
+## --all        patterns that don't match any files are returned as-is instead of no result.
+## --recursive  recurse into subdirectories
+## --exclude    exclude results matching the given filename (may be specified more than once)
+#
+# Examples:
+#
+# Return all .test files:
+#
+## Glob *.test
+#
+# Return all .c files any directory below test.*, including ignore.c:
+#
+## Glob --recursive --exclude=ignore.c test.*/*.c
+#
 proc Glob {args} {
 	show-this-rule
 
