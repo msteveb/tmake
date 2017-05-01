@@ -1384,12 +1384,15 @@ and headers in that directory will then be included in dynamic dependency analys
 			CFlags [prefix -I $srcpath]
 			C++Flags [prefix -I $srcpath]
 		}
-		# Normally buildpath would not equal srcpath, but
-		# if an out-of-tree location is given (e.g. /usr/local/include)
-		# then it will. No need to include twice.
-		if {$build && $buildpath ne $srcpath} {
-			CFlags [prefix -I $buildpath]
-			C++Flags [prefix -I $buildpath]
+		if {$build} {
+			if {$source && $buildpath eq $srcpath} {
+				# Normally buildpath would not equal srcpath, but
+				# if an out-of-tree location is given (e.g. /usr/local/include)
+				# then it will. No need to include twice.
+			} else {
+				CFlags [prefix -I $buildpath]
+				C++Flags [prefix -I $buildpath]
+			}
 		}
 	}
 }
