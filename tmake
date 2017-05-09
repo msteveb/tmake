@@ -3132,7 +3132,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 			# Need to verify that find-file returns the same result as last time
 			#puts "---- $filename ----"
 			#parray cachedresults
-			dputs-D "verifying up-to-data cached results for $filename"
+			dputs-D "verifying up-to-date cached results for $filename"
 			set ok 1
 			foreach {cfile ctypepath} $cachedresults {
 				set typepath [find-file $cfile $incpaths]

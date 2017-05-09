@@ -112,10 +112,6 @@ Note that many keys do not expect any values.
 	uses -nocache for performance reasons since install targets are never used
 	as dependencies.
 
--fatal
-	If the target fails to build, exit immediately (like tmake -q) rather than building
-	other, non-dependent targets.
-
 -inputs args
 	List of files/targets which are used by the -do command to create the target.
 	These targets are available to the -do command as $inputs
@@ -152,7 +148,7 @@ Note that many keys do not expect any values.
 	and thus are the same for all rules.
 
 	Note that if a name is specified with -var multiple times (possibly in multiple rules), the values accumulate
-	(with a space separator). Condsider the rule created by:
+	(with a space separator). Consider the rule created by:
 	
 	  Objects auth.app.c
 
@@ -186,11 +182,15 @@ The following options are experimental and may be removed in the future.
 	Normally only one rule for a target may contain -do. With -add, -do commands
 	may be added to an existing rule.
 
+-fatal
+	If the target fails to build, exit immediately (like tmake -q) rather than building
+	other, non-dependent targets.
+
 On Directories
 --------------
 
 Normally everything is relative to the top level source directory.
-So to compile dir/a.c to produce objdir/dir/a.o, a command such as the following
+To compile dir/a.c and produce objdir/dir/a.o, a command such as the following
 is run from the top level source directory.
 
   cc -c dir/a.c -o objdir/dir/a.o
@@ -244,9 +244,8 @@ $targetname  - The name of the target(s) of the rule
 $target      - The path to the target(s) of the rule ($BUILDDIR/$targetname)
 $inputs      - Any files mentioned with -inputs
 $depends     - Any files mentioned with -depends, plus any mentioned with -inputs
-$local       - The (relative) directory associated with the rule
+$local       - The (relative) source directory associated with the rule
 $build       - The (relative) build directory associated with the rule - outputs should go here
-$local       - The name of the local subdirectory
 
 In addition, any variables defined with 'define' (including variants) are available.
 
