@@ -1331,7 +1331,7 @@ For non-project libraries (such as system libraries), see UseSystemLibs and Link
 }
 
 rule IncludePaths {args} {
-IncludePaths ?--reset? ?--build? ?--source? paths...
+IncludePaths ?--reset? ?--global? ?--build? ?--source? paths...
 
 Arranges to search the given paths for header files. By default, the paths (relative)
 to the current local directory, are searched in both the source tree and the build tree,
@@ -1345,13 +1345,16 @@ The paths are added:
 If --reset is specified, INCPATHS, C_FLAGS, and CXX_FLAGS are reset to their default values,
 before any IncludePaths invocations. This can be useful to remove the implicit 'IncludePaths .'
 
+If --global is specified, paths are considered to be from the top of the tree rather
+than local (to the current dir) paths.
+
 Note that normally only relative paths should be used, however adding an absolute
 path (e.g. /usr/local/include) is possible, in which case the path is added as-is
 and headers in that directory will then be included in dynamic dependency analysis.
 } {
 	show-this-rule
 
-	getopt {--reset --build --source args} args
+	getopt {--reset --build --source --global args} args
 
 	if {$reset} {
 		global tmakedrb
@@ -1367,8 +1370,13 @@ and headers in that directory will then be included in dynamic dependency analys
 		incr source
 	}
 
-	set srcdir [local-dir]
-	set builddir [file-build [local-dir]]
+	if {$global} {
+		set srcdir .
+		set builddir [file-build .]
+	} else {
+		set srcdir [local-dir]
+		set builddir [file-build [local-dir]]
+	}
 
 	foreach dir $args {
 		set srcpath [file-join $srcdir $dir]
