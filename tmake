@@ -2752,9 +2752,9 @@ proc build {target {notifytarget {}}} {
 	# 4. Compare previous '-do' commands with current commands
 	if {$status eq "uptodate" && [llength $t(do)]} {
 		if {![dict exists $tmakecache(cmd) $ruletarget]} {
-			# If there are no dependencies, changed commands don't cause a rebuild by themselves
-			# XXX: Should there be a special flag for this sort of rule?
-			if {[llength $t(depends)]} {
+			# XXX: Do we need a special flag that doesn't rebuild if no dependencies?
+			# For now always rebuild
+			if {1 || [llength $t(depends)]} {
 				dputs b "No cached commands for $ruletarget, so forcing rebuild"
 				lappend reason nocache
 				set status built
