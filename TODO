@@ -74,6 +74,51 @@ Installation
 It is useful to be able to install different classes of things.
 install-docs, install-bin, install-dev, install-runtime, etc.
 
+Propagating Defines
+-------------------
+While all defined variables propagate from project.spec to subdirs,
+no variables defined in build.spec do so.
+It would be nice to be able to propagate selected defines to subdirs.
+
+Perhaps (although I don't like the name):
+
+  define-propagate name1 name2 ...
+
+In process-build-spec-file, the value of these variables
+need to be captured at the end of 'Scope'. Then they can be set
+for each subdir 'Scope'
+
+Alternatively, recognise that non-local settings need to be set in project.spec
+Either as a define or a proc. e.g.
+
+  Option 1
+  --------
+
+  -- project.spec --
+  define ENABLE_ABC
+  -- build.spec --
+  ifconfig ENABLE_ABC {
+	CFlags -Dtesting=123
+  }
+
+  Option 2
+  --------
+
+  -- project.spec --
+  define ABC_SPECIAL_CFLAGS -Dtesting=123
+  -- build.spec --
+  CFlags $ABC_SPECIAL_CFLAGS
+
+  Option 3
+  --------
+
+  -- project.spec --
+  proc EnableAbc {} {
+	CFlags -Dtesting=123
+  }
+  -- build.spec --
+  EnableAbc
+
 tmake TODO
 ----------
 * Does it make sense to support "IncludePaths /abc" to add paths
