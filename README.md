@@ -3,11 +3,11 @@ Overview of tmake
 tmake is a usable, proof-of-concept, advanced build system.
 
 It has perfectly acceptable performance for small projects (~1000 files),
-but slows down beyond that. It also has no support for parallel builds.
+but slows down beyond that.
 
 What it does have:
 - Build descriptions are succinct and declarative
-- A real language for build descriptions (Tcl), with simple conditional syntax
+- A real language for build descriptions (Tcl) and build actions, with simple conditional syntax
 - Rules can create multiple files
 - Two-stage reparsing allows build configurations to be generated and reloaded
   (e.g. via configure or kconfig)
@@ -65,13 +65,13 @@ High Level vs Low Level Rules
 -----------------------------
 The core tmake essentially has a single command to create a rule, target.
 While it would be possible to create a build description purely with the 'target' command,
-tmake is designed to layer a higher-level set of build commands.
+tmake is designed to layer a higher-level set of build commands, a "rulebase".
 
 The default rulebase includes such a set of high level rules, such as Executable,
 ArchiveLib, SharedObject, Phony, Install and more.
 
 The default rulebase may be extended or replaced, or rules tweaked
-with the low level 'target' if required.
+with the low level 'target' as required.
 
 Documentation for the 'target' command
 --------------------------------------
@@ -87,7 +87,22 @@ Arguments to 'target' take the form '-key1 values... -key2 ...', where all subse
 values are considered to belong to a key until the next key. This approach make
 it very easy to compose rules by simply appending keys and values.
 
-Note that many keys do not expect any values.
+Note that many keys are simple flags and do not expect any values.
+
+-depends args
+	List of files/targets upon which this target depends.
+	These targets are available to the -do command as $depends
+	Note that -inputs are automatically added to -depends.
+
+-inputs args
+	List of files/targets which are used by the -do command to create the target.
+	These targets are available to the -do command as $inputs.
+
+-do command
+	Tcl script to run when the target needs to be built.
+	Unless the target is phony, the -do command *must* create the given target(s).
+	The standard variables are set for the rule ($inputs, $target, etc.)
+	See 'Variables available to commands'
 
 -phony
 	Marks the target as phony. A phony target is considered to always need building
@@ -100,39 +115,12 @@ Note that many keys do not expect any values.
 	Tcl script to run if the command fails. Allows for cleanup, e.g. of
 	temporary files.
 
--chdir
-	Normally all commands are run from the top level *source* directory.
-	If -chdir is given, commands for this target are run from the local *build* directory
-	(objdir) instead. i.e. for a -chdir rule in directory 'abc', the rule is run from objdir/abc.
-	This is most often used for unit tests or generators which make assumptions
-	about the current directory. It should be avoided where possible.
-
--nocache
-	Do not cache this target. Note that the 'Install' command from rulebase.default
-	uses -nocache for performance reasons since install targets are never used
-	as dependencies.
-
--inputs args
-	List of files/targets which are used by the -do command to create the target.
-	These targets are available to the -do command as $inputs
-
--depends args
-	List of files/targets upon which this target depends.
-	These targets are available to the -do command as $depends
-	Note that -inputs are automatically added to -depends
-
 -msg command
 	Tcl script to run when the rule is invoked to build the target.
 	Should be succinct to avoid excess output in the normal case.
 	For example, the default object rule for .c files uses:
 
 	  -msg {note Cc $target}
-
--do command
-	Tcl script to run when the target needs to be built.
-	Unless the target is phony, the -do command *must* create the given target(s).
-	The standard variables are set for the rule ($inputs, $target, etc.)
-	See 'Variables available to commands'
 
 -dyndep command-prefix
 	Tcl command prefix invoked to extract dynamic dependencies from each of the dependencies.
@@ -176,6 +164,18 @@ Note that many keys do not expect any values.
 	Similar to -vars, except that the value of the variable is taken from current value
 	of the global variable (define)
 
+-chdir
+	Normally all commands are run from the top level *source* directory.
+	If -chdir is given, commands for this target are run from the local *build* directory
+	(objdir) instead. i.e. for a -chdir rule in directory 'abc', the rule is run from objdir/abc.
+	This is most often used for unit tests or generators which make assumptions
+	about the current directory. It should be avoided where possible.
+
+-nocache
+	Do not cache this rule. Note that the 'Install' command from rulebase.default
+	uses -nocache for performance reasons since install targets are never used
+	as dependencies.
+
 The following options are experimental and may be removed in the future.
 
 -add
@@ -214,7 +214,7 @@ The following are all implemented in rulebase.default
    In the first case, $SRCDIR will be "dir", while in the second it will be "../../dir"
    If the test program/script needs to reference support input files in can find them relative to $SRCDIR.
 
-3. Similarly, 'Generate' is given the '--chdir' flag, it creates a 'target -chdir' rule and also
+3. Similarly, if 'Generate' is given the '--chdir' flag, it creates a 'target -chdir' rule and also
    uses this directory specification to find the script or interpreter.
 
 Environment Variables
@@ -319,7 +319,7 @@ Document the commands and philosophy of the default rulebase.
 
 Orphan Targets
 --------------
-tmake maintains a cache of all targets which have previously been built.
+tmake maintains a cache of all targets that have previously been built.
 This allows tmake to "know" when rules change such that a previous target
 is no longer a target, and thus the old file can be discarded.
 
@@ -333,7 +333,7 @@ Consider the build.spec:
 
 	Executable prog a.c b.c
 
-$ make
+$ tmake
 Cc a.o
 Cc b.o
 Link prog
@@ -343,7 +343,7 @@ Now assume that b.c is no longer required:
 
 	Executable prog a.c
 
-$ make clean
+$ tmake clean
 Clean 1 orphan targets
 Clean .
 
@@ -352,7 +352,7 @@ it is not mentioned in any rule.
 
 Let's build again.
 
-$ make
+$ tmake
 Cc a.o
 Link prog
 Built 2 target(s) in 0.07 seconds
@@ -361,13 +361,13 @@ And now change the name of the program.
 
 	Executable newprog a.c
 
-$ make       
+$ tmake       
 Link newprog
 Built 1 target(s) in 0.04 seconds
 
 And clean orphans.
 
-$ make clean-orphans
+$ tmake clean-orphans
 Clean 1 orphan targets
 
 Caching Build Commands
@@ -416,7 +416,7 @@ to the various directories that contain them, we "publish" these
 shared files to a top level directory, such as 'publish'
 Ideally we do this with hard links (if supported) so that
 if an error occurs (say in a header file) and the file is edited,
-it will be the original file which is edited.
+it will be the original file that is edited.
 If hard links aren't supported, soft links or simply copying will work too.
 
 Unlike Install where the installed files are never dependencies, these
@@ -432,13 +432,13 @@ from a directory. build.spec would look something like this.
   Lib --publish my file1.c file2.c file3.c
 
 This will publish publish/include/{public1,public2}.h and publish/lib/libmy.a where
-they will be available for other directories.
+they will be available for targets in other directories.
 
 To publish an executable (say, needed during the build):
 
   HostExecutable --publish generate generate.c
 
-Now the directory which uses these published files does something like:
+Now the directory that uses these published files does something like:
 
   # Note that published header files are found automatically
 
@@ -447,7 +447,7 @@ Now the directory which uses these published files does something like:
   }
   Executable xyz main.c table.c <lib>my
 
-Here we use <bin> and <lib> selectors to refer to the corresponding published targets.
+Here we use <bin> and <lib> alias selectors to refer to the corresponding published targets.
 
 Note that the publish dir can be changed from the project.spec file. e.g.
 
@@ -548,6 +548,8 @@ Dynamic dependencies:
   This can occur if a system header was previously shadowed by a source file, but
   the build changes so that this no longer occurs.
 
+XXX: Note that "#include INCLUDEFILENAME" is not supported. Suggest workarounds.
+
 Reliability
 -----------
 
@@ -556,8 +558,8 @@ Reliability
 Note that currently we only cache the script which generates targets, not
 how that script resolves.
 
-However 'run' *does* cache the details of external programs (path, size, mtime) and will
-rebuild if the external program changes.
+However 'run' will cache the details of external programs (path, size, mtime) if
+'CheckExternalCommands on' is set and will rebuild if the external program changes.
 
 Parallel Builds
 ---------------
@@ -610,8 +612,8 @@ Also see the -vars and -getvar rule options which allow a variable to be bound t
 
 Multiple Targets on the Command Line
 ------------------------------------
-Explain how rulebase is parsed, then the build descriptions, then for each target
-the any 'Load' targets are built, and if necessary, the build descriptions are re-read.
+Explain how rulebase is parsed, then the build descriptions, 
+then any 'Load' targets are built, and if necessary, the build descriptions are re-read.
 Also, the target status is reset after every target.
 
 clean, distclean and clean-orphans are special
@@ -734,12 +736,12 @@ to select all the objects from the corresponding published library.
 libraries to be found by other components with UseLibs)
 
 When the inputs to the git2 library are collected, the selector
-such as <lib>src is replaced with the *objects* which are listed
+such as <lib>src is replaced with the *objects* that are listed
 as inputs to the src library. In addition, a dependency on the 'src'
 library is added to the 'git2' library to ensure that the objects
 are available when required.
 
-This approach has the advantage that the conglomerate library can be created
+This approach has the advantage that the aggregate library can be created
 in any directory, not just a parent of each of the component libraries.
 
 The same mechanism can be used for creating a shared libraries from other
@@ -748,7 +750,7 @@ libraries.
 
 Note 1: The <lib> selector selects the *objects* from the component library, not the library itself.
 Note 2: The component library must be published in order to be available.
-Note 3: When creating a conglomerate shared library, the appropriate compile flags (e.g. $(SH\_CFLAGS)
+Note 3: When creating an aggregate shared library, the appropriate compile flags (e.g. $(SH\_CFLAGS)
         must be added to objects in the component libraries. tmake is not able to automatically
         determine if this restriction has been followed.
 
