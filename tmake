@@ -664,6 +664,10 @@ proc load-build-description {loadcache} {
 
 	# Note that these are global, not per-directory, so fetch the values now
 	set tmake(maxjobs) [get-define MAXJOBS [get-num-cpus]]
+	if {![exists -command os.fork]} {
+		# No os.fork, so we can't do parallel builds
+		set tmake(maxjobs) 1
+	}
 	dputs m "Setting maxjobs=$tmake(maxjobs)"
 	set tmake(sepjobio) [get-define SEPJOBIO 1]
 
