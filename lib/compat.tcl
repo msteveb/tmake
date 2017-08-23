@@ -168,7 +168,7 @@ if {![exists -command wait]} {
 		lassign [os.wait {*}$args] pid status rc
 		switch -exact -- $status {
 			error - none {
-				set status NOPROCESS
+				set status NONE
 			}
 			exit {
 				set status CHILDSTATUS
