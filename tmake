@@ -7,7 +7,7 @@
 # Initialiation
 # ==================================================================
 
-set tmake(version) {0.7.1 (27-Mar-2017)}
+set tmake(version) {0.7.2 (13-Sep-2017)}
 set tmake(cacheversion) 3
 
 # Turn on debugging as early as possible
@@ -1321,7 +1321,7 @@ proc show-rule {target} {
 						puts @[join $v {, }]
 					}
 				}
-				phony - nofail - chdir - nocache - fatal - slow {
+				phony - nofail - chdir - nocache - fatal - slow - nofork {
 					if {$v} {
 						lappend flags $n
 					}
@@ -1794,7 +1794,7 @@ proc target {ruletarget args} {
 		return $ruletarget
 	} else {
 		set identical 1
-		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror finally phony target vars fatal slow} {
+		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror finally phony target vars fatal slow nofork} {
 			if {$info($i) ne $orig($i)} {
 				set identical 0
 				break
@@ -1834,6 +1834,7 @@ proc target {ruletarget args} {
 	incr orig(nocache) $info(nocache)
 	incr orig(fatal) $info(fatal)
 	incr orig(slow) $info(slow)
+	incr orig(nofork) $info(nofork)
 	append-with-space orig(onerror) $info(onerror) \n
 	append-with-space orig(finally) $info(finally) \n
 	# Only one of these will be non-blank
@@ -1916,7 +1917,7 @@ proc parse-rule-args {arglist} {
 proc parse-rule {target arglist} {
 	set info {
 		inputs {} depends {} do {} onerror {} finally {} msg {} vars {} dyndep {} add-do {} alias {}
-		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0
+		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0 nofork 0
 	}
 
 	set info(source) [find-source-location *build.spec]
@@ -1934,7 +1935,7 @@ proc parse-rule {target arglist} {
 	# And check/post-process the options
 	foreach {opt optargs} $arginfo {
 		switch -exact -- $opt {
-			phony - nofail - add - chdir - nocache - fatal - slow {
+			phony - nofail - add - chdir - nocache - fatal - slow - nofork {
 				if {[llength $optargs]} {
 					parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
@@ -2881,6 +2882,7 @@ proc build {target {notifytarget {}}} {
 			set tmake(currentruletarget) $ruletarget
 			set tmake(jobpid) -1
 			set tmake(warningmsgs) {}
+			incr tmake(sync) $t(nofork)
 
 			# Check the 'slow' flag of the target to see if we should fork
 			if {$t(slow)} {
@@ -2909,6 +2911,8 @@ proc build {target {notifytarget {}}} {
 
 			# Always restore the current dir afterwards
 			cd $tmake(topsrcdir)
+
+			incr tmake(sync) -$t(nofork)
 
 			if {$tmake(jobpid) > 0} {
 				set status running

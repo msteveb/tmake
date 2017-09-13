@@ -855,7 +855,7 @@ add-deferred-action {
 # ==================================================================
 
 rule Executable {args} {
-Executable --test --chdir --nobuild --publish --no|strip --install=<dir> target sources...
+Executable --test --chdir --nobuild --publish --no|strip --nofork --install=<dir> target sources...
 
 Builds an executable from one or more source files. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are linked (along with any libraries) to create the executable.
@@ -865,6 +865,7 @@ Used variables: LDFLAGS
 
 The following options are supported:
   --test              Marks the executable as a test (see Test)
+  --nofork            With --test, marks uses Test --nofork
   --chdir             This options is passed to Test if --test is also specified.
   --nobuild           Don't make this executable dependent on phony 'all', which is otherwise the default
   --publish           Publishes the executable (see PublishBin)
@@ -874,7 +875,7 @@ The following options are supported:
 	add-default-opts args
 	show-this-rule
 	set strip none
-	getopt {--test --chdir --nobuild --publish --strip:full --install: target args} args
+	getopt {--test --chdir --nobuild --nofork --publish --strip:full --install: target args} args
 
 	set localtarget [make-local $target]
 	set targetexe $target[get-define EXEEXT]
@@ -908,11 +909,14 @@ The following options are supported:
 		InstallFile {*}$opts [file-join $install $targetexe] $localtargetexe
 	}
 	if {$test} {
+		set opts {}
 		if {$chdir} {
-			Test --chdir $target
-		} else {
-			Test $target
+			lappend opts --chdir
 		}
+		if {$nofork} {
+			lappend opts --nofork
+		}
+		Test {*}$opts $target
 	}
 	if {!$nobuild} {
 		Phony all $localtargetexe
@@ -1515,7 +1519,7 @@ when compiling subsequent C/C++ sources.
 }
 
 rule Test {args} {
-Test --interp=<interp> --errok --chdir --quiet --stdout=<stdout.exp.file> --stderr=<stderr.exp.file> command args
+Test --interp=<interp> --errok --chdir --quiet --nofork --stdout=<stdout.exp.file> --stderr=<stderr.exp.file> command args
 
 Runs the test command
 If --stdout and/or --stderr is specified, the actual output is checked.
@@ -1523,7 +1527,7 @@ If it doesn't match, the test fails.
 } {
 	show-this-rule
 
-	getopt {--interp: --errok --chdir --quiet --stdout: --stderr: command args} args
+	getopt {--interp: --errok --chdir --quiet --nofork --stdout: --stderr: command args} args
 	set testid [get-test-id]
 	set depends {}
 	set localcommand [make-local $command]
@@ -1534,6 +1538,11 @@ If it doesn't match, the test fails.
 
 	if {$chdir} {
 		lappend opts -chdir
+	}
+	if {$nofork} {
+		lappend opts -nofork
+	} else {
+		lappend opts -slow
 	}
 	if {$errok} {
 		lappend vars errok 1
@@ -1586,7 +1595,7 @@ If it doesn't match, the test fails.
 	target [make-local $testid] -phony -depends $deps -vars {*}$vars {*}$opts -do {
 		setup-test-env $publishlib $LD_LIBRARY_PATH
 		run-test-command $testcommand
-	} -getvars LD_LIBRARY_PATH -slow
+	} -getvars LD_LIBRARY_PATH
 
 	Phony test [make-local $testid]
 
@@ -1786,6 +1795,7 @@ If 'mkindex.rb' were a script that used a locally built version of 'ruby' to run
 	}
 	target $localtarget -inputs {*}[make-local {*}$inputs] {*}$opts -do $rules -msg {note Generate $targetname} {*}$args
 	Clean $target
+	return $localtarget
 }
 
 rule Depends {target args} {
