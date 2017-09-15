@@ -152,7 +152,7 @@ proc make-parse-options {argv} {
 			exit 0
 		}
 		--rules {
-			user-notice purple "Warning: Use --commands rather than the deprecated --rules"
+			user-notice colwarn "Warning: Use --commands rather than the deprecated --rules"
 			set tmake(listcommands) 1
 		}
 		--commands {
@@ -289,6 +289,18 @@ proc make {argv} {
 	}
 
 	use colour util fileutil
+
+	# Default colour aliases. We use the col prefix
+	# to make it easier to find these in the code
+	colalias colwarn purple
+	colalias coldebugtime purple
+	colalias colrulename purple
+	colalias colruleargs yellow
+	colalias coldebug yellow
+	colalias colenterdir green
+	colalias colerror lred
+	colalias colnote cyan
+	colalias colrunwarn grey
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
@@ -608,7 +620,7 @@ proc load-cache {} {
 			lassign [time {source $tmake(topbuilddir)/.makecache}] us
 			dputs C "Loaded cache, .makecache in [expr {($us + 500) / 1000}]ms"
 			if {$tmakecache(version) != $tmake(cacheversion)} {
-				user-notice cyan ".makecache is out-of-date -- ignoring"
+				user-notice colnote ".makecache is out-of-date -- ignoring"
 				set tmakecache $tmake(emptycache)
 				# But overwrite the cache next time around
 				set tmakecache(writecache) 1
@@ -701,7 +713,7 @@ proc load-build-description {loadcache} {
 			foreach dep [get-rule-attr $ruletarget depends] {
 				if {[is-target? $dep]} {
 					if {[dict get [get-target-rule $dep] phony]} {
-						user-notice purple "Non phony target $ruletarget [make-source-location $ruletarget @] depends on phony $dep"
+						user-notice colwarn "Non phony target $ruletarget [make-source-location $ruletarget @] depends on phony $dep"
 						tmake-exit 1
 					}
 				}
@@ -1104,21 +1116,21 @@ proc use {args} {
 # Debug, Errors and Messages
 # ==================================================================
 
-# @user-error msg
+# @user-error ?colour? msg
 #
 # Indicate incorrect usage to the user
 # exits with a non-zero return code.
 #
-proc user-error {{col lred} msg} {
+proc user-error {{col colerror} msg} {
 	puts stderr [colerr $col "Error: $msg"]
 	puts stderr "Try: 'tmake --help' for options"
 	tmake-exit 1
 }
 
-# @build-error msg
+# @build-error ?colour? msg
 #
 # Indicate that something failed to build and set exitcode=1
-proc build-error {{col lred} msg} {
+proc build-error {{col colerror} msg} {
 	if {$msg eq ""} {
 		set msg "-- no message --"
 	}
@@ -1133,13 +1145,13 @@ proc build-error {{col lred} msg} {
 # Indicate that something failed to build and exit with exitcode=1
 proc build-fatal-error {msg} {
 	dputs b "BUILD FATAL ERROR: $msg"
-	puts stderr [colerr lred $msg]
+	puts stderr [colerr colerror $msg]
 	stderr flush
 	tmake-exit 1
 }
 
 
-# @user-notice msg
+# @user-notice ?colour? msg
 #
 # Output the given message to stderr, possibly with the given colour.
 #
@@ -1157,12 +1169,12 @@ proc parse-error {msg} {
 	# Message may contain a source reference relative to the top source dir
 	enter-new-dir $tmake(topsrcdir)
 
-	user-notice lred [error-location "Error: $msg"]
+	user-notice colerror [error-location "Error: $msg"]
 	tmake-exit 1
 }
 
 proc parse-warning {msg} {
-	user-notice purple [warning-location "Warning: $msg"]
+	user-notice colwarn [warning-location "Warning: $msg"]
 }
 
 proc wait-for-background-jobs {} {
@@ -1189,7 +1201,7 @@ proc tmake-exit {code {msg {}}} {
 
 	wait-for-background-jobs
 	if {$msg ne ""} {
-		user-notice lred $msg
+		user-notice colerror $msg
 	}
 
 	if 0 {
@@ -1213,7 +1225,7 @@ proc tmake-exit {code {msg {}}} {
 #
 proc vputs {msg} {
 	if {$::tmake(verbose)} {
-		pputs cyan $msg
+		pputs colnote $msg
 	}
 }
 
@@ -1240,7 +1252,7 @@ proc debug-is-set {types} {
 #
 proc dputs {types msg {indent 1}} {
 	if {[debug-is-set $types]} {
-		pputs "[colout purple [dbg-msg-indent $indent]] \[$types\] [colout yellow $msg]"
+		pputs "[colout coldebugtime [dbg-msg-indent $indent]] \[$types\] [colout coldebug $msg]"
 	}
 }
 
@@ -1381,7 +1393,7 @@ proc show-cache {} {
 	global tmake
 
 	if {![file exists $tmake(topbuilddir)/.makecache]} {
-		user-notice purple "No .makecache"
+		user-notice colwarn "No .makecache"
 		return
 	}
 	set tmakecache $tmake(emptycache)
@@ -1414,7 +1426,7 @@ proc show-cache {} {
 			set warnings [dict get $tmakecache(warnings) $i]
 			if {[llength $warnings]} {
 				foreach msg $warnings {
-					pputs grey $msg
+					pputs colrunwarn $msg
 				}
 			}
 		}
@@ -1456,7 +1468,7 @@ proc show-all-commands {} {
 		set otherlines [lassign [split [string trim $helptext] \n] firstline]
 		set otherlines [string trim [join $otherlines \n]]
 		regexp {^([^ ]*) +(.*)$} $firstline -> cmdname cmdargs
-		pputs "\n[colout purple $cmdname] [colout yellow $cmdargs]"
+		pputs "\n[colout colrulename $cmdname] [colout colruleargs $cmdargs]"
 		pputs \n$otherlines
 		#puts [string repeat - 60]
 	}
@@ -1479,7 +1491,7 @@ proc show-find-results {findtarget findall} {
 				}
 				if {$count > 1} {
 					incr count -1
-					pputs cyan "Note: $count non-exact matches also exist, use --findall to show them"
+					pputs colnote "Note: $count non-exact matches also exist, use --findall to show them"
 				}
 				tmake-exit 0
 			}
@@ -1727,7 +1739,7 @@ proc rule {cmdname arglist {helptext {}} body} {
 		parse-error "Command $cmdname already defined @$loc"
 	}
 	if {$helptext eq ""} {
-		user-notice purple "[join [info source $cmdname] :]:Warning: rule $cmdname has no help"
+		user-notice colrulename "[join [info source $cmdname] :]:Warning: rule $cmdname has no help"
 	}
 	dict set tmake(commands) $cmdname [list [info source $cmdname] $helptext]
 	proc $cmdname $arglist $body
@@ -2196,7 +2208,7 @@ proc run {args} {
 	} msg opts]
 	if {$rc == 0 && $msg ne ""} {
 		add-warning-msg $msg
-		pputs grey $msg
+		pputs colrunwarn $msg
 	}
 	if {$rc} {
 		pputs \n\t$cmdline\n
@@ -2225,7 +2237,7 @@ proc run-tmake {args} {
 		exec-save-stderr {*}$cmdline
 	} msg opts]
 	if {$rc == 0 && $msg ne ""} {
-		pputs grey $msg
+		pputs colrunwarn $msg
 	}
 	if {$rc == 1} {
 		pputs \n\t$cmdline\n
@@ -2307,7 +2319,7 @@ proc enter-new-dir {dirname} {
 	global tmake
 	if {$tmake(lastchdir) ne $dirname} {
 		# emulate make for vim quickerr
-		pputs green "tmake: Entering directory `$dirname'"
+		pputs colenterdir "tmake: Entering directory `$dirname'"
 		set tmake(lastchdir) $dirname
 	}
 }
@@ -2317,7 +2329,7 @@ proc wait-for-one-job {} {
 	while {[dict size $tmake(running)]} {
 		lassign [wait -1] status pid code
 		if {$pid <= 0} {
-			#user-notice purple "Warning: No child processes, but tmake(running) is not empty"
+			#user-notice colwarn "Warning: No child processes, but tmake(running) is not empty"
 			break
 		}
 		if {[dict exists $tmake(running) $pid]} {
@@ -2340,7 +2352,7 @@ proc wait-for-one-job {} {
 					set stdmsg [string trimright $stdmsg \n]
 					add-warning-msg $stdmsg
 					enter-new-dir $chdir
-					pputs grey $stdmsg
+					pputs colrunwarn $stdmsg
 				}
 				file delete $outfile
 			}
@@ -2352,7 +2364,7 @@ proc wait-for-one-job {} {
 					if {$rc} {
 						build-error $errmsg
 					} else {
-						pputs lred $errmsg
+						pputs colerror $errmsg
 					}
 				}
 				file delete $errfile
@@ -2900,7 +2912,7 @@ proc build {target {notifytarget {}}} {
 					}
 					if {$rc} {
 						if {$t(nofail) && [info return $rc] eq "error"} {
-							user-notice cyan "\[ignored\] $msg"
+							user-notice colnote "\[ignored\] $msg"
 							set rc 0
 						} else {
 							break
@@ -2933,9 +2945,9 @@ proc build {target {notifytarget {}}} {
 						# Must output the failure here since it's the only place we have the strack trace
 						dputs b "BUILD ERROR: $msg"
 						if {[exists opts(-errorinfo)]} {
-							puts stderr [colerr lred [error-stacktrace $msg $opts(-errorinfo)]]
+							puts stderr [colerr colerror [error-stacktrace $msg $opts(-errorinfo)]]
 						} elseif {$msg ne ""} {
-							puts stderr [colerr lred $msg]
+							puts stderr [colerr colerror $msg]
 						}
 						exit 1
 					} else {
@@ -2980,7 +2992,7 @@ proc build {target {notifytarget {}}} {
 					}
 					run-do $vardict $t(msg)
 					foreach msg $warnings {
-						pputs grey $msg
+						pputs colrunwarn $msg
 					}
 				}
 			}
@@ -3229,9 +3241,9 @@ set rc [catch -signal {
 	set rc [catch {callmake $argv} msg opts]
 	if {$rc} {
 		if {$rc == 1 && [exists -command error-stacktrace]} {
-			user-notice lred [error-stacktrace $msg $opts(-errorinfo)]
+			user-notice colerror [error-stacktrace $msg $opts(-errorinfo)]
 		} elseif {$msg ne ""} {
-			user-notice lred $msg
+			user-notice colerror $msg
 		}
 		set tmake(exitcode) 1
 	}
@@ -3240,7 +3252,7 @@ set rc [catch -signal {
 	if {$tmake(numtargets) || $tmake(showtime) || $tmake(verbose)} {
 		set elapsed [expr {([clock millis] - $tmake(start)) / 1000.0}]
 		if {!$tmake(quiet)} {
-			pputs cyan "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"
+			pputs colnote "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"
 		}
 	}
 	# This is to support unit testing
