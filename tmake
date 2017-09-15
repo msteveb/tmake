@@ -351,6 +351,12 @@ proc make {argv} {
 	# Full path
 	set tmake(topsrcdir) [pwd]
 
+	set tmakerc [getenv HOME]/.tmakerc
+	if {[file exists $tmakerc]} {
+		dputs m "Loading $tmakerc"
+		source $tmakerc
+	}
+
 	# By default, the build directory is 'objdir', but this
 	# can be changed with --build, either on the command line or from tmake.opt
 	# XXX: Currently tmake.opt overrides the command line because it it parsed later.
