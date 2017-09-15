@@ -1,7 +1,9 @@
 # Copyright (c) 2012 WorkWare Systems http://www.workware.net.au/
 # All rights reserved
 
-# Module which contains miscellaneous utility functions
+# @synopsis:
+#
+# Module containing miscellaneous utility functions
 
 # Dump variables in the parent scope to stdout
 proc dump-vars {{maxlength 50}} {
@@ -48,6 +50,11 @@ proc compare-versions {v1 v2} {
 	return 0
 }
 
+# @pad string width ?padchar?
+#
+# Returns $string, right padded to a length
+# of at least $with. If the pad char is not given,
+# pads with spaces (" ")
 proc pad {text width {char { }}} {
 	if {[string length $text] >= $width} {
 		return $text
@@ -55,6 +62,8 @@ proc pad {text width {char { }}} {
 	return $text[string repeat $char [expr {$width - [string length $text]}]]
 }
 
+# @append-with-spaces varname value ?space?
+#
 # If the given var is not set or is "", sets it to $value
 # Otherise appends $value with a space separator (or $space)
 #
@@ -67,10 +76,11 @@ proc append-with-space {varname value {space " "}} {
 	}
 }
 
-# Takes a list and returns a new list with $suf appended
-# to each element
+# @suffix suf element ...
+#
+# Returns a list with $suf appended to each element
 # 
-# suffix .c a b c => a.c b.c c.c
+## suffix .c a b c => a.c b.c c.c
 #
 proc suffix {suf args} {
 	set result {}
@@ -80,10 +90,11 @@ proc suffix {suf args} {
 	return $result
 }
 
-# Takes a list and returns a new list with $pre prepended
-# to each element
+# @prefix pre element ...
+#
+# Returns a list with $pre prepended to each element
 # 
-# prefix jim- a.c b.c => jim-a.c jim-b.c
+## prefix jim- a.c b.c => jim-a.c jim-b.c
 #
 proc prefix {pre args} {
 	set result {}
@@ -93,22 +104,12 @@ proc prefix {pre args} {
 	return $result
 }
 
-# @omit list elements..
+# @change-ext ext filename ...
 #
-# Returns a list with the given elements removed
-proc omit {list args} {
-	lmap p $list {
-		if {$p in $args} {
-			continue
-		}
-		lindex $p
-	}
-}
-
-# Takes a list of filenames and returns a new list with
-# the extension of each filename changed to $ext
+# Returns a list of filenames, where the extension of each each filename
+# is changed to $ext
 # 
-# change-ext .c a.o b.o c => a.c b.c c.c
+## change-ext .c a.o b.o c => a.c b.c c.c
 #
 proc change-ext {ext args} {
 	set result {}
@@ -116,6 +117,19 @@ proc change-ext {ext args} {
 		lappend result [file rootname $p]$ext
 	}
 	return $result
+}
+
+# @omit list element ...
+#
+# Returns a list with the given elements removed
+#
+proc omit {list args} {
+	lmap p $list {
+		if {$p in $args} {
+			continue
+		}
+		lindex $p
+	}
 }
 
 # Merges target variables.
@@ -135,4 +149,22 @@ proc merge-vars {dict1 dict2} {
 		return $d1
 	}
 	return $dict1
+}
+
+# @quote-if-needed string
+#
+# Returns a new string that is escaped according to shell
+# escaping rules. That is, double quotes and backslashes are
+# escape with backslash and the result is quoted if it contains double quotes.
+#
+## quote-if-needed {-DT=13 "Oct"} => {"-DT=13 \"Oct\""}
+#
+# Useful in cases like this:
+#
+## CFlags [quote-if-needed -DPROCESSOR_VERSION=\"[exec date]\"]
+proc quote-if-needed {str} {
+	if {[string match {*[\" \t]*} $str]} {
+		return \"[string map [list \" \\" \\ \\\\] $str]\"
+	}
+	return $str
 }

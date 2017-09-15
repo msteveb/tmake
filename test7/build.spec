@@ -1,5 +1,4 @@
-CFlags -DPROCESSOR_VERSION="processor\\ v1.0"
-#CFlags -DPROCESSOR_VERSION="def"
+CFlags [quote-if-needed {-DPROCESSOR_VERSION="processor v1.0"}]
 
 # XXX: If cross compiling, should use HostExecutable here
 Executable processor processor.c

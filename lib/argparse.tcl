@@ -1,4 +1,8 @@
-# Simple command line argument parser
+# @synopsis:
+#
+# Simple command line argument parser.
+# This module is always loaded.
+# 
 
 # @argparse argv { patterns code patterns code ... }
 #
