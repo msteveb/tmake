@@ -41,7 +41,6 @@ set tmake(showtime) 0
 set tmake(quickstop) 0
 set tmake(showrules) 0
 set tmake(exitcode) 0
-set tmake(modules) {}
 set tmake(autosubdirs) 1
 set tmake(checkexternalcmds) 0
 set tmake(deferred) {}
@@ -69,6 +68,7 @@ set tmake(clean-targets) {clean distclean clean-orphans}
 
 set tmakecache $tmake(emptycache)
 set tmakeprecache {}
+set tmakemodules {}
 
 set tmake(defaulttarget) all
 set tmake(loadedprojectspec) 0
@@ -1102,10 +1102,10 @@ proc use {args} {
 		return
 	}
 	foreach m $args {
-		if {[dict exists $::tmake(modules) $m]} {
+		if {[dict exists $::tmakemodules $m]} {
 			continue
 		}
-		dict set ::tmake(modules) $m 1
+		dict set ::tmakemodules $m 1
 
 		set source $::tmake(dir)/lib/${m}.tcl
 		if {![file exists $source]} {
