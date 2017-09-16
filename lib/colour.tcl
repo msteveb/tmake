@@ -3,7 +3,7 @@
 #
 # @synopsis:
 #
-# Module to provide colourised output to ANSI-compatible terminals
+# Provide colourised output to ANSI-compatible terminals
 #
 # Colourised output will not be used if:- $NOCOLOR is set in the environment,
 # $TERM is one of dumb, emacs or cygwin, or if the channel (stdout, stderr)
