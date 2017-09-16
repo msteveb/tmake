@@ -1,8 +1,10 @@
 # Copyright (c) 2007-2010 WorkWare Systems http://www.workware.net.au/
 # All rights reserved
 
-# Module containing misc procs useful to modules
-# Largely for platform compatibility
+# @synopsis:
+#
+# Module containing misc procs useful to modules, 
+# largely for platform compatibility.
 
 if {[string equal windows $tcl_platform(platform)]} {
 	proc iswin {} { return 1 }
@@ -10,12 +12,17 @@ if {[string equal windows $tcl_platform(platform)]} {
 	proc iswin {} { return 0 }
 }
 
+# @file-isexec filename
+#
+# Implements 'file isexec'
+
+# @exec-save-stderr cmd ...
+#
+# Implements 'exec >@stdout ...' to capture and return stderr on platforms
+# that don't support this natively.
+
 if {[iswin]} {
-	# mingw/windows separates $PATH with semicolons
-	# and doesn't have an executable bit
-	proc split-path {} {
-		split [getenv PATH .] {;}
-	}
+	# mingw/windows doesn't have an executable bit so use a heuristic
 	proc file-isexec {exec} {
 		# Basic test for windows. We ignore .bat
 		if {[file isfile $exec] || [file isfile $exec.exe]} {
@@ -43,9 +50,6 @@ if {[iswin]} {
 	stderr buffering none
 } else {
 	# unix separates $PATH with colons and has and executable bit
-	proc split-path {} {
-		split [getenv PATH .] :
-	}
 	proc file-isexec {exec} {
 		file executable $exec
 	}
@@ -54,10 +58,19 @@ if {[iswin]} {
 	}
 }
 
+
+# @split-path
+#
+# Returns environment variable $PATH as a list
+#
+proc split-path {} {
+	split [getenv PATH .] $::tcl_platform(pathSeparator)
+}
+
 # @lunique list
 #
 # Returns a copy of $list with any duplicates removed.
-# The order of the returned list is random.
+# The list is returned in 'lsort' order.
 #
 proc lunique {list} {
 	set a {}
@@ -67,6 +80,10 @@ proc lunique {list} {
 	lsort [dict keys $a]
 }
 
+# @isatty? channel
+#
+# Returns 1 if the channel is a tty. 
+#
 proc isatty? {channel} {
 	set tty 0
 	catch {
@@ -76,14 +93,23 @@ proc isatty? {channel} {
 	return $tty
 }
 
+# Returns a dictionary containing the current environment
 proc env-save {} {
 	return $::env
 }
 
+# Sets the current environment to the given dictionary
 proc env-restore {newenv} {
 	set ::env $newenv
 }
 
+# @getenv name ?default?
+#
+# Returns the value of environment variable 'name'.
+# If not set, returns 'default' if specified, otherwise generates an error.
+#
+# Note that on Windows, all environment variable values have backslash
+# converted to forward slash automatically.
 proc getenv {name args} {
 	if {[info exists ::env($name)]} {
 		set value $::env($name)
@@ -99,11 +125,20 @@ proc getenv {name args} {
 	return $value
 }
 
+# @setenv name value
+#
+# Sets the value of the given environment variable
+#
 proc setenv {name value} {
 	set ::env($name) $value
 }
 
 
+# @file-normalize path
+#
+# Like 'file normalize', but follows symlinks and is supported even on 
+# platforms withouth 'file normalize'
+#
 proc file-normalize {path} {
 	if {$path eq ""} {
 		return ""
@@ -128,6 +163,14 @@ proc file-normalize {path} {
 	return $result
 }
 
+# @file-join dir path
+#
+# Like 'file join' except will omit "." in either 'dir' or 'path'
+# e.g.
+#
+## file-join . abc => abc
+## file-join abc/def . => abc/def
+## file-join abc/def ghi => abc/def/ghi
 proc file-join {dir path} {
 	if {$dir eq "."} {
 		return $path
@@ -138,17 +181,24 @@ proc file-join {dir path} {
 	file join $dir $path
 }
 
+# @file-link ?-symbolic|-hard? newname target
+#
+# Implements 'file link', but uses the external command 'ln' if
+# 'file link' is not supported internally.
+#
+# Note that the arguments are reversed from 'ln', so creates 
+# 'dest' -> 'target'
 if {"link" in [file -commands]} {
 	alias file-link file link
 } else {
-	proc file-link {{-symbolic|-hard -hard} dest src} {
+	proc file-link {{-symbolic|-hard -hard} newname target} {
 		set opt ${-symbolic|-hard}
 		switch -glob -- $opt {
 			-h* {
-				exec ln $src $dest
+				exec ln $target $newname
 			}
 			-s* {
-				exec ln -s $src $dest
+				exec ln -s $target $newname
 			}
 			default {
 				return -code error "bad option \"$opt\": must be -hard, or -symbolic"
@@ -157,12 +207,18 @@ if {"link" in [file -commands]} {
 	}
 }
 
+# @file-mtime filename
+#
+# Implements 'file mtime', or 'file mtimens' if supported.
+#
 if {"mtimens" in [file -commands]} {
 	alias file-mtime file mtimens
 } else {
 	alias file-mtime file mtime
 }
 
+# Implements 'wait' in terms of the older 'os.wait'
+#
 if {![exists -command wait]} {
 	proc wait {args} {
 		lassign [os.wait {*}$args] pid status rc
@@ -189,8 +245,10 @@ if {![exists -command wait]} {
 # Directory/path handling
 #
 
-# Convert absolute path, $path into a path relative
-# to the given directory (or the current dir, if not given).
+# @relative-path path ?pwd?
+#
+# Convert absolute path 'path' into a path relative
+# to 'pwd', (or the current directory, if not given).
 #
 proc relative-path {path {pwd {}}} {
 	if {![file exists $path]} {
