@@ -153,10 +153,13 @@ proc make-parse-options {argv} {
 		}
 		--rules {
 			user-notice colwarn "Warning: Use --commands rather than the deprecated --rules"
-			set tmake(listcommands) 1
+			set tmake(listcommands) *
 		}
 		--commands {
-			set tmake(listcommands) 1
+			set tmake(listcommands) *
+		}
+		{--commands=*} {
+			set tmake(listcommands) [argparam $arg]
 		}
 		{--targets --targets=all} {
 			set tmake(listtargets) [argparam $arg]
@@ -447,7 +450,7 @@ proc make {argv} {
 		tmake-exit 0
 	}
 	if {[info exists tmake(listcommands)]} {
-		show-all-commands
+		show-matching-commands $tmake(listcommands)
 		tmake-exit 0
 	}
 	if {[info exists tmake(findtarget)]} {
@@ -1457,19 +1460,26 @@ proc show-all-targets {detailed} {
 	}
 }
 
-proc show-all-commands {} {
+proc show-matching-commands {pattern} {
 	global tmake
 
-	foreach info $tmake(commands-overview) {
-		lassign $info loc helptext
-		set lines [split [string trim $helptext] \n]
-		set lines [string trim [join $lines \n]]
-		pputs $lines
-		pputs [string repeat - 60]
+	if {$pattern eq "*"} {
+		foreach info $tmake(commands-overview) {
+			lassign $info loc helptext
+			set lines [split [string trim $helptext] \n]
+			set lines [string trim [join $lines \n]]
+			pputs $lines
+			pputs [string repeat - 60]
+		}
 	}
 
 	set commands $tmake(commands)
-	foreach cmd [lsort [dict keys $commands]] {
+	set cmds [dict keys $commands $pattern]
+	if {[llength $cmds] == 0} {
+		pputs colnote "No commands matched $pattern, showing commands matching ${pattern}*"
+		set cmds [dict keys $commands ${pattern}*]
+	}
+	foreach cmd [lsort $cmds] {
 		lassign $commands($cmd) loc helptext
 		set otherlines [lassign [split [string trim $helptext] \n] firstline]
 		set otherlines [string trim [join $otherlines \n]]
