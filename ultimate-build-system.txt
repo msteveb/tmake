@@ -113,14 +113,13 @@ Now the tmake equivalent
     ===========================================
     HostExecutable processor processor.c
 
-    foreach src [Glob *.in] {
-        regsub {[.]in$} $src {} target
-        Generate $target processor $src {
-            note Process $inputs
-            #note Output file: $target
-            run $target $inputs $target
-        }
-    }
+	foreach src [Glob *.in] {
+		set dest [file rootname $src]
+		Generate $dest processor $src {
+			run $script $inputs $target
+		}
+		Depends all [make-local $outfile]
+	}
     ===========================================
 
 waf is great if you feel like writing a python script
@@ -196,16 +195,8 @@ and how tmake addresses it
 
 Fast
 ----
-- parallel builds
-- cache dependencies
-
-The current (proof of concept) version of tmake is not fast for two reasons:
-1. It is written in pure Tcl, which is a slower than either compiled lanuages, or Python.
-2. It does not support parallel builds
-
-Note that there is nothing conceptually stopping tmake from supporting parallel builds.
-It is purely an implementation issue. Since it is "fast enough" for a medium sized project,
-both of these can be addressed at the same time.
+The current (proof of concept) version of tmake is not as fast as it could be
+due to the implementation in pure (Jim) Tcl, which is a slower than either compiled lanuages, or Python.
 
 Reliable
 --------
