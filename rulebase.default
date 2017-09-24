@@ -1995,6 +1995,86 @@ Notes:
 	# XXX support for shared libs ...
 }
 
+rule Configure {args} {
+Configure ?--configure=configscript? ?--output=filename? ?--logfile=logfile? {targets} {inputs} {do rules} ...
+
+Runs an autoconf-compatible ./configure (defaults to "configure") to produce the given
+targets. The given inputs, if any are added as dependencies.
+Runs the "do" rules, with the $configure variable set to the name of the configure script.
+
+If --output is given, the output from the configure command is assumed to be written
+to that file, and it is displayed if the configure fails.
+
+If --logfile is given, 'Distclean --source $logfile' is added to delete the logfile on distclean.
+
+Additional 'target' arguments may be appended.
+
+Typical usage for autoconf is:
+
+  Configure --output=config.out --logfile=config.log include/config.h {} {
+  	run $configure >config.out
+  }
+} {
+	getopt {--output: --logfile: --configure: targets inputs rules args} args
+
+	if {![info exists configure]} {
+		set configure "configure"
+	}
+	set inputs [make-local $configure {*}$inputs]
+	set opts {}
+
+	if {[info exists output]} {
+		lappend opts -onerror "puts \[readfile \$build/$output\]"
+		Clean $output
+	}
+	if {[info exists logfile]} {
+		DistClean --source $logfile
+	}
+
+	Depends $targets $inputs -msg {note Configure $targetname} -fatal -vars configure $configure -do $rules {*}$opts {*}$args
+	DistClean $targets
+}
+
+rule Autosetup {args} {
+Autosetup ?--verbose? {targets} ...
+
+Runs and autosetup-compatible configure to produce settings.conf plus the addition given $targets.
+
+Normally output is sent to config.out and only shown on error, but --verbose
+causes the output to be sent directly to stdout instead.
+
+Be sure to add something similar to the following to your auto.def file:
+
+  use tmake
+  ...
+  make-tmake-settings [get-env BUILDDIR objdir]/settings.conf {[A-Z]*}
+} {
+	getopt {--verbose targets} args
+
+	set opts {}
+
+	# We use [set AUTOREMAKE] in the -do to avoid rebuilding settings.conf
+	# if the AUTOREMAKE command changes
+	if {$verbose} {
+		set do {
+			run [set AUTOREMAKE]
+		}
+	} else {
+		set do {
+			run [set AUTOREMAKE] >$build/config.out
+		}
+		lappend opts --output=config.out
+	}
+
+	Configure {*}$opts --logfile=config.log [list settings.conf {*}$targets] auto.def $do {*}$args
+
+	# If not configured, configure with default options
+	# Note that it is expected that configure will normally be run
+	# separately. This is just a convenience.
+	# project.spec can redefine AUTOREMAKE if required
+	define? AUTOREMAKE configure TOPBUILDDIR=[get-define TOPBUILDDIR] --conf=auto.def
+	Load settings.conf
+}
 
 # ==================================================================
 # Built-in targets
