@@ -9,7 +9,12 @@ Autosetup include/autoconf.h
 # e.g. for up autoconf.h
 IncludePaths include
 
-ifconfig CONFIGURED
+ifconfig !CONFIGURED {
+	# Not configured, so don't process subdirs
+	AutoSubDirs off
+	# And don't process this file any further
+	ifconfig false
+}
 
 use util
 Phony showvars -do {

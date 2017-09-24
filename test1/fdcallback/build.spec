@@ -19,6 +19,7 @@ Scope {
 	Depends version.c $deps -do {
 		writefile $target "static const char version\[\] = \"@version@ [exec date]\";\n"
 	}
+	Clean version.c
 }
 
 # This executable won't use either the timer lib, nor the fdcallback lib
