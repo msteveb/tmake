@@ -22,6 +22,9 @@ ifconfig JIM_SHAREDLIB {
 
 UseSystemLibs $LIBS
 
+pkg-config sqlite3
+pkg-config readline
+
 set SRCS {}
 define? DESTDIR _install
 
@@ -81,6 +84,4 @@ Generate Tcl.html make-index jim_tcl.txt {
 }
 Install $prefix/docs Tcl.html README.jim=README
 Phony docs Tcl.html
-
-DistClean jim-config.h jimautoconf.h config.log settings.conf
 

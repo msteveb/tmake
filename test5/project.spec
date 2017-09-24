@@ -1,16 +1,9 @@
 # vim:set syntax=tcl:
 define? DESTDIR _install
 
-Depends settings.conf auto.def -msg {note Configuring...} -do {
-	run [set AUTOREMAKE] >$build/config.out
-} -onerror {puts [readfile $build/config.out]} -fatal
-Clean config.out
-DistClean --source config.log
-DistClean settings.conf
-
 define? AUTOREMAKE configure --host=arm-linux TOPBUILDDIR=$TOPBUILDDIR --conf=auto.def
 
-Load settings.conf
+Autosetup include/autoconf.h
 
 ifconfig CONFIGURED
 
