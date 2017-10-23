@@ -431,6 +431,17 @@ proc install-shared-lib {args} {
 	add-clean uninstall $installed
 }
 
+# @make-local-or-abs filename
+#
+# If $filename is an absolute path, returns $filename
+# Otherwise returns [make-local $filename]
+proc make-local-or-abs {filename} {
+	if {[string match /* $filename]} {
+		return $filename
+	}
+	return [make-local $filename]
+}
+
 # @expand-filespec dir filelist keepdir
 #
 # Implements target renaming/globbing for Publish and Install
@@ -455,7 +466,7 @@ proc expand-filespec {dir filelist keepdir} {
 		if {[string match *=* $spec]} {
 			lassign [split $spec =] target src
 			#dputs m "file renaming: dir=$dir, target=$target, src=$src => target=[file-join $dir $target] src=[make-local $src]"
-			lappend result [file-join $dir $target] [make-local $src]
+			lappend result [file-join $dir $target] [make-local-or-abs $src]
 			continue
 		}
 		if {[string match {*[{}*?]*} $spec]} {
@@ -465,11 +476,11 @@ proc expand-filespec {dir filelist keepdir} {
 		}
 		foreach src $srcs {
 			if {$keepdir} {
-				#dputs m "keepdir: dir=$dir, src=$src => target=[file-join $dir $src] src=[make-local $src]"
-				lappend result [file-join $dir $src] [make-local $src]
+				#dputs m "keepdir: dir=$dir, src=$src => target=[file-join $dir $src] src=[make-local-or-abs $src]"
+				lappend result [file-join $dir $src] [make-local-or-abs $src]
 			} else {
-				#dputs m "no keepdir: dir=$dir, src=$src => target=[file-join $dir [file tail $src]] src=[make-local $src]"
-				lappend result [file-join $dir [file tail $src]] [make-local $src]
+				#dputs m "no keepdir: dir=$dir, src=$src => target=[file-join $dir [file tail $src]] src=[make-local-or-abs $src]"
+				lappend result [file-join $dir [file tail $src]] [make-local-or-abs $src]
 			}
 		}
 	}
@@ -944,6 +955,7 @@ Note that 'name' can be 'target=src' to rename a file when published.
 	}
 
 
+	# XXX Currently does not support external sources
 	foreach {dest src} [expand-filespec $destdir $args 0] {
 		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $targetname} -alias <bin>[file tail $dest]
 		target $dest$exe -add -do {
@@ -978,6 +990,7 @@ Rather Publishlib and PublishBin should be used.
 		user-notice purple [warning-location "Warning: Use Lib --publish to publish libraries"]
 	}
 
+	# XXX Does not support external sources
 	foreach {dest src} [expand-filespec $dir $args $keepdir] {
 		publish-one-file $dest $src
 	}
@@ -1627,6 +1640,8 @@ The following options are supported:
 
 Adds the rule to the global 'install' target and adds the file the list of files
 to be uninstalled with 'uninstall'
+
+Note that the source can be an absolute path to install an external file.
 } {
 	show-this-rule
 
@@ -1652,10 +1667,18 @@ to be uninstalled with 'uninstall'
 		user-notice purple [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
 		return
 	}
+
 	# Note that we pass variable $dest purely so we can show a nice path in the message
-	target $destfile -nocache -inputs $src -vars dest $dest installopts $installopts -msg {note Install $dest} -do {
-		install-file {*}$installopts $target $inputs
+	if {[string match /* $src]} {
+		target $destfile -nocache -vars dest $dest src $src installopts $installopts -msg {note Install $dest} -do {
+			install-file {*}$installopts $target $src
+		}
+	} else {
+		target $destfile -nocache -vars dest $dest installopts $installopts -inputs $src -msg {note Install $dest} -do {
+			install-file {*}$installopts $target $inputs
+		}
 	}
+
 	target install -depends $destfile
 
 	# This file also needs to be uninstalled
