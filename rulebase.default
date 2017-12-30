@@ -234,6 +234,24 @@ Alias for ObjectRule.cpp
 	tailcall ObjectRule.cpp $obj $src
 }
 
+rule ObjectRule.l {obj src} {
+ObjectRule.l object source
+
+Generates an object file from a lexer source file
+} {
+	set base [file rootname $src]
+	set targets [list $base.lex.c $base.lex.h]
+
+	# Build the output files with lex/flex
+	target $targets -inputs $src -msg {note Lex $targetname} -getvars LEX LFLAGS -do {
+		run $LEX $LFLAGS --outfile=[lindex $target 0] --header-file=[lindex $target 1] $inputs
+	}
+	Clean $targets
+
+	# And create the object through Object
+	Object [make-unlocal $base.lex.o] [make-unlocal $base.lex.c]
+}
+
 rule ObjectRule.y {obj src} {
 ObjectRule.y object source
 
