@@ -1595,6 +1595,25 @@ proc define-append {name args} {
 	append-with-space value [join $args]
 	define $name $value
 }
+# @define-list-append value ...
+#
+# Like define-append, but the variable is treated as a Tcl list
+# and duplicate values are not appended.
+#
+# This may not be suitable for command lines, e.g. -I abc -I def
+# where the -I would be omitted
+#
+proc define-list-append {name args} {
+	set value [get-define $name]
+	# Avoid duplicates
+	foreach arg $args {
+		if {$arg ni $value} {
+			append-with-space value $arg
+		}
+	}
+	define $name $value
+	dputs v "$name += [join $args] => $value"
+}
 
 # @get-define name ?default?
 #
