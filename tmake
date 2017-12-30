@@ -572,7 +572,7 @@ proc get-rulebase {} {
 	if {[file exists rulebase.spec]} {
 		return rulebase.spec
 	} elseif {$tmake(installed)} {
-		return [list rulebase.builtin $tmake(defaultrulebase)]
+		return [list rulebase.default $tmake(defaultrulebase)]
 	} else {
 		return [list $tmake(dir)/rulebase.default]
 	}
@@ -824,7 +824,7 @@ proc invoke-spec-file {filename args} {
 
 	# If given, the argument is the contents of the file
 	if {[llength $args]} {
-		set cmd [list eval-source [lindex $args 0] $filename 1]
+		set cmd [info-source [lindex $args 0] $filename 1]
 	} else {
 		set cmd [list source $filename]
 	}
@@ -1948,11 +1948,12 @@ proc parse-rule {target arglist} {
 		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0 nofork 0
 	}
 
-	set info(source) [find-source-location *build.spec]
-	if {$info(source) eq "unknown"} {
-		set info(source) [find-source-location *.spec]
-		if {$info(source) eq "unknown"} {
-			set info(source) [find-source-location *.default]
+	# Note that we prefer build.spec over project.spec and rulebase.spec when
+	# finding the source of a rule
+	foreach pattern {build.spec *.spec *.default} {
+		set info(source) [find-source-location $pattern]
+		if {$info(source) ne "unknown"} {
+			break
 		}
 	}
 	set info(target) $target
@@ -2320,7 +2321,7 @@ proc subst-do {__target __vardict __do_list} {
 # Returns a list of {ret msg opts stacktrace} from catch
 #
 proc run-do {__vardict __script} {
-	if {[string length $__script] == 0} {
+	if {$__script eq {}} {
 		# Optimisation
 		return [list 0 {} {}]
 	}

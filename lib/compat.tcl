@@ -325,13 +325,19 @@ proc warning-location {msg {pattern *.spec}} {
 #
 proc find-source-location {{pattern *.spec}} {
 	# Search back through the stack for the first location in a .spec file
+	set result unknown
+
 	for {set i 1} {$i < [info level]} {incr i} {
 		lassign [info frame -$i] info(caller) info(file) info(line)
-		if {[string match $pattern $info(file)]} {
+		if {[string match *.spec $info(file)]} {
 			return [relative-path $info(file)]:$info(line)
 		}
+		# But use the last occurrence when searching in (e.g.) rulebase.default
+		if {[string match $pattern $info(file)]} {
+			set result $info(file):$info(line)
+		}
 	}
-	return unknown
+	return $result
 }
 
 # Similar to error-location, but called when user code generates an error
@@ -424,13 +430,12 @@ proc init-compat {} {
 	# Older versions of Jim Tcl didn't support this
 	if {[catch {info source {} t.tcl 1}] == 0} {
 		# Have [info source]
-		proc eval-source {script filename line} {
-			tailcall eval [info source $script $filename $line]
+		proc info-source {script filename line} {
+			tailcall info source $script $filename $line
 		}
 	} else {
-		# No, so just use [eval]
-		proc eval-source {script filename args} {
-			tailcall eval $script
+		proc info-source {script filename args} {
+			return $script
 		}
 	}
 
