@@ -2373,7 +2373,7 @@ proc wait-for-one-job {} {
 			dict unset tmake(running) $pid
 
 			lassign $job ruletarget notifytarget chdir outfile errfile
-			dputs j "Job $pid has finished with $status\($code) for {$ruletarget $notifytarget}"
+			dputs j "Job $pid building $ruletarget has finished with $status\($code), needed by $notifytarget"
 			if {$status eq "CHILDSTATUS" && $code == 0} {
 				set rc 0
 			} else {
@@ -2413,7 +2413,7 @@ proc wait-for-one-job {} {
 				dict incr tmake(pending) $notifytarget -1
 				if {[dict get $tmake(pending) $notifytarget] == 0} {
 					if {[get-rule-status $notifytarget] eq "waiting"} {
-						dputs j "Status of $notifytarget set to unknown"
+						dputs j "Status of $notifytarget changed from waiting => unknown"
 						set-rule-status $notifytarget unknown
 					}
 				}
