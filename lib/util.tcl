@@ -132,6 +132,16 @@ proc omit {list args} {
 	}
 }
 
+# @lpop list
+#
+# Removes the last entry from the given list and returns it.
+proc lpop {listname} {
+	upvar $listname list
+	set val [lindex $list end]
+	set list [lrange $list 0 end-1]
+	return $val
+}
+
 # Merges target variables.
 # These are stored in dictionaries, where $dict1 is the current vars
 # and the new vars $dict2 need to be merged.

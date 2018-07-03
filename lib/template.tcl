@@ -4,68 +4,120 @@
 # Module which provides creation of a file from a template with substitution
 # XXX: Should this be in the default rulebase instead?
 
-# @apply-template infile outfile mapping targetname
+# @apply-template infile outfile vars targetname
 #
-# Reads the input file $infile and writes the output file $outfile.
+# Reads the input file '$infile' and writes the output file '$outfile'
 #
-# $mapping is a mapping per [string map]
+# '$vars' contains a list of variable name value pairs
 #
-# $targetname is the name of the output file for warning reporting purposes.
+# '$targetname' is the name of the output file for warning reporting purposes.
+#
+# If '$outfile' is blank/omitted, '$template' should end with '.in' which
+# is removed to create the output file name.
 #
 # Conditional sections may be specified as follows:
-## @if name == value
+## @if NAME eq "value"
 ## lines
 ## @else
 ## lines
 ## @endif
 #
-# Where 'name' is a defined variable name and @else is optional.
+# Where 'NAME' is a variable name from '$vars' and '@else' is optional.
 # If the expression does not match, all lines through '@endif' are ignored.
 #
 # The alternative forms may also be used:
-## @if name
-## @if name != value
+## @if NAME  (true if the variable is defined, but not empty and not "0")
+## @if !NAME  (opposite of the form above)
+## @if <general-tcl-expression>
 #
-# Where the first form is true if the variable is defined, but not empty or 0
+# In the general Tcl expression, any words beginning with an uppercase letter
+# are translated into the [dict get $vars NAME]
 #
-# Currently these expressions can't be nested.
+# Expressions may be nested
 #
-proc apply-template {infile outfile mapping target} {
-	set mapped [string map $mapping [readfile $infile]]
+proc apply-template {infile outfile vars target} {
 
-
+	# A stack of true/false conditions, one for each nested conditional
+	# starting with "true"
+	set condstack {1}
 	set result {}
+	set linenum 0
 	foreach line [split [readfile $infile] \n] {
-		if {[info exists cond]} {
-			set l [string trimright $line]
-			if {$l eq "@endif"} {
-				unset cond
-				continue
+		incr linenum
+		if {[regexp {^@(if|else|endif)\s*(.*)} $line -> condtype condargs]} {
+			dputs m "condtype=$condtype, condargs=$condargs, vars=$vars"
+			if {$condtype eq "if"} {
+				if {[llength $condargs] == 1} {
+					# ABC => [dict get $vars ABC] ni {0 ""}
+					# !ABC => [dict get $vars ABC] in {0 ""}
+					lassign $condargs condvar
+					set not 0
+					if {[regexp {^!(.*)} $condvar -> condvar]} {
+						set not 1
+					}
+					if {![dict exists $vars $condvar]} {
+						build-fatal-error "$infile:$linenum: No such variable: $condvar"
+					}
+					set value [dict get $vars $condvar]
+					set condexpr 0
+					if {$not} {
+						if {$value in {0 ""}} {
+							set condexpr 1
+						}
+					} else {
+						if {$value ni {0 ""}} {
+							set condexpr 1
+						}
+					}
+					dputs m condexpr=$condexpr
+				} else {
+					# Translate alphanumeric ABC into [dict get $vars ABC] and leave the
+					# rest of the expression untouched
+					regsub -all {([A-Z][[:alnum:]_]*)} $condargs {[dict get \$vars \1]} condexpr
+				}
+				if {[catch [list expr $condexpr] condval]} {
+					dputs m $condval
+					build-fatal-error "$infile:$linenum: Invalid expression: $line"
+				}
+				dputs m "@$condtype: $condexpr => $condval"
 			}
-			if {$l eq "@else"} {
-				set cond [expr {!$cond}]
-				continue
+			if {$condtype ne "if" && [llength $condstack] <= 1} {
+				build-fatal-error "$infile:$linenum: Error: @$condtype missing @if"
 			}
-			if {$cond} {
-				lappend result $line
-			}
-			continue
-		}
-		if {[regexp {^@if\s+(\w+)(.*)} $line -> name expression]} {
-			lassign $expression equal value
-			set varval [get-define $name ""]
-			if {$equal eq ""} {
-				set cond [expr {$varval ni {"" 0}}]
-			} else {
-				set cond [expr {$varval eq $value}]
-				if {$equal ne "=="} {
-					set cond [expr {!$cond}]
+			switch -exact $condtype {
+				if {
+					# push condval
+					lappend condstack $condval
+				}
+				else {
+					# Toggle the last entry
+					set condval [lpop condstack]
+					set condval [expr {!$condval}]
+					lappend condstack $condval
+				}
+				endif {
+					if {[llength $condstack] == 0} {
+						user-notice "$infile:$linenum: Error: @endif missing @if"
+					}
+					lpop condstack
 				}
 			}
 			continue
 		}
+		# Only output this line if the stack contains all "true"
+		if {"0" in $condstack} {
+			continue
+		}
 		lappend result $line
 	}
+
+	# Now the inline mapping
+	set mapping {}
+	foreach {name value} $vars {
+		lappend mapping @$name@ $value
+	}
+
+	# Apply the mapping
 	set mapped [string map $mapping [join $result \n]]\n
 	# Check for any unmapped variables
 	set unmapped [regexp -all -inline {@[A-Za-z0-9_]+@} $mapped]
@@ -111,19 +163,19 @@ and produces a warning unless '--warn' is given.
 	# Create the mapping as a variable to the rule.
 	# If the mapping changes, the rule will re-run
 	#       
-	set mapping {}
+	set vars {}
 	foreach var $args {
 		if {[regexp {([^=]*)=(.*)} $var -> name value]} {
-			lappend mapping @$name@ $value
+			lappend vars $name $value
 		} else {
 			if {![define-exists $var]} {
 				user-notice purple [warning-location "Warning: $target maps undefined variable $var" build.spec]
 			}
-			lappend mapping @$var@ [get-define $var]
+			lappend vars $var [get-define $var]
 		}
 	}
-	target [make-local $target] -inputs [make-local $src] -vars mapping $mapping -msg {note Template $targetname} -do {
-		apply-template $inputs $target $mapping $targetname
+	target [make-local $target] -inputs [make-local $src] -vars vars $vars -msg {note Template $targetname} -do {
+		apply-template $inputs $target $vars $targetname
 	}
 	Clean $target
 	return [make-local $target]
