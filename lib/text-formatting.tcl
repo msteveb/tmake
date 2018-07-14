@@ -8,7 +8,7 @@ proc wordwrap {text length {firstprefix ""} {nextprefix ""}} {
     set space $firstprefix
     foreach word [split $text] {
         set word [string trim $word]
-        if {$word == ""} {
+        if {$word eq ""} {
             continue
         }
         if {$len && [string length $space$word] + $len >= $length} {

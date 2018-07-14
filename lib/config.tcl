@@ -27,7 +27,7 @@ proc is-defined? {name} {
 ## ifconfig CONFIGURED
 #
 # Evaluate the given code if USE_UTF8 and CONFIGURED are both defined.
-## ifconfig USE_UTF8 && CONFIGURED {
+## ifconfig {USE_UTF8 && CONFIGURED} {
 ##    ...
 ## }
 proc ifconfig {expr args} {
@@ -58,8 +58,8 @@ proc do_ifconfig {name expr exprargs} {
 		}
 		3 {
 			# ifconfig expr {code} else {code}
-			if {[lindex $exprargs 1] == "else"} {
-				do_if_else 3 $expr [lindex $exprargs 0] [lindex $exprargs 2] 
+			if {[lindex $exprargs 1] eq "else"} {
+				do_if_else 3 $expr [lindex $exprargs 0] [lindex $exprargs 2]
 				return
 			}
 		}
@@ -73,12 +73,12 @@ proc do_ifconfig {name expr exprargs} {
 proc do_if_else {level expr true false} {
 	if $expr {
 		dputs c "Expression is true, so executing $true"
-		if {$true != ""} {
+		if {$true ne ""} {
 			uplevel $level $true
 		}
 	} else {
 		dputs c "Expression is false"
-		if {$false != ""} {
+		if {$false ne ""} {
 			uplevel $level $false
 		}
 	}
