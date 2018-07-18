@@ -151,3 +151,7 @@ tmake TODO
     as global variables
 * archive libraries uses a pretty simple format.
   we could parse these libraries for timestamps directly in Tcl if required
+* We have --warnings, but does it make sense to also capture errors and avoid
+  rebuilding if nothing has changes, and just outputting the previously captured errors?
+  I'm inclined not to since ccache already does a good job of this and I don't
+  think it's big use case to keep recompiling with no changes.
