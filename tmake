@@ -1085,9 +1085,12 @@ proc discard-orphan-targets {} {
 			set discard 1
 			foreach j $i {
 				#puts "Discarding orphan target and deps $j"
-				dict unset tmakecache(targets) $j
+				dict unset tmakecache(target) $j
 				dict unset tmakecache(deps) $j
 				dict unset tmakecache(exec) $j
+				dict unset tmakecache(file) $j
+				dict unset tmakecache(warnings) $j
+				dict unset tmakecache(headerscan) $j
 			}
 		}
 	}
