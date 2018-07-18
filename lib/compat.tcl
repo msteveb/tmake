@@ -251,10 +251,12 @@ if {![exists -command wait]} {
 # to 'pwd', (or the current directory, if not given).
 #
 proc relative-path {path {pwd {}}} {
-	if {![file exists $path]} {
-		stderr puts "Warning: $path does not exist. May not be canonical"
-	} else {
-		set path [file-normalize $path]
+	if {![string match /* $path]} {
+		if {![file exists $path]} {
+			stderr puts "Warning: $path does not exist. May not be canonical"
+		} else {
+			set path [file-normalize $path]
+		}
 	}
 	if {$pwd eq ""} {
 		set pwd [pwd]
