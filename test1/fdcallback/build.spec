@@ -13,7 +13,7 @@ Scope {
 	# so make version.c depend on the dependencies of testfdloop except version.o
 
 	# Find deps of testfdloop, ommitting version.o
-	set deps [omit [get-rule-attr [make-local testfdloop] depends] [make-local version.o]]
+	set deps [omit [get-rule-attr [make-local testfdloop$EXEEXT] depends] [make-local version.o]]
 
 	# And create the rule
 	Depends version.c $deps -do {
