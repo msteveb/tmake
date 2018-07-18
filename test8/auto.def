@@ -6,6 +6,8 @@ use cc cc-shared tmake
 options {
 }
 
+cc-check-tools ar ranlib strip
+
 set objdir [get-env BUILDDIR objdir]
 
 make-tmake-settings $objdir/settings.conf {[A-Z]*}
