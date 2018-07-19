@@ -493,6 +493,7 @@ proc make {argv} {
 					dputs-n "Load --nocare $t, not a target"
 					continue
 				}
+				dputs {b T} "Building Load target $t"
 				set status [build-sync $t]
 				if {$status eq "failed"} {
 					if {$tmake(exitcode) == 0} {
