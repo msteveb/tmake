@@ -50,6 +50,9 @@ proc init-colour {} {
 		set tmake(colout) [isatty? stdout]
 		set tmake(colerr) [isatty? stderr]
 	}
+	foreach {n v} $tmake(ansicodes) {
+		lappend tmake(collist) $n
+	}
 }
 
 # @colstr colour string
@@ -103,4 +106,21 @@ proc colget {name} {
 		set name [dict get $::tmake(colalias) $name]
 	}
 	dict get $::tmake(ansicodes) $name
+}
+
+proc show-colours {} {
+	global tmake
+	set colmap {}
+	foreach {n v} $tmake(colalias) {
+		lappend colmap($v) $n
+	}
+	foreach col $tmake(collist) {
+		if {[exists colmap($col)]} {
+			set aliases $colmap($col)
+		} else {
+			set aliases -none-
+		}
+		puts "Colour [colstr $col [pad $col 7]] is used for: $aliases"
+	}
+	puts "\nUse [colstr yellow "colalias <alias> <colour>"] to change colour usage"
 }

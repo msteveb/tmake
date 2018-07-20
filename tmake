@@ -205,6 +205,11 @@ proc make-parse-options {argv} {
 			set tmake(colout) 0
 			set tmake(colerr) 0
 		}
+		--showcol* {
+			use colour
+			show-colours
+			exit 0
+		}
 		--version {
 			use help
 			pputs [show-version]
