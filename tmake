@@ -206,6 +206,7 @@ proc make-parse-options {argv} {
 			set tmake(colerr) 0
 		}
 		--showcol* {
+			load-tmakerc
 			use colour
 			show-colours
 			exit 0
@@ -359,11 +360,7 @@ proc make {argv} {
 	# Full path
 	set tmake(topsrcdir) [pwd]
 
-	set tmakerc [getenv HOME]/.tmakerc
-	if {[file exists $tmakerc]} {
-		dputs m "Loading $tmakerc"
-		source $tmakerc
-	}
+	load-tmakerc
 
 	# By default, the build directory is 'objdir', but this
 	# can be changed with --build, either on the command line or from tmake.opt
@@ -566,6 +563,14 @@ proc make {argv} {
 			}
 		}
 		set targets [list {*}$addtargets {*}$targets]
+	}
+}
+
+proc load-tmakerc {} {
+	set tmakerc [getenv HOME]/.tmakerc
+	if {[file exists $tmakerc]} {
+		dputs m "Loading $tmakerc"
+		source $tmakerc
 	}
 }
 
