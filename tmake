@@ -317,6 +317,7 @@ proc make {argv} {
 	set tmake(prevtime) $tmake(start)
 	set tmake(initialdir) [pwd]
 	set tmake(lastchdir) $tmake(initialdir)
+	set tmake(isroot) [is-uid-root]
 
 	# Parse the options and return the list of targets to build
 
@@ -373,7 +374,7 @@ proc make {argv} {
 	}
 
 	# Create the build dir now
-	file mkdir $tmake(build)
+	file-mkdir -rooterr $tmake(build)
 
 	set tmake(topbuilddir) [file-normalize $tmake(build)]
 
@@ -554,7 +555,7 @@ proc make {argv} {
 		}
 
 		# Add any new targets to the target list
-		# These are added before current targets, so 
+		# These are added before current targets, so
 		set addtargets {}
 		foreach new $tmake(addtargets) {
 			if {$new ni $targets && $new ni $addtargets} {
@@ -667,6 +668,14 @@ proc mark-cache-dirty {msg} {
 proc write-cache {} {
 	global tmake tmakecache
 	if {$tmakecache(writecache)} {
+		# This should never happend because it is hard to make any changes that require
+		# the cache to be updated if only install rules are -rootok
+		# Writing an existing file as root is fine
+		if {$tmake(isroot) && ![file exists $tmake(topbuilddir)/.makecache]} {
+			# Don't call build-fatal-error here since that calls tmake-exit which calls build-fatal-error
+			puts stderr [colerr colerror "Error: Refusing to create .makecache when running as root"]
+			exit 1
+		}
 		set tmakecache(version) $tmake(cacheversion)
 		unset tmakecache(writecache)
 		lassign [time {
@@ -703,7 +712,7 @@ proc load-build-description {loadcache} {
 	dputs m "Setting maxjobs=$tmake(maxjobs)"
 	set tmake(sepjobio) [get-define SEPJOBIO 1]
 
-	# Loaded in the global scope 
+	# Loaded in the global scope
 
 	foreach i $tmake(deferred) {
 		uplevel #0 $i
@@ -953,7 +962,7 @@ proc file-build-relative {buildpath {srcdir {}}} {
 	set build [file join $::tmake(topbuilddir) $buildpath]
 	set src [file join $::tmake(topsrcdir) $srcdir]
 	# Note that the source path needs to exist for relative-path to work on all platforms
-	file mkdir [file dirname $src]
+	file-mkdir -rootskip [file dirname $src]
 	relative-path $build $src
 }
 
@@ -968,7 +977,7 @@ proc file-src-relative {srcpath {builddir {}}} {
 	set there [file join $::tmake(topsrcdir) $srcpath]
 	set here [file join $::tmake(topbuilddir) $builddir]
 	# Note that the source path needs to exist for relative-path to work on all platforms
-	file mkdir [file dirname $here]
+	file-mkdir -rootskip [file dirname $here]
 	relative-path $there $here
 }
 
@@ -1109,6 +1118,26 @@ proc discard-orphan-targets {} {
 		mark-cache-dirty "discarded orphan targets"
 	}
 }
+
+# Like file mkdir except if the directory doesn't exist
+# and the current user is root, the option indicates what should happen.
+#
+## -rootskip  do nothing
+## -rooterr   fatal error
+
+proc file-mkdir {option name} {
+	if {![is-uid-root] || [file isdir $name]} {
+		tailcall file mkdir $name
+	}
+	if {$option eq "-rootskip"} {
+		return
+	} elseif {$option eq "-rooterr"} {
+		build-fatal-error "Error: Refusing to create directory $name when running as root"
+	} else {
+		error "got file-mkdir $option $name, option should be -rootskip or -rooterr"
+	}
+}
+
 
 # ==================================================================
 # Module Loading
@@ -1356,7 +1385,7 @@ proc show-rule {target} {
 						puts @[join $v {, }]
 					}
 				}
-				phony - nofail - chdir - nocache - fatal - slow - nofork {
+				phony - nofail - chdir - nocache - fatal - slow - nofork - rootok {
 					if {$v} {
 						lappend flags $n
 					}
@@ -1553,7 +1582,7 @@ proc num-nonphony-targets {} {
 # @define name arg ...
 #
 # Set a variable to the given value, unless it was defined with define!
-# 
+#
 # e.g. define CC arm-linux-gcc -mbig-endian
 #
 proc define {name args} {
@@ -1797,7 +1826,7 @@ proc rule {cmdname arglist {helptext {}} body} {
 # Should be called as the very first command in a rule that supports default option setting.
 # Prepends any options given with set-default-opts
 #
-# 
+#
 proc add-default-opts {&arglist} {
 	global tmake
 	set rule [lindex [info level -1] 0]
@@ -1855,7 +1884,7 @@ proc target {ruletarget args} {
 		return $ruletarget
 	} else {
 		set identical 1
-		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror finally phony target vars fatal slow nofork} {
+		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror finally phony target vars fatal slow nofork rootok} {
 			if {$info($i) ne $orig($i)} {
 				set identical 0
 				break
@@ -1896,6 +1925,7 @@ proc target {ruletarget args} {
 	incr orig(fatal) $info(fatal)
 	incr orig(slow) $info(slow)
 	incr orig(nofork) $info(nofork)
+	incr orig(rootok) $info(rootok)
 	append-with-space orig(onerror) $info(onerror) \n
 	append-with-space orig(finally) $info(finally) \n
 	# Only one of these will be non-blank
@@ -1978,7 +2008,7 @@ proc parse-rule-args {arglist} {
 proc parse-rule {target arglist} {
 	set info {
 		inputs {} depends {} do {} onerror {} finally {} msg {} vars {} dyndep {} add-do {} alias {}
-		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0 nofork 0
+		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0 nofork 0 rootok 0
 	}
 
 	# Note that we prefer build.spec over project.spec and rulebase.spec when
@@ -1997,7 +2027,7 @@ proc parse-rule {target arglist} {
 	# And check/post-process the options
 	foreach {opt optargs} $arginfo {
 		switch -exact -- $opt {
-			phony - nofail - add - chdir - nocache - fatal - slow - nofork {
+			phony - nofail - add - chdir - nocache - fatal - slow - nofork - rootok {
 				if {[llength $optargs]} {
 					parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
 				}
@@ -2126,7 +2156,7 @@ proc find-newest-time {list name} {
 
 # Both $targets and $depends are lists of files which must exist
 # If any file is $targets is older than any file in $depends, the
-# targets are out of date and 1 is returned. In this case the 
+# targets are out of date and 1 is returned. In this case the
 # variable named $depname is set to the name of the newest
 # file in $depends
 # Otherwise 0 is returned.
@@ -2889,6 +2919,15 @@ proc build {target {notifytarget {}}} {
 	}
 
 	if {$status eq "built" && [llength $t(do)]} {
+		if {!$t(rootok) && $tmake(isroot)} {
+			dputs b "Running command for $target as root"
+			dputs b $t(do)
+			build-fatal-error "Error: [make-source-location $ruletarget] Refusing to run command for $target as root"
+			set status failed
+		}
+	}
+
+	if {$status eq "built" && [llength $t(do)]} {
 		dputs g "[join $tmake(current) { --> }] ($reason)" 0
 
 		set tmake(sync) 1
@@ -2931,7 +2970,9 @@ proc build {target {notifytarget {}}} {
 			}
 			if {[llength $dirlist]} {
 				dputs m "mkdir [join $dirlist]"
-				file mkdir {*}$dirlist
+				if {$t(rootok) || !$tmake(isroot)} {
+					file mkdir {*}$dirlist
+				}
 			}
 
 			enter-new-dir $tmake(chdir)
@@ -2963,7 +3004,11 @@ proc build {target {notifytarget {}}} {
 				# child process or sync, so run the jobs
 				foreach do $t(do) {
 					set oldenv [env-save]
-					lassign [run-do $vardict $do] rc msg opts
+					if {!$t(rootok) && $tmake(isroot)} {
+						build-fatal-error "Error: [make-source-location $ruletarget] Refusing to run command for $target as root"
+					} else {
+						lassign [run-do $vardict $do] rc msg opts
+					}
 					env-restore $oldenv
 					if {$tmake(jobpid) > 0} {
 						# run has forked and this is the parent

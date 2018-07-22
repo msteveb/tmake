@@ -64,6 +64,21 @@ Installation
 It is useful to be able to install different classes of things.
 install-docs, install-bin, install-dev, install-runtime, etc.
 
+Installation as root
+--------------------
+A common sequence is:
+
+./configure
+make
+sudo make install
+
+One of the gotchas here is that if the 'make install' step performs any build operations, those
+files will be created as root.
+
+One file that will be updated as a result of make install is .makecache, but because that is
+an existing file that is rewritten, it won't change owner. Should we add something to prevent
+non-install rules running as root?
+
 Propagating Defines
 -------------------
 While all defined variables propagate from project.spec to subdirs,

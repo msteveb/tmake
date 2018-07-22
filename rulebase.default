@@ -431,7 +431,7 @@ proc install-shared-lib {args} {
 	if {$striplib} {
 		lappend installopts "--strip=[get-define STRIP] [get-define STRIPLIBFLAGS]"
 	}
-	target $installed -nocache -inputs $source -msg {note Install $libname} -do {
+	target $installed -nocache -rootok -inputs $source -msg {note Install $libname} -do {
 		file delete {*}$target
 		install-file {*}$installopts [lindex $target 0] $inputs
 		make-shlib-symlinks {*}$target
@@ -770,15 +770,17 @@ proc clean-files {files {msg {}}} {
 	}
 }
 
-# @clean-target type msg
+# @clean-target type msg ?args...?
 #
 # Create the phony clean target of the given type and message.
 # The created target invokes clean-files
 #
 # Additional files can be added to the target with 'add-clean'
 #
-proc clean-target {type msg} {
-	target $type -phony -nofail -vars cleanfiles {} -msg "note $msg [local-dir]" -do {
+# If 'args' are specified, these are added to the target. e.g. -rootok
+#
+proc clean-target {type msg args} {
+	target $type -phony -nofail -vars cleanfiles {} -msg "note $msg [local-dir]" {*}$args -do {
 		clean-files $cleanfiles
 	}
 }
@@ -839,7 +841,7 @@ proc find-project-bin {bin args} {
 			set curdir [file-build [local-dir]]
 			set builddir [publish-path bin]
 			# It can't hurt to create the $PUBLISH/bin here and it makes relative-path always work
-			file mkdir $builddir
+			file-mkdir -rootskip $builddir
 			set reldir [relative-path $builddir $curdir]
 
 			set result [list $bin $reldir/$basename]
@@ -1680,11 +1682,11 @@ Note that the source can be an absolute path to install an external file.
 
 	# Note that we pass variable $dest purely so we can show a nice path in the message
 	if {[string match /* $src]} {
-		target $destfile -nocache -vars dest $dest src $src installopts $installopts -msg {note Install $dest} -do {
+		target $destfile -nocache -rootok -vars dest $dest src $src installopts $installopts -msg {note Install $dest} -do {
 			install-file {*}$installopts $target $src
 		}
 	} else {
-		target $destfile -nocache -vars dest $dest installopts $installopts -inputs $src -msg {note Install $dest} -do {
+		target $destfile -nocache -rootok -vars dest $dest installopts $installopts -inputs $src -msg {note Install $dest} -do {
 			install-file {*}$installopts $target $inputs
 		}
 	}
@@ -2119,7 +2121,7 @@ Be sure to add something similar to the following to your auto.def file:
 
 clean-target clean Clean
 clean-target distclean DistClean
-clean-target uninstall Uninstall
+clean-target uninstall Uninstall -rootok
 
 Phony all
 Phony libs
@@ -2149,7 +2151,8 @@ Phony clean-orphans -do {
 # the .trash directory. This directory is only removed via the
 # 'clean', 'distclean' or 'clean-orphans' targets.
 proc delete-orphan-files {args} {
-	file mkdir .trash
+	# XXX can't create .trash if it doesn't exist and we are root 
+	file-mkdir -rooterr .trash
 	foreach file $args {
 		if {[file exists $file]} {
 			set trashfile .trash/[string map {/ _} $file]

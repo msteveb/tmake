@@ -60,6 +60,7 @@ TODO Items
 - Address known issues below, if possible
 - Do we need a -vars variant which completely replaces the var?
 - Lots of windows support
+- Do we need tmake --rootok to support the ability to run a build as root?
 
 High Level vs Low Level Rules
 -----------------------------
@@ -111,6 +112,11 @@ Note that many keys are simple flags and do not expect any values.
 -nofail
 	Failure of the '-do' commands for the rule is ignored.
 
+-rootok
+	Normally, the '-do' commands for a rule will refuse to run if being run as root.
+	This option disables the check for this rule. See the section below on installation
+	as root for the rationale for this option.
+
 -onerror command
 	Tcl script to run if the command fails. Allows for cleanup, e.g. of
 	temporary files.
@@ -137,7 +143,7 @@ Note that many keys are simple flags and do not expect any values.
 
 	Note that if a name is specified with -var multiple times (possibly in multiple rules), the values accumulate
 	(with a space separator). Consider the rule created by:
-	
+
 	  Objects auth.app.c
 
 		authapp/auth.app.o: authapp/auth.app.c
@@ -361,7 +367,7 @@ And now change the name of the program.
 
 	Executable newprog a.c
 
-$ tmake       
+$ tmake
 Link newprog
 Built 1 target(s) in 0.04 seconds
 
@@ -552,6 +558,7 @@ return -code 20
 Creating Installation Trees
 ---------------------------
 The idea of Install and 'make install' where a target tree/filesystem is created.
+Also discuss -rootok here.
 
 Out-of-tree Builds
 ------------------
@@ -702,7 +709,7 @@ which can set a specific configuration. It is now possible to set
 the configuration and rebuild with the command line:
 
     $ tmake default all
-	
+
 It might be desirable for the single action to both update the configuration
 and rebuild. One way to do this may be with a recursive invocation of tmake:
 
@@ -863,6 +870,9 @@ fossil
 - A number of HostExecutable generators are used
 - Most of these could be easily replaced with Tcl commands or scripts
 
+nethack4
+~~~~~~~~
+
 Differences with make
 ---------------------
 - Differentiates between rule 'inputs' and 'dependencies'
@@ -872,7 +882,6 @@ Differences with make
 - The 'run' built-in runs external commands
 - Commands used to build a target a cached so that if commands change, rules are re-run
 - Automatic directory creation
-
 
 Future Plans
 ------------

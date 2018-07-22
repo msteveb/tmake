@@ -419,6 +419,17 @@ proc get-num-cpus {} {
 	return $numcpus
 }
 
+# Returns 1 if the current user is root
+# On platforms with no concept of root, always returns 0
+proc is-uid-root {} {
+	if {[exists -command os.getids]} {
+		if {[dict get [os.getids] uid] == 0} {
+			return 1
+		}
+	}
+	return 0
+}
+
 proc init-compat {} {
 	# Do we have the signal command?
 	if {![exists -command signal]} {
