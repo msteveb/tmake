@@ -1058,7 +1058,7 @@ Creates a shared library from the given sources. For each source, the appropriat
 to generate the object file, and these files are linked (along with any libraries) to create the shared library.
 
 Imported variables: CCLD (from Linker), PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
-Used variables: SH_LDFLAGS, LDFLAGS, SH_SOEXT, SH_SOEXTVER, SH_SOPREFIX
+Used variables: LD_FLAGS, LDFLAGS, SH_LDFLAGS, SH_SOEXT, SH_SOEXTVER, SH_SOPREFIX
 
 The following options are supported:
   --publish           For compatibility. Note that shared libraries are always published. (see PublishLib)
@@ -1137,10 +1137,10 @@ The following options are supported:
 	# XXX: Here we use $LDFLAGS to capture any user-specified link flags (.e.g. -mbig-endian).
 	#      Assume that these are required both for shared libs and for executables.
 	#      Any shared-library-only flags are in $SH_LDFLAGS.
-	#      Is LinkFlags/LD_FLAGS also required?
+	#      LinkFlags/LD_FLAGS are also used here (we assume they are appropriate)
 
 	target $locallibname -inputs {*}$objects -depends [get-define PROJDEPS] -msg {note SharedLib $targetname} -do {
-		run $CCLD $SH_LDFLAGS $LDFLAGS -o $target $setsoname {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
+		run $CCLD $LD_FLAGS $SH_LDFLAGS $LDFLAGS -o $target $setsoname {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
 	} -getvars CCLD PROJLIBS SYSLIBS -vars setsoname $setsoname
 	Clean $locallibname
 
