@@ -7,7 +7,7 @@
 # Initialiation
 # ==================================================================
 
-set tmake(version) {0.7.4 (4-Jul-2018)}
+set tmake(version) {0.7.5 (22-Jul-2018)}
 set tmake(cacheversion) 3
 
 # Turn on debugging as early as possible
@@ -2811,6 +2811,22 @@ proc build {target {notifytarget {}}} {
 		}
 	}
 
+	# This is done now so that (e.g.) vardicts(inputs) is consistent between the build commands
+	# check and the build step
+	if {$t(chdir)} {
+		# Note that -chdir uses the *first* target to determine the directory
+		set tmake(chdir) [file-normalize [file-build [file dirname [lindex $ruletarget 0]]]]
+		# And we want $inputs, $depends and $target to refer to filenames relative
+		# to tmake(chdir), so update these variables to take the chdir into account
+		foreach var {inputs depends target} {
+			set vardict($var) [lmap p $vardict($var) {
+				relative-path [file-join $tmake(topsrcdir) $p] $tmake(chdir)
+			}]
+		}
+	} else {
+		set tmake(chdir) $tmake(topsrcdir)
+	}
+
 	# 4. Compare previous '-do' commands with current commands
 	if {$status eq "uptodate" && [llength $t(do)]} {
 		if {![dict exists $tmakecache(cmd) $ruletarget]} {
@@ -2865,13 +2881,6 @@ proc build {target {notifytarget {}}} {
 		dputs b "Rebuilding $target because of --force"
 		lappend reason force
 		set status built
-	}
-
-	if {$t(chdir)} {
-		# Note that -chdir uses the *first* target to determine the directory
-		set tmake(chdir) [file-normalize [file-build [file dirname [lindex $ruletarget 0]]]]
-	} else {
-		set tmake(chdir) $tmake(topsrcdir)
 	}
 
 	if {$status eq "built" && [llength $t(do)]} {
