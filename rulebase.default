@@ -187,6 +187,8 @@ proc is-duplicate-obj-rule {obj src vars} {
 #
 # The appropriate ObjectRule.<ext> is invoked from Object
 # (and hence Objects, Executable and Lib) based on the extension.
+#
+# Note that 'object' and 'source' are fully qualified names
 
 rule ObjectRule.c {obj src} {
 ObjectRule.c object source
@@ -246,7 +248,7 @@ Generates an object file from a lexer source file
 	target $targets -inputs $src -msg {note Lex $targetname} -getvars LEX LFLAGS -do {
 		run $LEX $LFLAGS --outfile=[lindex $target 0] --header-file=[lindex $target 1] $inputs
 	}
-	Clean $targets
+	add-clean [make-local clean] $targets
 
 	# And create the object through Object
 	Object [make-unlocal $base.lex.o] [make-unlocal $base.lex.c]
@@ -264,7 +266,7 @@ Generates an object file from a yacc source file
 	target $targets -inputs $src -msg {note Yacc $targetname} -getvars YACC YFLAGS -do {
 		run $YACC $YFLAGS --output=[lindex $target 0] --defines=[lindex $target 1] $inputs
 	}
-	Clean $targets
+	add-clean [make-local clean] $targets
 
 	# And create the object through Object
 	Object [make-unlocal $base.tab.o] [make-unlocal $base.tab.c]
