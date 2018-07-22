@@ -37,16 +37,6 @@ There is no easy way to clean those files
 
 We can now do Clean/DistClean --source
 
-** make clean/distclean should not require configure to be run
-   - currently this is an ugly hack to check for known cleaning targets: clean, distclean, clean-orphans
-** make distclean should remove stub Makefiles (or else tmake --clean should do this)
-   - These should become orphan targets
-* Should have SetDefaultTarget and it should default to 'all'
-
-* Building in a subdir does not build targets in subdirs of that subdir.
-  e.g. subdir/clean does not invoke subdir/unit/clean
-  maybe this can be done by depending subdir/clean on subdir/unit/clean instead of clean on subdir/unit/clean
-
 Integrating foreign projects
 ----------------------------
 autotools-based, make-based
