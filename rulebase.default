@@ -1905,7 +1905,11 @@ Note: HostExecutable and HostLibs are stopgaps until separate build contexts are
 		header-scan-regexp-recursive $local "" $CHDRPATTERN
 	} {*}[target-alias $target $targetexe]
 
-	PublishBin $target
+	set desttargetexe [file-join [publish-dir bin] $targetexe]
+	hard-link $desttargetexe $localtargetexe -vars dest bin/$target -msg {note Publish $targetname} -alias <bin>[file tail $target]
+	target $desttargetexe -add -do {
+		chmodx-file $target
+	}
 	Clean $targetexe
 
 	return $localtarget
