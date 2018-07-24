@@ -1695,7 +1695,8 @@ Note that the source can be an absolute path to install an external file.
 
 	target install -depends $destfile
 	# Should $src be built by default?
-	if {[get-define INSTALLDEPTARGET] ne ""} {
+	set srcdep [get-define INSTALLDEPTARGET]
+	if {$srcdep ne ""} {
 		Depends $srcdep $src
 	}
 
