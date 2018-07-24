@@ -311,7 +311,6 @@ proc rulebase-prolog {} {
 
 proc rulebase-epilog {} {
 	show-this-rule [local-dir]
-	global tmake
 
 	# Does subdir/all have any dependencies? If not, make it depend on subdir/libs (if that rule exists)
 	set t [get-target-rule [make-local all]]
@@ -1020,9 +1019,6 @@ ArchiveLib ?--publish? ?--install=<dir>? basename sources...
 Creates an archive library from the given sources. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are combined with $AR and $RANLIB to create the archive library.
 
-		run $AR $ARFLAGS $target {*}[expand-objects $inputs]
-		run $RANLIB $target
-
 Used variables: AR, ARFLAGS, RANLIB
 
 The following options are supported:
@@ -1512,7 +1508,7 @@ PublishIncludes ?--keepdir? name ...
 
 Shorthand for:
 
-	Publish ?--keepdir? include name ...
+  Publish ?--keepdir? include name ...
 } {
 	getopt {--keepdir args} args
 
@@ -1652,9 +1648,9 @@ InstallFile ?--strip|--striplib? ?--bin? dest source
 Installs the given source file to the destination (file) relative to $DESTDIR
 The following options are supported:
 
-	--bin      - make the target executable
-	--strip    - strips the target with $STRIP $STRIPFLAGS
-	--striplib - strips the target with $STRIP $STRIPLIBFLAGS
+  --bin      - make the target executable
+  --strip    - strips the target with $STRIP $STRIPFLAGS
+  --striplib - strips the target with $STRIP $STRIPLIBFLAGS
 
 Adds the rule to the global 'install' target and adds the file the list of files
 to be uninstalled with 'uninstall'
@@ -1663,7 +1659,7 @@ Note that the source can be an absolute path to install an external file.
 } {
 	show-this-rule
 
-	getopt {--strip --striplib --bin dest src} args
+	getopt {--strip --striplib --bin --build dest src} args
 
 	#puts "InstallFile $dest $src"
 
@@ -1795,7 +1791,7 @@ The arguments are as follows:
   target     The target to generator. May be a list of one or more targets. Available as $target
   generator  The generator program or script. May be a local built target, a published built target
              (in which case the <bin> prefix is used), empty for none, or an external command (if none of the above).
-			 Unless empty, this is available as $script
+             Unless empty, this is available as $script
   inputs     Local files that are inputs to the generator. Available as $inputs
   rules      A -do script that generates the target
   target-args  Additional arguments to 'target'
@@ -2061,7 +2057,7 @@ Additional 'target' arguments may be appended.
 Typical usage for autoconf is:
 
   Configure --output=config.out --logfile=config.log include/config.h {} {
-  	run $configure >config.out
+    run $configure >config.out
   }
 } {
 	getopt {--output: --logfile: --configure: targets inputs rules args} args

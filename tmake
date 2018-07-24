@@ -1524,6 +1524,10 @@ proc show-matching-commands {pattern} {
 	}
 	foreach cmd [lsort $cmds] {
 		lassign $commands($cmd) loc helptext
+		if {[string match *\t* $helptext]} {
+			set helptext [string map [list \t <tab>] $helptext]
+			pputs colnote "Warning: help text for rule $cmd contains tabs"
+		}
 		set otherlines [lassign [split [string trim $helptext] \n] firstline]
 		set otherlines [string trim [join $otherlines \n]]
 		regexp {^([^ ]*) +(.*)$} $firstline -> cmdname cmdargs
