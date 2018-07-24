@@ -150,6 +150,12 @@ The following per-directory phony targets are created:
 
 Note that by default, Lib is an alias for ArchiveLib. This can be changed with:
   alias Lib SharedLib
+
+Normally 'install' targets are built on-demand, but the following can be set
+to build the install dependencies as part of the 'all' target in order to avoid
+build during install when installing as root.
+
+  define INSTALLDEPTARGET all
 }
 
 # ==================================================================
@@ -1692,6 +1698,10 @@ Note that the source can be an absolute path to install an external file.
 	}
 
 	target install -depends $destfile
+	# Should $src be built by default?
+	if {[get-define INSTALLDEPTARGET] ne ""} {
+		Depends $srcdep $src
+	}
 
 	# This file also needs to be uninstalled
 	add-clean uninstall $destfile
