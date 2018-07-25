@@ -1195,7 +1195,7 @@ and these files are linked (along with any libraries) to create the loadable obj
 
 Imported variables: CCLD (from Linker), SHOBJ_LDFLAGS (must be set appropriately),
                     PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
-Used variables: LDFLAGS, SHOBJ_CFLAGS (must be set appropriately)
+Used variables: LD_FLAGS, LDFLAGS, SHOBJ_CFLAGS (must be set appropriately)
 
 Note that sources are marked to be built with SHOBJ_CFLAGS via ObjectCFlags.
 
@@ -1219,7 +1219,7 @@ The following options are supported:
 	set localtarget [make-local $target]
 
 	target $localtarget -inputs {*}[Objects $srcs] -depends [get-define PROJDEPS] -msg {note SharedObject $targetname} -do {
-		run $CCLD $SHOBJ_LDFLAGS -o $target {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
+		run $CCLD $LD_FLAGS $SHOBJ_LDFLAGS -o $target {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
 	} -getvars CCLD PROJLIBS SYSLIBS
 	Clean $target
 	Phony all $localtarget
