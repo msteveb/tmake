@@ -1134,7 +1134,12 @@ The following options are supported:
 			set soversion $default_soversion
 		}
 		set soname lib$basename[format [get-define SH_SOEXTVER] $soversion]
-		set setsoname [get-define SH_SOPREFIX]$soname
+		if {[info exists install] && [get-define SH_SOFULLPATH] ne ""} {
+			set fullsoname [file-join $install $soname]
+		} else {
+			set fullsoname $soname
+		}
+		set setsoname [get-define SH_SOPREFIX]$fullsoname
 	}
 
 	define? CCLD [get-define CC]
@@ -1181,6 +1186,7 @@ The following options are supported:
 
 		install-shared-lib {*}$opts $install $names $locallibname
 	}
+	return $libname
 }
 
 # If desired, this can be aliased to SharedLib in project.spec
