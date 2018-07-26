@@ -872,6 +872,9 @@ fossil
 
 nethack4
 ~~~~~~~~
+- Avoiding 'sudo tmake install' creating build files as root
+- There were some recursive dependencies that required subset libraries to be created
+- date.h was being recreated every time
 
 Differences with make
 ---------------------
