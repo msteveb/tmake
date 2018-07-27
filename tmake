@@ -62,10 +62,21 @@ set tmake(usehashes) 0
 set tmake(cachecleanup) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
-set tmake(emptycache) {file {} cmd {} deps {} target {} headerscan {} warnings {} exec {} version 0 writecache 0 srchash {} dephash {} usehashes 0}
+set tmake(emptycache) {
+	file {} cmd {} deps {} target {} headerscan {} warnings {}
+	exec {} version 0 writecache 0 srchash {} dephash {} usehashes 0
+}
+
 set tmake(commands-overview) {}
 set tmake(commands) {}
 set tmake(cli-options) {}
+# Template for a target. flags have values of 0, while nonflags have {}
+set tmake(emptytarget) {
+	alias {} chdir 0 depends {} do {} dyndep {} fatal 0 finally {}
+	getvars {} hash 0 inputs {} msg {} nocache 0 nofail 0
+	nofork 0 onerror {} phony 0 rootok 0 slow 0 vars {}
+}
+
 # The known clean targets
 set tmake(clean-targets) {clean distclean clean-orphans}
 
@@ -1461,16 +1472,18 @@ proc show-rule {target} {
 		puts [pad "-- $ruletarget " 60 -]--
 		foreach n [lsort [dict keys $t]] {
 			set v $t($n)
+			set type [target-option-type $n]
+			if {$type eq "flag"} {
+				if {$v} {
+					lappend flags $n
+				}
+				continue
+			}
 			switch -- $n {
 				do - depends - inputs - building - msg - target {}
 				source {
 					if {$v ne "unknown"} {
 						puts @[join $v {, }]
-					}
-				}
-				phony - nofail - chdir - nocache - fatal - slow - nofork - rootok {
-					if {$v} {
-						lappend flags $n
 					}
 				}
 				result {
@@ -1939,11 +1952,23 @@ proc add-deferred-action {action} {
 	lappend tmake(deferred) $action
 }
 
+# Returns flag, string or none
+proc target-option-type {opt} {
+	if {[dict exists $::tmake(emptytarget) $opt]} {
+		if {[dict get $::tmake(emptytarget) $opt] eq "0"} {
+			return flag
+		}
+		return string
+	}
+	return none
+}
+
 # Create a target dependency
 #
 # Parses the arguments and adds them to the rule base
 #
 proc target {ruletarget args} {
+	global tmake
 	# If the rule aready exists, we are updating
 	if {[is-rule? $ruletarget]} {
 		# Use take-rule here for efficiency
@@ -1972,7 +1997,8 @@ proc target {ruletarget args} {
 		return $ruletarget
 	} else {
 		set identical 1
-		foreach i {chdir depends do dyndep inputs local msg nocache nofail onerror finally phony target vars fatal slow nofork rootok} {
+		foreach i [dict keys $tmake(emptytarget)] {
+			# XXX: Are there some fields we should not compare?
 			if {$info($i) ne $orig($i)} {
 				set identical 0
 				break
@@ -2006,14 +2032,11 @@ proc target {ruletarget args} {
 	}
 	lappend orig(depends) {*}$info(depends)
 	lappend orig(inputs) {*}$info(inputs)
-	incr orig(phony) $info(phony)
-	incr orig(nofail) $info(nofail)
-	incr orig(chdir) $info(chdir)
-	incr orig(nocache) $info(nocache)
-	incr orig(fatal) $info(fatal)
-	incr orig(slow) $info(slow)
-	incr orig(nofork) $info(nofork)
-	incr orig(rootok) $info(rootok)
+	foreach i [dict keys $tmake(emptytarget)] {
+		if {[target-option-type $i] eq "flag"} {
+			incr orig($i) $info($i)
+		}
+	}
 	append-with-space orig(onerror) $info(onerror) \n
 	append-with-space orig(finally) $info(finally) \n
 	# Only one of these will be non-blank
@@ -2094,10 +2117,8 @@ proc parse-rule-args {arglist} {
 # Returns a dictionary (list) representing the parsed target rule
 #
 proc parse-rule {target arglist} {
-	set info {
-		inputs {} depends {} do {} onerror {} finally {} msg {} vars {} dyndep {} add-do {} alias {}
-		add 0 nofail 0 phony 0 chdir 0 nocache 0 fatal 0 slow 0 nofork 0 rootok 0
-	}
+	global tmake
+	set info $tmake(emptytarget)
 
 	# Note that we prefer build.spec over project.spec and rulebase.spec when
 	# finding the source of a rule
@@ -2113,14 +2134,26 @@ proc parse-rule {target arglist} {
 	set arginfo [parse-rule-args $arglist]
 
 	# And check/post-process the options
+	set add 0
 	foreach {opt optargs} $arginfo {
-		switch -exact -- $opt {
-			phony - nofail - add - chdir - nocache - fatal - slow - nofork - rootok {
-				if {[llength $optargs]} {
-					parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
-				}
-				set info($opt) 1
+		# Special -add option
+		if {$opt eq "add"} {
+			incr add
+			continue
+		}
+		set type [target-option-type $opt]
+
+		if {$type eq "none"} {
+			parse-error "Rule for $target has unknown option: -$opt"
+		}
+		if {$type eq "flag"} {
+			if {[llength $optargs]} {
+				parse-error "Rule for $target has non-option parameters after -$opt: $optargs"
 			}
+			set info($opt) 1
+			continue
+		}
+		switch -exact -- $opt {
 			inputs - depends {
 				set info($opt) [join $optargs]
 			}
@@ -2153,21 +2186,19 @@ proc parse-rule {target arglist} {
 					lappend info(vars) $v [get-define $v]
 				}
 			}
-			default {
-				parse-error "Rule for $target has unknown option: -$opt"
-			}
 		}
 	}
 
-	if {$info(add)} {
+	if {$add} {
 		if {![llength $info(do)]} {
 			parse-error "Rule for $target has '-add' but no '-do'"
 		}
 		# Transfer -do to add-do
 		set info(add-do) $info(do)
 		set info(do) {}
+	} else {
+		set info(add-do) {}
 	}
-	unset info(add)
 
 	if {[llength $info(do)] == 0 && [llength $info(inputs)]} {
 		parse-error "Rule for $target has '-inputs' but no '-do'"
@@ -2269,10 +2300,14 @@ proc check-mtime-needbuild {targets depends &reason} {
 # ------------------------------------------------------------------
 # Hash-based dependency checking
 # ------------------------------------------------------------------
-proc calc-file-hash {file} {
+proc calc-file-hash {file forcehash} {
 	if {[is-target? $file]} {
 		# If it's a target, we only need real mtime
-		return [file-real-mtime $file]
+		if {!$forcehash} {
+			return [file-real-mtime $file]
+		}
+		# Unless $forcehash is set
+		set file [file-build $file]
 	}
 
 	# Otherwise it is source, so use the source hash (possibly from cache)
@@ -2280,22 +2315,22 @@ proc calc-file-hash {file} {
 
 }
 
-proc calc-target-hash {depends} {
+proc calc-target-hash {depends forcehash} {
 	set calchashlist {}
 	foreach dep [lsort $depends] {
-		lappend calchashlist $dep [calc-file-hash $dep]
+		lappend calchashlist $dep [calc-file-hash $dep $forcehash]
 	}
 	return $calchashlist
 }
 
-proc check-hash-needbuild {ruletarget depends &reason} {
+proc check-hash-needbuild {ruletarget depends forcehash &reason} {
 	global tmake tmakecache
 	if {![dict exists $tmakecache dephash $ruletarget]} {
 		set savedhash {}
 	} else {
 		set savedhash [dict get $tmakecache dephash $ruletarget]
 	}
-	set calchash [calc-target-hash $depends]
+	set calchash [calc-target-hash $depends $forcehash]
 	if {$calchash eq $savedhash} {
 		dputs n "hash match for $ruletarget, not building"
 		return 0
@@ -2365,11 +2400,11 @@ proc get-source-id {file} {
 # file in $depends
 # Otherwise 0 is returned.
 #
-proc needbuild? {targets depends &reason} {
+proc needbuild? {targets depends forcehash &reason} {
 	global tmake
 
 	if {$tmake(usehashes)} {
-		check-hash-needbuild $targets $depends reason
+		check-hash-needbuild $targets $depends $forcehash reason
 	} else {
 		check-mtime-needbuild $targets $depends reason
 	}
@@ -3031,7 +3066,7 @@ proc build {target {notifytarget {}}} {
 	if {$status eq "uptodate" && ([llength $depends] || $tmake(usehashes))} {
 		# 3.  Target exists but no dependencies were built so check time/hash dependencies
 		#     Note that we can't do this mtime check with no dependencies, but we can do a hash check
-		if {[needbuild? $ruletarget $depends reason]} {
+		if {[needbuild? $ruletarget $depends $t(hash) reason]} {
 			set status built
 		}
 	} elseif {$tmake(usehashes) && !$t(phony) && $status in {built uptodate}} {
@@ -3039,7 +3074,7 @@ proc build {target {notifytarget {}}} {
 		# checking dependencies, it won't have it's hash updated in the cache.
 		# So do it now. Could wait until it has succeeded, but that could be
 		# some time away if the job is run in the background
-		set calchash [calc-target-hash $depends]
+		set calchash [calc-target-hash $depends $t(hash)]
 		dputs h "updating hash for $ruletarget (status=$status): $calchash"
 		dict set tmakecache dephash $ruletarget $calchash
 		mark-cache-dirty "target hash updated"
