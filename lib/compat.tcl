@@ -461,3 +461,20 @@ proc init-compat {} {
 		}
 	}
 }
+
+# Returns 1 if md5sum hashing is available
+proc init-md5sum {} {
+	foreach cmd {md5sum md5} {
+		if {[catch [list exec $cmd /dev/null] result] == 0} {
+			lassign $result sum
+			if {$sum eq "d41d8cd98f00b204e9800998ecf8427e"} {
+				# OK. Create the md5sum proc
+				proc md5sum {filename} cmd {
+					lindex [exec $cmd $filename] 0
+				}
+				return 1
+			}
+		}
+	}
+	return 0
+}

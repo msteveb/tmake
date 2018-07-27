@@ -1,4 +1,5 @@
 # Initial project.spec created by 'autosetup --init=tmake'
+UseHashes on
 
 # vim:set syntax=tcl:
 define PUBLISH .publish
