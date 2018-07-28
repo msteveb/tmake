@@ -2299,13 +2299,13 @@ proc check-mtime-needbuild {targets depends &reason} {
 # ------------------------------------------------------------------
 # Hash-based dependency checking
 # ------------------------------------------------------------------
-proc calc-file-hash {file forcehash} {
+proc calc-file-hash {file} {
 	if {[is-target? $file]} {
-		# If it's a target, we only need real mtime
+		# If it's a target, we only need real mtime, unless it has -hash
+		set forcehash [dict get [get-target-rule $file] hash]
 		if {!$forcehash} {
 			return [file-real-mtime $file]
 		}
-		# Unless $forcehash is set
 		set file [file-build $file]
 	}
 
@@ -2314,22 +2314,22 @@ proc calc-file-hash {file forcehash} {
 
 }
 
-proc calc-target-hash {depends forcehash} {
+proc calc-target-hash {depends} {
 	set calchashlist {}
 	foreach dep [lsort $depends] {
-		lappend calchashlist $dep [calc-file-hash $dep $forcehash]
+		lappend calchashlist $dep [calc-file-hash $dep]
 	}
 	return $calchashlist
 }
 
-proc check-hash-needbuild {ruletarget depends forcehash &reason} {
+proc check-hash-needbuild {ruletarget depends &reason} {
 	global tmake tmakecache
 	if {![dict exists $tmakecache dephash $ruletarget]} {
 		set savedhash {}
 	} else {
 		set savedhash [dict get $tmakecache dephash $ruletarget]
 	}
-	set calchash [calc-target-hash $depends $forcehash]
+	set calchash [calc-target-hash $depends]
 	if {$calchash eq $savedhash} {
 		dputs n "hash match for $ruletarget, not building"
 		return 0
@@ -2399,11 +2399,11 @@ proc get-source-id {file} {
 # file in $depends
 # Otherwise 0 is returned.
 #
-proc needbuild? {targets depends forcehash &reason} {
+proc needbuild? {targets depends &reason} {
 	global tmake
 
 	if {$tmake(usehashes)} {
-		check-hash-needbuild $targets $depends $forcehash reason
+		check-hash-needbuild $targets $depends reason
 	} else {
 		check-mtime-needbuild $targets $depends reason
 	}
@@ -3065,7 +3065,7 @@ proc build {target {notifytarget {}}} {
 	if {$status eq "uptodate" && ([llength $depends] || $tmake(usehashes))} {
 		# 3.  Target exists but no dependencies were built so check time/hash dependencies
 		#     Note that we can't do this mtime check with no dependencies, but we can do a hash check
-		if {[needbuild? $ruletarget $depends $t(hash) reason]} {
+		if {[needbuild? $ruletarget $depends reason]} {
 			set status built
 		}
 	} elseif {$tmake(usehashes) && !$t(phony) && $status in {built uptodate}} {
@@ -3073,7 +3073,7 @@ proc build {target {notifytarget {}}} {
 		# checking dependencies, it won't have it's hash updated in the cache.
 		# So do it now. Could wait until it has succeeded, but that could be
 		# some time away if the job is run in the background
-		set calchash [calc-target-hash $depends $t(hash)]
+		set calchash [calc-target-hash $depends]
 		dputs h "updating hash for $ruletarget (status=$status): $calchash"
 		dict set tmakecache dephash $ruletarget $calchash
 		mark-cache-dirty "target hash updated"
