@@ -209,7 +209,7 @@ if {"link" in [file -commands]} {
 
 # @file-mtime filename
 #
-# Implements 'file mtime', or 'file mtimens' if supported.
+# Return modification time of the file, using the high-res timestamp if possble.
 #
 # @file-lmtime linkname
 #
@@ -217,8 +217,22 @@ if {"link" in [file -commands]} {
 #
 if {"mtimens" in [file -commands]} {
 	alias file-mtime file mtimens
+	proc show-mtime {mtime} {
+		set ms_str [format %03d $($mtime / 1000000 % 1000)]
+		set secs $($mtime / 1000000000)
+		return [clock format $secs -format "%H:%M:%S.$ms_str %d-%b-%Y"]
+	}
+	proc file-lmtime {filename} {
+		dict get [file-lstat $filename] mtimens
+	}
 } else {
 	alias file-mtime file mtime
+	proc show-mtime {mtime} {
+		return [clock format $secs -format "%H:%M:%S %d-%b-%Y"]
+	}
+	proc file-lmtime {filename} {
+		dict get [file-lstat $filename] mtime
+	}
 }
 
 # @file-lstat filename ?var?
@@ -454,7 +468,28 @@ proc is-uid-root {} {
 	return 0
 }
 
+# Returns 1 if md5sum hashing is available
+proc init-md5sum {} {
+	foreach cmd {md5sum md5} {
+		if {[catch [list exec $cmd /dev/null] result] == 0} {
+			lassign $result sum
+			if {$sum eq "d41d8cd98f00b204e9800998ecf8427e"} {
+				# OK. Create the md5sum proc
+				proc md5sum {filename} cmd {
+					if {![file exists $filename]} {
+						build-error "md5sum $filename does not exist"
+					}
+					lindex [exec $cmd $filename] 0
+				}
+				return 1
+			}
+		}
+	}
+	return 0
+}
+
 proc init-compat {} {
+
 	# Do we have the signal command?
 	if {![exists -command signal]} {
 		proc signal {args} {
@@ -484,24 +519,4 @@ proc init-compat {} {
 			signal $disp $sig
 		}
 	}
-}
-
-# Returns 1 if md5sum hashing is available
-proc init-md5sum {} {
-	foreach cmd {md5sum md5} {
-		if {[catch [list exec $cmd /dev/null] result] == 0} {
-			lassign $result sum
-			if {$sum eq "d41d8cd98f00b204e9800998ecf8427e"} {
-				# OK. Create the md5sum proc
-				proc md5sum {filename} cmd {
-					if {![file exists $filename]} {
-						build-error "md5sum $filename does not exist"
-					}
-					lindex [exec $cmd $filename] 0
-				}
-				return 1
-			}
-		}
-	}
-	return 0
 }

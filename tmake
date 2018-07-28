@@ -8,7 +8,7 @@
 # ==================================================================
 
 set tmake(version) {0.7.6 (27-Jul-2018)}
-set tmake(cacheversion) 3
+set tmake(cacheversion) 4
 
 # Turn on debugging as early as possible
 set tmake(debug) $("--debug" in $argv)
@@ -65,6 +65,7 @@ set tmake(addtargets) {}
 set tmake(emptycache) {
 	file {} cmd {} deps {} target {} headerscan {} warnings {}
 	exec {} version 0 writecache 0 srchash {} dephash {} usehashes 0
+	updatecount 0
 }
 
 set tmake(commands-overview) {}
@@ -330,6 +331,7 @@ proc make {argv} {
 	colalias colerror lred
 	colalias colnote cyan
 	colalias colrunwarn grey
+	colalias colstatus lyellow
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
@@ -739,6 +741,8 @@ proc write-cache {} {
 		}
 		set tmakecache(version) $tmake(cacheversion)
 		unset tmakecache(writecache)
+		incr tmakecache(updatecount)
+		file-mkdir -rootskip $tmake(topbuilddir)
 		lassign [time {
 			set f [open $tmake(topbuilddir)/.makecache w]
 			foreach i [dict keys $tmakecache] {
@@ -787,17 +791,6 @@ proc load-build-description {loadcache} {
 			# If disabled, discard any previously cached external command info
 			dict set tmakecache exec {}
 			mark-cache-dirty "external cmd cache discarded"
-		}
-		if {$tmakecache(usehashes) != $tmake(usehashes)} {
-			set tmakecache(usehashes) $tmake(usehashes)
-			if {$tmakecache(usehashes) && [dict size $tmakecache(dephash)] || [dict size $tmakecache(srchash)]} {
-				user-notice colnote "Hashing disabled, so discarding hashes from cache"
-				dict set tmakecache dephash {}
-				dict set tmakecache srchash {}
-				mark-cache-dirty "hash cache discarded"
-			} else {
-				mark-cache-dirty "hash setting updated"
-			}
 		}
 	}
 
@@ -1334,12 +1327,6 @@ proc tmake-exit {code {msg {}}} {
 		exit $code
 	}
 
-	if 0 {
-		if {$code != $tmake(exitcode)} {
-			puts "Got tmake-exit $code, but exitcode=$tmake(exitcode)"
-		}
-	}
-
 	wait-for-background-jobs
 	if {$msg ne ""} {
 		user-notice colerror $msg
@@ -1543,22 +1530,28 @@ proc show-cache {} {
 	source $tmake(topbuilddir)/.makecache
 
 	# Files
-	puts "File times (V=virtual mtime, M=mtime)"
+	pputs colstatus ".makecache updated $tmakecache(updatecount) times\n"
+	pputs colnote "File timestamp"
 	puts "-------------------------------------"
 
 	foreach i [lsort [dict keys $tmakecache(file)]] {
-		lassign [dict get $tmakecache(file) $i] vmtime mtime
-		set vmtimestr [clock format $vmtime -format "%H:%M:%S %d-%b-%Y"]
-		if {$mtime == $vmtime} {
-			set mtimestr "(same)"
-		} else {
-			set mtimestr [clock format $mtime -format "%H:%M:%S %d-%b-%Y"]
-		}
-		puts [format "%25s  V=%s  M=%s" $i $vmtimestr $mtimestr]
+		lassign [dict get $tmakecache(file) $i] mtime
+		set mtimestr [show-mtime $mtime]
+		puts [format "%35s  %s" $i $mtimestr]
 	}
 	puts ""
 
-	puts "Commands used to build targets and warnings"
+	if {[dict size $tmakecache(srchash)]} {
+		pputs colnote "Source Hash (mtime hash)"
+		puts "---------------------------------------------"
+		foreach i [lsort [dict keys $tmakecache(srchash)]] {
+			set hash [dict get $tmakecache(srchash) $i]
+			puts [format "%35s  %s" $i $hash]
+		}
+		puts ""
+	}
+
+	pputs colnote "Commands used to build targets and warnings"
 	puts "-------------------------------------------"
 	# Commands
 	foreach i [lsort [dict keys $tmakecache(cmd)]] {
@@ -2209,163 +2202,17 @@ proc parse-rule {target arglist} {
 # Dependency Engine
 # ==================================================================
 
-# ------------------------------------------------------------------
-# Time-based dependency checking
-# ------------------------------------------------------------------
-
-proc file-real-mtime {filename} {
-	if {[is-target? $filename]} {
-		set symlink [dict get [get-target-rule $filename] symlink]
-		return [file-target-mtime $filename $symlink]
-	}
-	file mtime $filename
-}
-
-proc file-virtual-mtime {filename} {
-	global tmakecache
-
-	set mtime [file-real-mtime $filename]
-	if {[dict exists $tmakecache(file) $filename]} {
-		lassign [dict get $tmakecache(file) $filename] vmtime omtime
-		# If the actual mtime is different from the saved mtime, we
-		# ignore the cached (virtual) mtime.
-		if {$omtime == $mtime} {
-			# The cache is up to date, so use the virtual mtime
-			set mtime $vmtime
-		}
-	}
-	return $mtime
-}
-
-proc find-oldest-time {list name} {
-	upvar $name oldestname
-	lassign $list oldestname
-	set oldesttime [file-virtual-mtime $oldestname]
-
-	if {[llength $list] > 1} {
-		foreach file $list {
-			set t [file-virtual-mtime $file]
-			if {$t < $oldesttime} {
-				set oldesttime $t
-				set oldestname $file
-			}
-		}
-	}
-	#puts "find-oldest-time: $oldestname $oldesttime ($list)"
-	return $oldesttime
-}
-
-proc find-newest-time {list name} {
-	upvar $name newestname
-	lassign $list newestname
-	set newesttime [file-real-mtime $newestname]
-
-	if {[llength $list] > 1} {
-		foreach file $list {
-			set t [file-real-mtime $file]
-			if {$t > $newesttime} {
-				set newesttime $t
-				set newestname $file
-			}
-		}
-	}
-	#puts "find-newest-time: $newestname $newesttime ($list)"
-	return $newesttime
-}
-
-# Both $targets and $depends are lists of files which must exist
-# If any file in $targets is older than any file in $depends, the
-# targets are out of date and 1 is returned. In this case, the reason
-# is appended to &reason.
-# Otherwise 0 is returned.
+# Returns the "hash" of the given file, that must exist.
 #
-proc check-mtime-needbuild {targets depends &reason} {
-	set depends_time [find-newest-time $depends newest_depends]
-	#puts "newest depends: [clock format $depends_time] $newest_depends"
-	set targets_time [find-oldest-time $targets oldest_target]
-	#puts "oldest targets: [clock format $targets_time] $oldest_target"
-	if {$targets_time < $depends_time} {
-		lappend reason older $newest_depends
-		dputs b "$oldest_target is older than $newest_depends, so forcing rebuild"
-		return 1
-	}
-	dputs-n "$targets is newer than $depends, so not forcing rebuild"
-	return 0
-}
-
-# ------------------------------------------------------------------
-# Hash-based dependency checking
-# ------------------------------------------------------------------
-proc calc-file-hash {file} {
-	if {[is-target? $file]} {
-		# If it's a target, we only need real mtime, unless it has -hash
-		set forcehash [dict get [get-target-rule $file] hash]
-		if {!$forcehash} {
-			return [file-real-mtime $file]
-		}
-		set file [file-build $file]
-	}
-
-	# Otherwise it is source, so use the source hash (possibly from cache)
-	return [get-source-id $file]
-
-}
-
-proc calc-target-hash {depends} {
-	set calchashlist {}
-	foreach dep [lsort $depends] {
-		lappend calchashlist $dep [calc-file-hash $dep]
-	}
-	return $calchashlist
-}
-
-proc check-hash-needbuild {ruletarget depends &reason} {
-	global tmake tmakecache
-	if {![dict exists $tmakecache dephash $ruletarget]} {
-		set savedhash {}
-	} else {
-		set savedhash [dict get $tmakecache dephash $ruletarget]
-	}
-	set calchash [calc-target-hash $depends]
-	if {$calchash eq $savedhash} {
-		dputs n "hash match for $ruletarget, not building"
-		return 0
-	}
-	if {$savedhash eq ""} {
-		dputs b "No hash for $ruletarget"
-		lappend reason no-hash
-	} else {
-		dputs b "hash for $ruletarget has changed, so forcing rebuild"
-		dputs h "old hash: $savedhash, new hash: $calchash"
-		# Give a meaninful reason
-		if {[debug-is-set g]} {
-			foreach {sfile shash} $savedhash {cfile chash} $calchash {
-				if {$sfile ne $cfile} {
-					lappend reason newdeps
-					break
-				} elseif {$shash ne $chash} {
-					lappend reason newhash $sfile
-					break
-				}
-			}
-		} else {
-			lappend reason hash-mismatch
-		}
-	}
-	# Save the newly calculated hash
-	dict set tmakecache dephash $ruletarget $calchash
-	mark-cache-dirty "target hash updated"
-	return 1
-}
-
-# Used by both hash and mtime comparison to find the "id"
-# of an existing source file.
+# If hashing is disabled, simply returns file-mtime
 #
-# If using hashes, the id of a source file is it's mtime
-# Otherwise it is it's hash.
+# If hashing is enabled, first checks file-mtime, and if
+# there is a srchash entry in the cache that matches, return the hash
+# from the cache. Otherwise calculate the hash, store it in the
+# cache and return it.
 #
-proc get-source-id {file} {
-	set mtime [file-real-mtime $file]
+proc get-file-hash {file} {
+	set mtime [file-mtime $file]
 	if {!$::tmake(usehashes)} {
 		return $mtime
 	}
@@ -2389,36 +2236,88 @@ proc get-source-id {file} {
 	return $hash
 }
 
-# Or 0 if the target doesn't exist
-proc file-target-mtime {target symlink} {
-	set mtime 0
-	catch {
-		set file [file-build [map-alias $target]]
-		if {$symlink} {
-			file-lstat $file stat
-		} else {
-			file stat $file stat
+# The file may be a source, target symlink, target with -hash set
+# or regular target
+# Calculates the file hash as follows:
+# source               - get-file-hash $file
+# target is symlink    - link:[readlink [file-build $file]]
+# target with -hash    - get-file-hash of [file-build $file]
+# target               - file-mtime of [file-build $file]
+#
+proc calc-file-hash {file} {
+	if {[is-target? $file]} {
+		set realfile [file-build [map-alias $file]]
+		if {[file-type $realfile] eq "link"} {
+			# symlinks aways hash to the link contents
+			return link:[file readlink $realfile]
 		}
-		set mtime $stat(mtime)
-	} msg
-	return $mtime
+		if {[dict get [get-target-rule $file] hash]} {
+			return [get-file-hash $realfile]
+		} else {
+			return [file-mtime $realfile]
+		}
+	}
+
+	# Otherwise it is source, so use the source hash (possibly from cache)
+	return [get-file-hash $file]
 }
 
-# Both $targets and $depends are lists of files which must exist
-# If any file in $targets is out of date with respect to any is older than any file in $depends, the
-# targets are out of date and 1 is returned. In this case the
-# variable named $depname is set to the name of the newest
-# file in $depends
-# Otherwise 0 is returned.
-#
-proc needbuild? {targets depends &reason} {
-	global tmake
-
-	if {$tmake(usehashes)} {
-		check-hash-needbuild $targets $depends reason
-	} else {
-		check-mtime-needbuild $targets $depends reason
+# Calculates the hash of each file in the list
+# (in sorted order) and returns the list
+proc calc-deplist-hash {list} {
+	set calchashlist {}
+	foreach dep [lsort $list] {
+		lappend calchashlist $dep [calc-file-hash $dep]
 	}
+	return $calchashlist
+}
+
+
+# Both $targets and $depends are lists of files which must exist
+# Calculate the hash of all files in $depends
+# If this matches the saved hash, 0 is returned.
+# Otherwise:
+# - save/update the calculated hash in dephash
+# - append the details of the mismatch to 'reason' 
+# - the ruletarget is out of date so 1 is returned.
+#
+proc needbuild? {ruletarget depends &reason} {
+	global tmake tmakecache
+	if {![dict exists $tmakecache dephash $ruletarget]} {
+		set savedhash {}
+	} else {
+		set savedhash [dict get $tmakecache dephash $ruletarget]
+	}
+	set calchash [calc-deplist-hash $depends]
+	if {$calchash eq $savedhash} {
+		dputs n "Deps for $ruletarget are unchanged, not building"
+		return 0
+	}
+	if {$savedhash eq ""} {
+		dputs b "No saved hash for $ruletarget"
+		lappend reason no-hash
+	} else {
+		dputs b "Deps for $ruletarget have changed, so rebuild"
+		dputs h "old hash: $savedhash, new hash: $calchash"
+		# Give a meaninful reason
+		if {[debug-is-set g]} {
+			foreach {sfile shash} $savedhash {cfile chash} $calchash {
+				if {$sfile ne $cfile} {
+					lappend reason newdeps
+					break
+				} elseif {$shash ne $chash} {
+					lappend reason changed $sfile
+					break
+				}
+			}
+		} else {
+			lappend reason changed
+		}
+	}
+	# Save the newly calculated hash
+	dict set tmakecache dephash $ruletarget $calchash
+	mark-cache-dirty "target hash updated"
+	return 1
 }
 
 proc locate-files {files} {
@@ -2593,17 +2492,34 @@ proc calc-dyndeps {vardict target} {
 	return $dyndeps
 }
 
+proc file-mtime-if-exists {file {symlink 0}} {
+	#puts -nonewline "file-mtime-if-exists $file $symlink => "
+	if {$symlink} {
+		if {[catch {file readlink $file}]} {
+			#puts "0 (not a symlink)"
+			return 0
+		}
+		#puts "[file-lmtime $file]"
+		return [file-lmtime $file]
+	}
+	if {[file exists $file]} {
+		#puts "[file-mtime $file]"
+		return [file-mtime $file]
+	}
+	#puts "0 (noexist)"
+	return 0
+}
+
 proc file-exists-all {list missingname} {
 	upvar $missingname missing
 	foreach f $list {
 		if {[is-target? $f]} {
 			set symlink [dict get [get-target-rule $f] symlink]
-			set mtime [file-target-mtime $f $symlink]
-			if {$mtime == 0} {
-				set missing $f
-				return 0
-			}
-		} elseif {![file exists [file-build $f]]} {
+			set mtime [file-mtime-if-exists [file-build $f] $symlink]
+		} else {
+			set mtime [file-mtime-if-exists $f]
+		}
+		if {$mtime == 0} {
 			set missing $f
 			return 0
 		}
@@ -2669,7 +2585,7 @@ proc wait-for-one-job {} {
 			set job [dict get $tmake(running) $pid]
 			dict unset tmake(running) $pid
 
-			lassign $job ruletarget notifytarget chdir outfile errfile
+			lassign $job ruletarget notifytarget started chdir outfile errfile
 			dputs j "Job $pid building $ruletarget has finished with $status\($code), needed by $notifytarget"
 			if {$status eq "CHILDSTATUS" && $code == 0} {
 				set rc 0
@@ -2816,9 +2732,8 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 
 	# Did the rule make the targets?
 	if {$rc == 0 && !$t(phony) && ![is-cleaning?]} {
-		set now [clock seconds]
 		foreach f $ruletarget {
-			set mtime [file-target-mtime $f $t(symlink)]
+			set mtime [file-mtime-if-exists [file-build $f] $t(symlink)]
 			if {$mtime == 0} {
 				# XXX: Should onerror run here if --quickstop is set?
 				# XXX: Should the cache still be updated?
@@ -2826,10 +2741,10 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 				# Use break to indicate that we have already output the message
 				set rc 3
 			} elseif {!$t(nocache)} {
-				# Record the time that this target was created
-				# soon this will be used exclusively to remove orphan targets
+				# Record the time that this target was created.
+				# This is used exclusively to remove orphan targets
+				#puts "Set cachetime of $f=[show-mtime $mtime]"
 				dict set tmakecache(file) $f $mtime
-				#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 				# Remember the rule which built this target
 				dict set tmakecache(target) $f $ruletarget
 			}
@@ -3089,12 +3004,12 @@ proc build {target {notifytarget {}}} {
 		if {[needbuild? $ruletarget $depends reason]} {
 			set status built
 		}
-	} elseif {$tmake(usehashes) && !$t(phony) && $status in {built uptodate}} {
+	} elseif {!$t(phony) && $status in {built uptodate}} {
 		# If a target is determined to be uptodate or built without
 		# checking dependencies, it won't have it's hash updated in the cache.
 		# So do it now. Could wait until it has succeeded, but that could be
 		# some time away if the job is run in the background
-		set calchash [calc-target-hash $depends]
+		set calchash [calc-deplist-hash $depends]
 		dputs h "updating hash for $ruletarget (status=$status): $calchash"
 		dict set tmakecache dephash $ruletarget $calchash
 		mark-cache-dirty "target hash updated"
@@ -3403,7 +3318,7 @@ proc header-scan-regexp {suffix regex filename} {
 	return $headers
 }
 
-# Returns a list of {type path-to-filename mtime}
+# Returns a list of {type path-to-filename}
 # where type is "target" or "source"
 #
 # If the $path/$filename is neither a target nor source, the empty list is returned
@@ -3418,11 +3333,7 @@ proc find-file-on-path {filename path} {
 		if {$status in {built uptodate}} {
 			# with tmake -n, the file may not have actually been built
 			set filepath [file-build $f]
-			if {[file exists $filepath]} {
-				set result [list target $f [file-mtime $filepath]]
-			} else {
-				set result [list target $f 0]
-			}
+			set result [list target $f]
 		} else {
 			dputs-D "failed to build $f"
 			if {$::tmake(quickstop)} {
@@ -3433,7 +3344,7 @@ proc find-file-on-path {filename path} {
 		}
 	} else {
 		if {[file exists $f]} {
-			set result [list source $f [file-real-mtime $f]]
+			set result [list source $f]
 		}
 	}
 	#puts "find-file-on-path $filename + $path ($f) => $result "
@@ -3513,7 +3424,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 
 	dputs-D "Scanning $filename for headers: incpaths=$incpaths"
 	# Can we get the result from the cache?
-	set stamp [list [get-source-id $filepath] $incpaths $suffix $regex]
+	set stamp [list [get-file-hash $filepath] $incpaths $suffix $regex]
 	if {[dict exists $tmakecache(headerscan) $filename]} {
 		lassign [dict get $tmakecache(headerscan) $filename] cache_stamp headers cachedresults
 		if {$cache_stamp eq $stamp} {
@@ -3526,21 +3437,6 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 				set typepath [find-file $cfile $incpaths]
 				if {$typepath ne $ctypepath} {
 					dputs-d "previously $cfile resolved to {$ctypepath}, but now resolves to {$typepath} -  forcing rescan"
-
-					# XXX: Previously we discarded any cached, orphan targets here, but
-					# that is not necessary since the normal orphan cleaning does it
-					if 0 {
-						foreach {ctype cpath cmtime} $ctypepath {
-							if {$ctype eq "target" && ![is-target? $cpath]} {
-								set orphanpath [file-build $cpath]
-								if {[file exists $orphanpath]} {
-									dputs-d "discarding orphan $cpath"
-									delete-orphan-files $orphanpath
-								}
-							}
-						}
-					}
-
 					set ok 0
 					break
 				}
@@ -3570,7 +3466,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 				set scanned($d) 1
 				set findfiles [find-file $d $incpaths]
 				set results($d) $findfiles
-				foreach {type deppath mtime} $findfiles {
+				foreach {type deppath} $findfiles {
 					set deps($deppath) 1
 					lappend newscan {*}[header-scan-regexp $suffix $regex $deppath]
 				}

@@ -124,6 +124,28 @@ Either as a define or a proc. e.g.
   -- build.spec --
   EnableAbc
 
+Inputs changing during long compiles
+------------------------------------
+Previously, when using time-based comparisons, tmake would only create a virtual
+timestamp for a target after the target was built. This suffered from a number of problems:
+
+* It assumes that [file mtime] can be compared directly against [clock seconds]
+
+* If source files change between when the 'do' started, and when it finished,
+  this information is lost.
+
+* This situation is complicated with high resolution timestamps as some tools write
+  files with 1-second resolution timestamps and thus built targets can have
+  timestamps before the inputs.
+
+Note that hash-based builds don't suffer from this problem as the hash is always
+compared against the previously stored hash. No ordering is required.
+Therefore the solution is to use the same approach for time-based builds and
+consider the mtime as a proxy hash of the source file. If the hash/mtime for any dependency
+changes from the previous build, the target is out of date and needs to be rebuilt.
+This simplifies the logic as the same algorithm is used in both time-based and
+hash-based builds, simply with a different "hash" calculation.
+
 tmake TODO
 ----------
 * Does it make sense to support "IncludePaths /abc" to add paths
