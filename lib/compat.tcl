@@ -470,6 +470,9 @@ proc init-md5sum {} {
 			if {$sum eq "d41d8cd98f00b204e9800998ecf8427e"} {
 				# OK. Create the md5sum proc
 				proc md5sum {filename} cmd {
+					if {![file exists $filename]} {
+						build-error "md5sum $filename does not exist"
+					}
 					lindex [exec $cmd $filename] 0
 				}
 				return 1
