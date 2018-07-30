@@ -211,10 +211,34 @@ if {"link" in [file -commands]} {
 #
 # Implements 'file mtime', or 'file mtimens' if supported.
 #
+# @file-lmtime linkname
+#
+# Return modification time of the symlink, using the high-res timestamp if possble.
+#
 if {"mtimens" in [file -commands]} {
 	alias file-mtime file mtimens
 } else {
 	alias file-mtime file mtime
+}
+
+# @file-lstat filename ?var?
+#
+# Implements 'file lstat', or 'file stat' if lstat isn't supported.
+#
+if {"lstat" in [file -commands]} {
+	alias file-lstat file lstat
+} else {
+	alias file-lstat file stat
+}
+
+# Like file type but returns "none" if the file doesn't exist
+# rather than throwing an error
+proc file-type {file} {
+	set type none
+	catch {
+		set type [file type $file]
+	}
+	return $type
 }
 
 # Implements 'wait' in terms of the older 'os.wait'

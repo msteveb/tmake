@@ -2167,7 +2167,7 @@ proc delete-orphan-files {args} {
 	# XXX can't create .trash if it doesn't exist and we are root 
 	file-mkdir -rooterr .trash
 	foreach file $args {
-		if {[file exists $file]} {
+		if {[file-type $file] in {file link}} {
 			set trashfile .trash/[string map {/ _} $file]
 			# Can't simple use file rename -force in case the files are hard links
 			file delete $trashfile

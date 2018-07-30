@@ -115,6 +115,10 @@ Note that many keys are simple flags and do not expect any values.
 	of date will be made using a hash rather than a timestamp.
 	This is useful if the build command updates the file with unchanged contents.
 
+-symlink
+    Should be set if the target is a symlink, so that the existence and timestamp
+	of the target is used rather than what the target points to.
+
 -phony
 	Marks the target as phony. A phony target is considered to always need building
 	and any file with the same name is ignored. Typical phony targets are: all, clean, test, install
@@ -397,7 +401,7 @@ Consider:
 
 Build with -v so we can see the actual commands:
 
-$ tmake -v 
+$ tmake -v
 cc -Ipublish/include -I.  -c a.c -o a.o
 cc   -o newprog a.o
 Built 2 target(s) in 0.41 seconds
@@ -551,6 +555,19 @@ context instead of just objdir/
 
 How does Load work? For example, $CC_FOR_BUILD may be loaded only in the default
 context. Do we need to use ${#default#CC_FOR_BUILD} ?
+
+symlink targets
+---------------
+tmake normally uses stat() to validate that the targets of rules were created,
+and to determine the modification time of those targets. However if a target
+is a symlink, lstat() should be used instead. This is especially notable
+if the target is a dangling symlink. The -symlink flag indicates to tmake that the
+target is a symlink.
+
+Note that if a rule has multiple targets, lstat() is used on all targets.
+This will normally be ok, even if only one of the targets is a symlink as lstat()
+will return the same as stat() in this case.
+(Is there a case to always use lstat() on targets?)
 
 Integration with autosetup
 --------------------------
@@ -958,13 +975,6 @@ There a few extra things to consider.
 
 Hashes are compued by running 'md5sum' (or md5, for MacOS) because it is a fast hash
 with a low chance of collisions.
-
-What if files change while the build is running?
-------------------------------------------------
-
-What if the time on the system goes backwards?
-----------------------------------------------
-This will affect VTIME on built files.
 
 Known Issues
 ------------

@@ -74,7 +74,7 @@ set tmake(cli-options) {}
 set tmake(emptytarget) {
 	alias {} chdir 0 depends {} do {} dyndep {} fatal 0 finally {}
 	getvars {} hash 0 inputs {} msg {} nocache 0 nofail 0
-	nofork 0 onerror {} phony 0 rootok 0 slow 0 vars {}
+	nofork 0 onerror {} phony 0 rootok 0 slow 0 symlink 0 vars {}
 }
 
 # The known clean targets
@@ -1034,10 +1034,6 @@ proc build-prefix {} {
 
 proc build-dir {} {
 	return $::tmake(build)
-}
-
-proc file-build-exists {path} {
-	file exists [file-build $path]
 }
 
 # If $srcdir is a dir from the top of the source tree,
@@ -2219,7 +2215,8 @@ proc parse-rule {target arglist} {
 
 proc file-real-mtime {filename} {
 	if {[is-target? $filename]} {
-		set filename [file-build [map-alias $filename]]
+		set symlink [dict get [get-target-rule $filename] symlink]
+		return [file-target-mtime $filename $symlink]
 	}
 	file mtime $filename
 }
@@ -2390,6 +2387,21 @@ proc get-source-id {file} {
 	mark-cache-dirty "source hash updated"
 
 	return $hash
+}
+
+# Or 0 if the target doesn't exist
+proc file-target-mtime {target symlink} {
+	set mtime 0
+	catch {
+		set file [file-build [map-alias $target]]
+		if {$symlink} {
+			file-lstat $file stat
+		} else {
+			file stat $file stat
+		}
+		set mtime $stat(mtime)
+	} msg
+	return $mtime
 }
 
 # Both $targets and $depends are lists of files which must exist
@@ -2582,9 +2594,16 @@ proc calc-dyndeps {vardict target} {
 }
 
 proc file-exists-all {list missingname} {
+	upvar $missingname missing
 	foreach f $list {
-		if {![file exists [file-build $f]]} {
-			upvar $missingname missing
+		if {[is-target? $f]} {
+			set symlink [dict get [get-target-rule $f] symlink]
+			set mtime [file-target-mtime $f $symlink]
+			if {$mtime == 0} {
+				set missing $f
+				return 0
+			}
+		} elseif {![file exists [file-build $f]]} {
 			set missing $f
 			return 0
 		}
@@ -2799,15 +2818,17 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 	if {$rc == 0 && !$t(phony) && ![is-cleaning?]} {
 		set now [clock seconds]
 		foreach f $ruletarget {
-			if {![file exists [file-build $f]]} {
+			set mtime [file-target-mtime $f $t(symlink)]
+			if {$mtime == 0} {
 				# XXX: Should onerror run here if --quickstop is set?
 				# XXX: Should the cache still be updated?
 				build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f ([file-build $f])"
 				# Use break to indicate that we have already output the message
 				set rc 3
 			} elseif {!$t(nocache)} {
-				# Record the time that this target was created, along with the real mtime
-				dict set tmakecache(file) $f [list $now [file-real-mtime $f]]
+				# Record the time that this target was created
+				# soon this will be used exclusively to remove orphan targets
+				dict set tmakecache(file) $f $mtime
 				#puts "Set cachetime of $f [clock format $now] [clock format [file-real-mtime $f]]"
 				# Remember the rule which built this target
 				dict set tmakecache(target) $f $ruletarget
