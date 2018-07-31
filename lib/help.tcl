@@ -9,7 +9,7 @@ proc show-version {} {
 
 proc show-help {argv} {
     puts \
-{Usage: tmake [options] [targets]
+{Usage: tmake [options] [name=value ...] [targets]
 
    tmake builds projects based on simple, flexible build descriptions.
 
@@ -38,6 +38,19 @@ proc show-help {argv} {
    --rulebase            Output the builtin rulebase
    --ref                 Show developer reference
 }
+   # Note: The following are not documented. Should include these with --help=all
+   # --findall
+   # --delta
+   # --force
+   # --showvars
+   # --showaliases
+   # --warnings
+   # --commands
+   # --col
+   # --nocol
+   # --nopager
+   # --hash
+
     puts [show-version]
     exit 0
 }
