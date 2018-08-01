@@ -2421,13 +2421,14 @@ proc run {args} {
 		dict set tmakecache exec $tmake(currentruletarget) $cmd [stat-cmd-in-path $cmd]
 	}
 
+	vputs [string trim $cmdline]
+
 	if {[fork-job-if-required] > 0} {
 		# can't just [return] here since we need to ensure that the rest of
 		# the -do doesn't run in the parent, but only in the child
 		return -code break
 	}
 
-	vputs [string trim $cmdline]
 	set rc [catch {
 		exec-save-stderr {*}$cmdline
 	} msg opts]
