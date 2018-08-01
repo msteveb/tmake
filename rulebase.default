@@ -1689,7 +1689,7 @@ to be uninstalled with 'uninstall'
 	}
 
 	# Note that we pass variable $dest purely so we can show a nice path in the message
-	sym-link $destfile $linktarget -nocache -rootok -vars dest $dest -msg {note InstallLink $dest}
+	sym-link $destfile $linktarget -nocache -rootok -vars dest "$dest -> $linktarget" -msg {note InstallLink $dest}
 
 	target install -depends $destfile
 	add-clean uninstall $destfile
