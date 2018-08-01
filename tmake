@@ -1545,8 +1545,8 @@ proc show-cache {} {
 		pputs colnote "Source Hash (mtime hash)"
 		puts "---------------------------------------------"
 		foreach i [lsort [dict keys $tmakecache(srchash)]] {
-			set hash [dict get $tmakecache(srchash) $i]
-			puts [format "%35s  %s" $i $hash]
+			lassign [dict get $tmakecache(srchash) $i] mtime hash
+			puts [format "%35s  %s %s" $i [show-mtime $mtime] $hash]
 		}
 		puts ""
 	}

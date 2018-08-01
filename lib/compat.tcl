@@ -215,15 +215,15 @@ if {"link" in [file -commands]} {
 #
 # Return modification time of the symlink, using the high-res timestamp if possble.
 #
-if {"mtimens" in [file -commands]} {
-	alias file-mtime file mtimens
+if {"mtimeus" in [file -commands]} {
+	alias file-mtime file mtimeus
 	proc show-mtime {mtime} {
-		set ms_str [format %03d $($mtime / 1000000 % 1000)]
-		set secs $($mtime / 1000000000)
+		set ms_str [format %03d $($mtime / 1000 % 1000)]
+		set secs $($mtime / 1000000)
 		return [clock format $secs -format "%H:%M:%S.$ms_str %d-%b-%Y"]
 	}
 	proc file-lmtime {filename} {
-		dict get [file-lstat $filename] mtimens
+		dict get [file-lstat $filename] mtimeus
 	}
 } else {
 	alias file-mtime file mtime
