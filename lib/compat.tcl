@@ -228,7 +228,7 @@ if {"mtimens" in [file -commands]} {
 } else {
 	alias file-mtime file mtime
 	proc show-mtime {mtime} {
-		return [clock format $secs -format "%H:%M:%S %d-%b-%Y"]
+		return [clock format $mtime -format "%H:%M:%S %d-%b-%Y"]
 	}
 	proc file-lmtime {filename} {
 		dict get [file-lstat $filename] mtime
