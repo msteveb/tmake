@@ -690,6 +690,27 @@ proc hard-link {args} {
 	add-clean [make-local distclean] $dest
 }
 
+# @sym-link dest source ?target-args...?
+#
+# Creates a rule to link $dest to $source
+# Additional arguments may be passed and are added to the target rule.
+#
+proc sym-link {args} {
+	#show-this-rule
+
+	getopt {dest linktarget args} args
+
+	target $dest -symlink -vars linktarget $linktarget -do {
+		file delete $target
+		file-link -sym $target $linktarget
+	} {*}$args
+
+	# Note that we can't use Clean here because $dest is already
+	# a local name
+	add-clean [make-local clean] $dest
+	add-clean [make-local distclean] $dest
+}
+
 # @install-file ?--strip=$STRIPCMD? ?--bin? target source
 #
 # Helper for installing files
@@ -1647,6 +1668,35 @@ Copies the source file to the destination file
 	}
 	Clean $dest
 }
+
+rule InstallSymlink {args} {
+InstallSymlink dest linktarget
+
+Installs a symlink pointing to the given (relative) target
+The following options are supported:
+
+Adds the rule to the global 'install' target and adds the symlink to the list of files
+to be uninstalled with 'uninstall'
+} {
+	show-this-rule
+
+	getopt {dest linktarget} args
+
+	set destfile [get-define DESTDIR]$dest
+	if {[is-target? $destfile]} {
+		user-notice purple [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
+		return
+	}
+
+	# Note that we pass variable $dest purely so we can show a nice path in the message
+	sym-link $destfile $linktarget -nocache -rootok -vars dest $dest -msg {note InstallLink $dest}
+
+	target install -depends $destfile
+	add-clean uninstall $destfile
+
+	return $destfile
+}
+
 
 rule InstallFile {args} {
 InstallFile ?--strip|--striplib? ?--bin? dest source
