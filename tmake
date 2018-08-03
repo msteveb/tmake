@@ -2298,7 +2298,8 @@ proc needbuild? {ruletarget depends &reason} {
 		lappend reason no-hash
 	} else {
 		dputs b "Deps for $ruletarget have changed, so rebuild"
-		dputs h "old hash: $savedhash, new hash: $calchash"
+		dputs B "old hash: $savedhash"
+		dputs B "new hash: $calchash"
 		# Give a meaninful reason
 		if {[debug-is-set g]} {
 			foreach {sfile shash} $savedhash {cfile chash} $calchash {
@@ -2765,7 +2766,14 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 		}
 	} else {
 		# On failure, delete the target(s)
-		file delete {*}$ruletarget
+		file delete {*}[file-build-list $ruletarget]
+		dputs b "build failed so deleting [file-build-list $ruletarget]"
+
+		# It's probably not necessary to do this since we just deleted the files,
+		# but it's probably better than leaving 
+		dputs h "target $ruletarget failed, so resetting dephash"
+		dict set tmakecache dephash $ruletarget failed
+		mark-cache-dirty "dephash updated on failed build"
 
 		# Try to run onerror
 		lassign [run-do $vardict $t(onerror)] frc fmsg fopts
