@@ -536,7 +536,7 @@ proc make {argv} {
 				set status [build-sync $t]
 				if {$status eq "failed"} {
 					if {$tmake(exitcode) == 0} {
-						build-fatal-error "Error: Don't know how to build $t"
+						build-fatal-error "Error: Failed to build $t"
 					}
 					break
 				}
@@ -571,7 +571,11 @@ proc make {argv} {
 		set status [build-sync $target]
 		if {$status eq "failed"} {
 			if {$tmake(exitcode) == 0} {
-				build-error "Error: Don't know how to build $target"
+				if {[is-target? $target]} {
+					build-error "Error: Failed to build $target"
+				} else {
+					build-error "Error: Don't know how to build $target"
+				}
 			}
 			if {$tmake(quickstop)} {
 				wait-for-background-jobs
