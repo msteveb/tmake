@@ -2151,30 +2151,27 @@ Be sure to add something similar to the following to your auto.def file:
   ...
   make-tmake-settings [get-env BUILDDIR objdir]/settings.conf {[A-Z]*}
 } {
-	getopt {--verbose targets} args
+	getopt {--verbose targets args} args
 
 	set opts {}
+	set redirect {}
 
-	# We use [set AUTOREMAKE] in the -do to avoid rebuilding settings.conf
-	# if the AUTOREMAKE command changes
-	if {$verbose} {
-		set do {
-			run [set AUTOREMAKE]
-		}
-	} else {
-		set do {
-			run [set AUTOREMAKE] >$build/config.out
-		}
+	# We use [set redirect] in the -do to avoid rebuilding settings.conf
+	# if just the verbosity setting changes
+	if {!$verbose} {
+		set redirect >[file-build config.out]
 		lappend opts --output=config.out
 	}
 
-	Configure {*}$opts --logfile=config.log [list settings.conf {*}$targets] auto.def $do {*}$args
+	Configure {*}$opts --logfile=config.log [list settings.conf {*}$targets] auto.def {
+		run $AUTOREMAKE [set redirect]
+	} -vars redirect $redirect {*}$args
 
 	# If not configured, configure with default options
 	# Note that it is expected that configure will normally be run
 	# separately. This is just a convenience.
 	# project.spec can redefine AUTOREMAKE if required
-	define? AUTOREMAKE configure TOPBUILDDIR=[get-define TOPBUILDDIR] --conf=auto.def
+	define? AUTOREMAKE configure
 	Load settings.conf
 }
 
