@@ -336,6 +336,7 @@ proc make {argv} {
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
 	set tmake(start) [clock millis]
+	set tmake(hashtime) 0
 	set tmake(prevtime) $tmake(start)
 	set tmake(initialdir) [pwd]
 	set tmake(lastchdir) $tmake(initialdir)
@@ -2221,7 +2222,7 @@ proc get-file-hash {file} {
 		return $mtime
 	}
 
-	global tmakecache
+	global tmakecache tmake
 
 	# Does it exists in the source hash cache with the same mtime?
 	if {[dict exists $tmakecache srchash $file]} {
@@ -2232,7 +2233,10 @@ proc get-file-hash {file} {
 	}
 
 	# Not in the source hash cache, or mtime has changed, so recalculate
-	set hash md5:[md5sum $file]
+	lassign [time {
+		set hash md5:[md5sum $file]
+	}] us
+	incr tmake(hashtime) $us
 	dputs h "md5sum $file => $hash"
 	dict set tmakecache srchash $file [list $mtime $hash]
 	mark-cache-dirty "source hash updated"
@@ -3536,6 +3540,9 @@ set rc [catch -signal {
 		if {!$tmake(quiet)} {
 			pputs colnote "Built $tmake(numtargets) of [num-nonphony-targets] target(s) in [format %.2f $elapsed] seconds"
 		}
+	}
+	if {$tmake(usehashes)} {
+		dputs T "Time spending hashing sources: [format %.2f $($tmake(hashtime) / 1e6)] seconds"
 	}
 	# This is to support unit testing
 	if {[env TMAKE_ERROR ""] eq "late"} {
