@@ -86,6 +86,9 @@ proc rulebase-init {} {
 	# Default header pattern for C and C++ dynamic dependencies
 	define? CHDRPATTERN {^[\t ]*#[\t ]*include[\t ]*[<\"]([^\">]*)[\">]}
 
+	# Value to check for change (e.g. from environment)  to force Autosetup configure to rerun
+	define? CONFIGURE_ENV ""
+
 	# These are set by the project via CFlags, ObjectCFlags, LinkFlags, etc.
 	define C_FLAGS ""
 	define CXX_FLAGS ""
@@ -2140,7 +2143,7 @@ Typical usage for autoconf is:
 rule Autosetup {args} {
 Autosetup ?--verbose? {targets} ...
 
-Runs and autosetup-compatible configure to produce settings.conf plus the addition given $targets.
+Runs an autosetup-compatible configure to produce settings.conf plus the addition given $targets.
 
 Normally output is sent to config.out and only shown on error, but --verbose
 causes the output to be sent directly to stdout instead.
@@ -2150,6 +2153,9 @@ Be sure to add something similar to the following to your auto.def file:
   use tmake
   ...
   make-tmake-settings [get-env BUILDDIR objdir]/settings.conf {[A-Z]*}
+
+
+Imported variables: CONFIGURE_ENV is checked for changes to force configure to rerun
 } {
 	getopt {--verbose targets args} args
 
@@ -2164,8 +2170,9 @@ Be sure to add something similar to the following to your auto.def file:
 	}
 
 	Configure {*}$opts --logfile=config.log [list settings.conf {*}$targets] auto.def {
+		# $CONFIGURE_ENV
 		run $AUTOREMAKE [set redirect]
-	} -vars redirect $redirect {*}$args
+	} -getvars CONFIGURE_ENV -vars redirect $redirect {*}$args
 
 	# If not configured, configure with default options
 	# Note that it is expected that configure will normally be run
