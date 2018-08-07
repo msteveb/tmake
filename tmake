@@ -2261,13 +2261,10 @@ proc calc-file-hash {file} {
 		}
 		if {[dict get [get-target-rule $file] hash]} {
 			return [get-file-hash $realfile]
-		} else {
-			# If running in dry-run mode, the file might not exist,
-			# so return 0 in this case
-			catch {
-				return [file-mtime $realfile]
-			}
+		} elseif {$::tmake(norun) && [file-type $realfile] eq "none"} {
 			return 0
+		} else {
+			return [file-mtime $realfile]
 		}
 	}
 
