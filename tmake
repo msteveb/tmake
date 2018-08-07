@@ -2255,13 +2255,14 @@ proc get-file-hash {file} {
 proc calc-file-hash {file} {
 	if {[is-target? $file]} {
 		set realfile [file-build [map-alias $file]]
-		if {[file-type $realfile] eq "link"} {
+		set type [file-type $realfile]
+		if {$type eq "link"} {
 			# symlinks aways hash to the link contents
 			return link:[file readlink $realfile]
 		}
 		if {[dict get [get-target-rule $file] hash]} {
 			return [get-file-hash $realfile]
-		} elseif {$::tmake(norun) && [file-type $realfile] eq "none"} {
+		} elseif {$::tmake(norun) && $type eq "none"} {
 			return 0
 		} else {
 			return [file-mtime $realfile]
@@ -2597,7 +2598,7 @@ proc wait-for-one-job {} {
 			set job [dict get $tmake(running) $pid]
 			dict unset tmake(running) $pid
 
-			lassign $job ruletarget notifytarget started chdir outfile errfile
+			lassign $job ruletarget notifytarget chdir outfile errfile
 			dputs j "Job $pid building $ruletarget has finished with $status\($code), needed by $notifytarget"
 			if {$status eq "CHILDSTATUS" && $code == 0} {
 				set rc 0
