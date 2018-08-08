@@ -258,6 +258,7 @@ Generates an object file from a lexer source file
 		run $LEX $LFLAGS --outfile=[lindex $target 0] --header-file=[lindex $target 1] $inputs
 	}
 	add-clean [make-local clean] $targets
+	add-clean [make-local distclean] $targets
 
 	# And create the object through Object
 	Object [make-unlocal $base.lex.o] [make-unlocal $base.lex.c]
@@ -276,6 +277,7 @@ Generates an object file from a yacc source file
 		run $YACC $YFLAGS --output=[lindex $target 0] --defines=[lindex $target 1] $inputs
 	}
 	add-clean [make-local clean] $targets
+	add-clean [make-local distclean] $targets
 
 	# And create the object through Object
 	Object [make-unlocal $base.tab.o] [make-unlocal $base.tab.c]
