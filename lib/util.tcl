@@ -178,3 +178,15 @@ proc quote-if-needed {str} {
 	}
 	return $str
 }
+
+# @shell-quote-list list
+#
+# Applies 'quote-if-needed' to each element of the list and returns
+# a string suitable for passing to the shell.
+proc shell-quote-list {argv} {
+	set args {}
+	foreach arg $argv {
+		lappend args [quote-if-needed $arg]
+	}
+	join $args
+}
