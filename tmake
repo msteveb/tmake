@@ -910,13 +910,17 @@ proc make-local-src {args} {
 proc invoke-spec-file {filename args} {
 	global tmake
 
-	lappend tmake(specfiles) $filename
-
-	# If given, the argument is the contents of the file
-	if {[llength $args]} {
-		set cmd [info-source [lindex $args 0] $filename 1]
+	if {$filename eq ""} {
+		set cmd [lindex $args 0]
 	} else {
-		set cmd [list source $filename]
+		lappend tmake(specfiles) $filename
+
+		# If given, the argument is the contents of the file
+		if {[llength $args]} {
+			set cmd [info-source [lindex $args 0] $filename 1]
+		} else {
+			set cmd [list source $filename]
+		}
 	}
 
 	# Spec files are loaded at frame level #1, in the scope of run-do
@@ -1075,13 +1079,27 @@ proc tmake-reset-defines {} {
 	}
 }
 
-proc Scope {script} {
+# @Scope { commands }
+#
+# XXX
+proc Scope {{dir ""} script} {
 	global tmake
 	# Save all defines
 	set defines $tmake(defines)
+	if {$dir ne ""} {
+		set oldlocaldir $tmake(localdir)
+		set oldprefix $tmake(prefix)
+		set tmake(localdir) $dir
+		set tmake(prefix) [make-prefix $dir]
+	}
+
 	set result [uplevel 1 $script]
 	set tmake(defines) $defines
 	# Now need to reset/restore all the variables at frame #1
+	if {$dir ne ""} {
+		set tmake(localdir) $oldlocaldir
+		set tmake(prefix) $oldprefix
+	}
 	tmake-reset-defines
 	return $result
 }
@@ -1094,9 +1112,6 @@ proc process-build-spec-file {dir {optional 0}} {
 	dputs m "process-build-spec $dir"
 	set ignore 0
 
-	set tmake(localdir) $dir
-	set tmake(prefix) [make-prefix $dir]
-
 	set path [file-join $dir build.spec]
 
 	if {![file exists $path]} {
@@ -1107,7 +1122,7 @@ proc process-build-spec-file {dir {optional 0}} {
 		incr ignore
 	}
 
-	Scope {
+	Scope $dir {
 		rulebase-invoke prolog
 		if {$ignore} {
 			set rc 0
@@ -1129,7 +1144,6 @@ proc process-build-spec-file {dir {optional 0}} {
 	}
 
 	# Now subdirectories
-	incr tmake(depth)
 
 	# Find the explicitly set subdirs
 	set subdirs $tmake(subdirs)
@@ -1148,7 +1162,17 @@ proc process-build-spec-file {dir {optional 0}} {
 	foreach d $subdirs {
 		process-build-spec-file $d
 	}
-	incr tmake(depth) -1
+}
+
+# @VirtualSubDir dir { ... build.spec rules ... }
+#
+# XXX
+proc VirtualSubDir {dir code} {
+	Scope $dir {
+		rulebase-invoke prolog
+		invoke-spec-file {} $code
+		rulebase-invoke epilog
+	}
 }
 
 proc do-delete-orphans {orphans} {
