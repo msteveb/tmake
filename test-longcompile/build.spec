@@ -1,4 +1,4 @@
-Depends a -inputs a.in -do {
+Depends a -inputs [make-local a.in] -do {
 	puts "Simulating writing inputs during build"
 	sleep 0.5
 	writefile a.in [rand]\n
@@ -6,6 +6,6 @@ Depends a -inputs a.in -do {
 	file copy -force $inputs $target
 }
 
-Depends all a
+Depends all [make-local a]
 
 Clean a

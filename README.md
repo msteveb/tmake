@@ -254,7 +254,17 @@ Note that the environment is saved/restored for each '-do' command.
 
 Variables available during parsing
 ----------------------------------
-TBD
+Add 'define' variables are available as Tcl variables during the parsing phase.
+This includes the system defined variables:
+
+$TOPSRCDIR          Absolute path to the root of the project
+$BUILDDIR           Relative path to the to build directory (default: objdir)
+$TOPBUILDDIR        Absolute path to $BUILDDIR
+
+In addition, rulebase.defaults defines many variables to support the high level rules.
+
+Local Tcl variables may also be used. The lifetime of any such variables is through to the end
+of the current file (e.g. build.spec, project.spec)
 
 Variables available to commands
 -------------------------------
