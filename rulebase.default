@@ -1,7 +1,8 @@
 # vim:set syntax=tcl:
 # These are the built-in rules
 #
-# They can be replaced if necessary
+# They can be replaced if necessary by creating rulebase.spec
+# at the top level of your project.
 
 # @synopsis:
 #
@@ -142,12 +143,12 @@ The following global phony targets are created:
   by using a / prefix. e.g. /all
 
 The following per-directory phony targets are created:
-  all:       Builds executables and shared objects in the current directory
+  all:       Builds executables and shared objects for the current directory
              (or libraries if there are no executables or shared objects)
-  test:      Runs all tests in the current directory
-  clean:     Removes all build products, including Clean targets, in the current directory
-  distclean: Runs 'clean', removes DistClean targets in the current directory,
-             and cleans all orphan objects
+  test:      Runs all tests for the current directory
+  clean:     Removes all build products, including Clean targets, for the current directory
+  distclean: Runs 'clean', and removes DistClean targets for the current directory,
+             and removes all orphan objects
   install:   A convenience alias for /install
   uninstall: A convenience alias for /uninstall
 
@@ -176,7 +177,7 @@ proc is-duplicate-obj-rule {obj src vars} {
 
 	if {[dict exists $tmakedrb objrules $obj]} {
 		# Is it identical?
-		dputs t "Ignoring identical duplicate object rule for $obj at [find-source-location]"
+		dputs m "Ignoring identical duplicate object rule for $obj at [find-source-location]"
 
 		set oldinfo [dict get $tmakedrb objrules $obj]
 		if {$oldinfo ne $info} {
@@ -204,8 +205,9 @@ ObjectRule.c object source
 
 Generates an object file from a C source file
 
-Imported variables: CC, C_FLAGS (from CFlags, ObjectCFlags), INCPATHS (from IncludePaths)
-Used variables: CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
+Bound variables: CC, C_FLAGS (from CFlags, ObjectCFlags), INCPATHS (from IncludePaths)
+Used variables:  CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
+                 PRECOMPILED_HEADER (see PrecompiledHeader)
 } {
 	if {![is-duplicate-obj-rule $obj $src {CC C_FLAGS INCPATHS}]} {
 		# Capture the current value of CC, C_FLAGS and INCPATHS
@@ -220,11 +222,13 @@ Used variables: CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 
 rule ObjectRule.cpp {obj src} {
 ObjectRule.cpp object source
+(Also aliases ObjectRule.cc, ObjectRule.cxx, ObjectRule.C)
 
 Generates an object file from a C++ source file
 
-Imported variables: CXX, CXX_FLAGS (from C++Flags), INCPATHS (from IncludePaths)
-Used variables: CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
+Bound variables: CXX, CXX_FLAGS (from C++Flags), INCPATHS (from IncludePaths)
+Used variables:  CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation),
+                 PRECOMPILED_HEADER (see PrecompiledHeader)
 } {
 	if {![is-duplicate-obj-rule $obj $src {CXX CXX_FLAGS INCPATHS}]} {
 		# Capture the current value of CXX, CXX_FLAGS and INCPATHS
@@ -237,18 +241,18 @@ Used variables: CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation
 	return $obj
 }
 
-rule ObjectRule.cc {obj src} {
-ObjectRule.cc object source
-
-Alias for ObjectRule.cpp
-} {
-	tailcall ObjectRule.cpp $obj $src
-}
+# Why haven't we settled on a single extension?
+alias ObjectRule.cc ObjectRule.cpp
+alias ObjectRule.cxx ObjectRule.cpp
+alias ObjectRule.C ObjectRule.cpp
 
 rule ObjectRule.l {obj src} {
 ObjectRule.l object source
 
 Generates an object file from a lexer source file
+Note that $LEX must support --outfile and --header-file
+
+Bound variables: LEX, LFLAGS
 } {
 	set base [file rootname $src]
 	set targets [list $base.lex.c $base.lex.h]
@@ -268,6 +272,10 @@ rule ObjectRule.y {obj src} {
 ObjectRule.y object source
 
 Generates an object file from a yacc source file
+
+Note that $YACC must support --output and --defines
+
+Bound variables: YACC, YFLAGS
 } {
 	set base [file rootname $src]
 	set targets [list $base.tab.c $base.tab.h]
@@ -914,14 +922,15 @@ Executable --test --chdir --nobuild --publish --no|strip --nofork --install=<dir
 Builds an executable from one or more source files. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are linked (along with any libraries) to create the executable.
 
-Imported variables: CCLD (from Linker), LD_FLAGS (from LinkFlags), PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
+Bound variables: CCLD (from Linker), LD_FLAGS (from LinkFlags), PROJLIBS and PROJDEPS (from UseLibs)
+                 LOCAL_LIBS (from ArchiveLib), SYSLIBS (from UseSystemLibs)
 Used variables: LDFLAGS
 
 The following options are supported:
   --test              Marks the executable as a test (see Test)
-  --nofork            With --test, marks uses Test --nofork
-  --chdir             This options is passed to Test if --test is also specified.
-  --nobuild           Don't make this executable dependent on phony 'all', which is otherwise the default
+  --nofork            With --test, uses Test --nofork
+  --chdir             With --test, uses Test --chdir
+  --nobuild           Don't make this executable dependent on phony 'all' (which is otherwise the default)
   --publish           Publishes the executable (see PublishBin)
   --install=<dir>     Install the executable to the given directory (see InstallFile)
   --strip[=full|dynamic|none]  Sets the strip type on installation. --strip means full. omitted means none. (see InstallFile)
@@ -1017,7 +1026,7 @@ Accepts the following file names:
   - Renaming rules of the form: target=src
   - Glob patterns (.e.g *.img)
 
-Normally files are publish directly into $PUBLISH/$dir, but if --keepdir is
+Normally files are published directly into $PUBLISH/$dir, but if --keepdir is
 specified, the relative source directory is kept and replicated under $PUBLISH/$dir
 
 Note: Libraries and Binaries should not be published with this rule.
@@ -1044,6 +1053,8 @@ ArchiveLib ?--publish? ?--install=<dir>? basename sources...
 
 Creates an archive library from the given sources. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are combined with $AR and $RANLIB to create the archive library.
+
+This library is added to LOCAL_LIBS so that subsequent Executable's are linked against it.
 
 Used variables: AR, ARFLAGS, RANLIB
 
@@ -1084,20 +1095,20 @@ The following options are supported:
 }
 
 rule SharedLib {args} {
-SharedLib ?--publish? ?--strip=<type>? ?--version=<ver>? ?--soversion=<ver>? ?--install=<dir> basename source...
+SharedLib ?--publish? ?--strip=<type>? ?--version=<ver>? ?--soversion=<ver>? ?--install=<dir>? basename source...
 
 Creates a shared library from the given sources. For each source, the appropriate ObjectRule is used
 to generate the object file, and these files are linked (along with any libraries) to create the shared library.
 
-Imported variables: CCLD (from Linker), PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
+Bound variables: CCLD (from Linker), PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
 Used variables: LD_FLAGS, LDFLAGS, SH_LDFLAGS, SH_SOEXT, SH_SOEXTVER, SH_SOPREFIX
 
 The following options are supported:
-  --publish           For compatibility. Note that shared libraries are always published. (see PublishLib)
-  --install=<dir>     Install the shared library to the given directory (see InstallFile)
-  --version=<ver>     A version for the shared library of the form n.n.n (1-3 parts)
-  --soversion=<ver>   Override the soname version. Otherwise the first part of the version is used.
-  --strip[=dynamic|none]   Sets the strip type on installation. --strip means dynamic. omitted means none. (see InstallFile)
+  --publish              For compatibility. Note that shared libraries are always published. (see PublishLib)
+  --install=<dir>        Install the shared library to the given directory (see InstallFile)
+  --version=<ver>        A version for the shared library of the form n.n.n (1-3 parts)
+  --soversion=<ver>      Override the soname version. Otherwise the first part of the version is used.
+  --strip[=dynamic|none] Sets the strip type on installation. --strip means dynamic. omitted means none. (see InstallFile)
 } {
 	show-this-rule
 	add-default-opts args
@@ -1219,21 +1230,21 @@ The following options are supported:
 alias Lib ArchiveLib
 
 rule SharedObject {args} {
-SharedObject ?--install=<dir>? ?--no|strip? target sources...
+SharedObject ?--install=<dir>? ?--strip=<type>? target sources...
 
 Builds a dynamically loadable shared object from the given sources.
 For each source, the appropriate ObjectRule is used to generate the object file,
 and these files are linked (along with any libraries) to create the loadable object.
 
-Imported variables: CCLD (from Linker), SHOBJ_LDFLAGS (must be set appropriately),
-                    PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
-Used variables: LD_FLAGS, LDFLAGS, SHOBJ_CFLAGS (must be set appropriately)
+Bound variables: CCLD (from Linker), SHOBJ_LDFLAGS (must be set appropriately),
+                 PROJLIBS and PROJDEPS (from UseLibs), SYSLIBS (from UseSystemLibs)
+Used variables:  LD_FLAGS, LDFLAGS, SHOBJ_CFLAGS (must be set appropriately)
 
 Note that sources are marked to be built with SHOBJ_CFLAGS via ObjectCFlags.
 
 The following options are supported:
-  --install=<dir>              Install the shared object to the given directory (see InstallFile)
-  --strip[=dynamic|none]       Sets the strip type on installation. --strip means dynamic. omitted means none. (see InstallFile)
+  --install=<dir>        Install the shared object to the given directory (see InstallFile)
+  --strip[=dynamic|none] Sets the strip type on installation. --strip means dynamic. omitted means none. (see InstallFile)
 } {
 	show-this-rule
 	add-default-opts args
@@ -1269,13 +1280,16 @@ The following options are supported:
 }
 
 rule Objects {args} {
-Objects source...
+Objects source ...
 
-Create an object file from each source file
-Uses the appropriate ObjectRule for each source.
-Returns a list of objects
-Accepts object files (.o) in addition to source files
-and simply returns them
+Create an object file from each source file using the appropriate ObjectRule for each source.
+Accepts object files (.o) and <lib> aliases in addition to source files and simply returns them.
+
+Returns a list of (local) objects.
+
+e.g.
+
+  Objects file1.c file2.o file3.cc <lib>compat
 } {
 	show-this-rule
 	set args [join $args]
@@ -1293,7 +1307,7 @@ and simply returns them
 rule Object {target src} {
 Object obj src
 
-Creates object $target from source $src by using the appropriate ObjectRule, e.g. ObjectRule.c
+Creates object 'obj' from source 'src' by using the appropriate ObjectRule, e.g. ObjectRule.c
 for .c sources.
 } {
 	show-this-rule
@@ -1313,10 +1327,14 @@ for .c sources.
 }
 
 rule ObjectCFlags {srcs args} {
-ObjectCFlags source ...
+ObjectCFlags {sources} ...
 
 Like CFlags, but instead of adding C_FLAGS for all subsequent rules, adds
-C_FLAGS only to the objects created from the given list of source files
+C_FLAGS only to the objects created from the given list of source files.
+
+Can also be used to apply directly to object files. e.g.
+
+  ObjectCFlags {file1.c file2.o file3.cc} -O0
 } {
 	show-this-rule
 	foreach src $srcs {
@@ -1328,16 +1346,16 @@ C_FLAGS only to the objects created from the given list of source files
 rule CFlags {args} {
 CFlags ...
 
-Add the given flags to C_FLAGS (used in ObjectRule.c)
+Add the given flags to C_FLAGS (used in all subsequent ObjectRule.c)
 e.g.  CFlags -DABC=7
 
 Note that to pass a string value, it generally sufficient to quote it normally:
 
   CFlags -DVERSION="v1.0"
 
-However if the value contains spaces, quote with a double backslash:
+However if the value may contain spaces, use quote-if-needed. eg.
 
-  CFlags -DVERSION="prog\\ v1.0"
+  CFlags [quote-if-needed {-DVERSION="processor v1.0"}]
 } {
 	show-this-rule
 	define-append C_FLAGS {*}$args
@@ -1346,7 +1364,7 @@ However if the value contains spaces, quote with a double backslash:
 rule C++Flags {args} {
 C++Flags ...
 
-Add the given flags to CXX_FLAGS (used in ObjectRule.cpp)
+Add the given flags to CXX_FLAGS (used in all subsequent ObjectRule.cpp)
 
 See CFlags
 } {
@@ -1356,7 +1374,7 @@ See CFlags
 rule LinkFlags {args} {
 LinkFlags ...
 
-Add the given flags to LD_FLAGS (used in Executable and SharedLib)
+Add the given flags to LD_FLAGS (used in all subsequent Executable and SharedLib)
 } {
 	define-append LD_FLAGS {*}$args
 }
@@ -1394,22 +1412,28 @@ For non-project libraries (such as system libraries), see UseSystemLibs and Link
 }
 
 rule IncludePaths {args} {
-IncludePaths ?--reset? ?--global? ?--build? ?--source? paths...
+IncludePaths ?--reset? ?--global? ?--build|--source? paths...
 
-Arranges to search the given paths for header files. By default, the paths (relative)
-to the current local directory, are searched in both the source tree and the build tree,
-however specifying only one of --build and --source restricts to search to just that tree.
+Arranges to search the given paths for header files.
 
 The paths are added:
 - to $INCPATHS for use by dynamic header dependency searching
 - to CFlags ($C_FLAGS) as -I <path>
 - to C++Flags ($CXX_FLAGS) as -I <path>
 
-If --reset is specified, INCPATHS, C_FLAGS, and CXX_FLAGS are reset to their default values,
-before any IncludePaths invocations. This can be useful to remove the implicit 'IncludePaths .'
+By default, the paths (relative to the current local directory) are
+searched in both the source tree and the build tree, but this can
+be changed by specifying --build or --source.
 
-If --global is specified, paths are considered to be from the top of the tree rather
-than local (to the current dir) paths.
+The following options are supported:
+  --build         Search the paths only in the build tree
+  --source        Search the paths only in the source tree
+  --reset         INCPATHS, C_FLAGS, and CXX_FLAGS are reset to their default values,
+                  before any IncludePaths invocations.
+                  This can be useful to remove the implicit 'IncludePaths .'
+
+  --global        Paths are considered to be from the top of the tree rather
+                  than local (to the current dir) paths.
 
 Note that normally only relative paths should be used, however adding an absolute
 path (e.g. /usr/local/include) is possible, in which case the path is added as-is
@@ -1554,8 +1578,10 @@ Shorthand for:
 rule PrecompiledHeader {header} {
 PrecompiledHeader headerfile.h
 
-Arranges for the given header file to be precompiled and included
+Arranges for the given header file to be precompiled (to headerfile.gch) and included
 when compiling subsequent C/C++ sources.
+
+Note that this is a work-in-progress. It appears to work with gcc and clang.
 } {
 	show-this-rule
 
@@ -1580,9 +1606,16 @@ when compiling subsequent C/C++ sources.
 rule Test {args} {
 Test --interp=<interp> --errok --chdir --quiet --nofork --stdout=<stdout.exp.file> --stderr=<stderr.exp.file> command args
 
-Runs the test command
-If --stdout and/or --stderr is specified, the actual output is checked.
-If it doesn't match, the test fails.
+Runs the given test command with the given arguments.
+
+The following options are supported (all are optional):
+  --interp  Built or external program required to run the test. Available as $interp
+  --chdir   The test runs from the local (build) directory
+  --stdout  A local file. The command output must exactly match the file for the test to pass
+  --stderr  As per --stdout, but for the command stderr output.
+  --quiet   Do not output a message with the test rule runs.
+  --errok   Ignores the return code of the command. Normally a non-zero return code indicates failure.
+  --nofork  The test is run in the foreground. Otherwise tests are always run as separate jobs.
 } {
 	show-this-rule
 
@@ -1678,7 +1711,6 @@ rule InstallSymlink {args} {
 InstallSymlink dest linktarget
 
 Installs a symlink pointing to the given (relative) target
-The following options are supported:
 
 Adds the rule to the global 'install' target and adds the symlink to the list of files
 to be uninstalled with 'uninstall'
@@ -1707,11 +1739,11 @@ rule InstallFile {args} {
 InstallFile ?--strip|--striplib? ?--bin? dest source
 
 Installs the given source file to the destination (file) relative to $DESTDIR
-The following options are supported:
 
-  --bin      - make the target executable
-  --strip    - strips the target with $STRIP $STRIPFLAGS
-  --striplib - strips the target with $STRIP $STRIPLIBFLAGS
+The following options are supported:
+  --bin               Make the target executable
+  --strip             Strip the target with $STRIP $STRIPFLAGS
+  --striplib          Strip the target with $STRIP $STRIPLIBFLAGS
 
 Adds the rule to the global 'install' target and adds the file the list of files
 to be uninstalled with 'uninstall'
@@ -1773,12 +1805,14 @@ Install ?--bin? ?--strip|--striplib? ?--keepdir? destdir file-spec...
 A convenience wrapper around InstallFile to allow multiple files to be installed at once.
 See InstallFile for more details.
 
-The following arguments are supported:
-  --bin               Adds 'bin' to the InstallFile flags
-  --strip             Adds 'strip' to the InstallFile flags
-  --keepdir           Passes --keepdir to InstallFile
-  destdir             Installs to the given directory
-  file-spec...        A file specification for files to be installed. See 'File specifications' above.
+Files are installed to (directory) 'destdir'.  'file-spec...' is a
+list of file specifications for files to be installed. See 'File
+specifications' above.
+
+The following options are supported:
+  --bin               Pass --bin to InstallFile
+  --strip|--striplib  Pass --strip or --striplib to InstallFile
+  --keepdir           Pass --keepdir to InstallFile
 } {
 	show-this-rule
 
@@ -1807,6 +1841,9 @@ rule Clean {args} {
 Clean ?--source? target ...
 
 Adds the given targets to the list of files to be removed on 'tmake clean'
+
+The following options are supported:
+  --source       The file is relative to the source directory instead of the build directory
 } {
 	# DistClean also cleans these files
 	DistClean {*}$args
@@ -1826,8 +1863,9 @@ rule DistClean {args} {
 DistClean ?--source? target ...
 
 Adds the given targets to the list of files to be removed on 'tmake distclean'
-If --source is specified, the target is relative to the source directory
-rather than the build directory.
+
+The following options are supported:
+  --source       The file is relative to the source directory instead of the build directory
 } {
 	getopt {--source --src args} args
 
@@ -1847,16 +1885,17 @@ rule Generate {args} {
 Generate ?--interp=<interp>? ?--chdir? target generator inputs rules target-args...
 
 A general purpose rule to create a target via a generator (program or script).
+
 The arguments are as follows:
-  --interp   Optional built or external program required to run the generator. Available as $interp
-  --chdir    If specified, the generator runs from the local directory
-  target     The target to generator. May be a list of one or more targets. Available as $target
-  generator  The generator program or script. May be a local built target, a published built target
-             (in which case the <bin> prefix is used), empty for none, or an external command (if none of the above).
-             Unless empty, this is available as $script
-  inputs     Local files that are inputs to the generator. Available as $inputs
-  rules      A -do script that generates the target
-  target-args  Additional arguments to 'target'
+  --interp    Optional built or external program required to run the generator. Available as $interp
+  --chdir     If specified, the generator runs from the local directory
+  target      The target to generator. May be a list of one or more targets. Available as $target
+  generator   The generator program or script. May be a local built target, a published built target
+              (in which case the <bin> prefix is used), empty for none, or an external command (if none of the above).
+              Unless empty, this is available as $script
+  inputs      Local files that are inputs to the generator. Available as $inputs
+  rules       A -do script that generates the target
+  target-args Additional arguments to 'target'
 
 The following is an example of a local, built generator.
 
@@ -1905,6 +1944,12 @@ rule Depends {target args} {
 Depends target target-args...
 
 Creates a local target with the given additional target arguments.
+
+e.g.
+
+  Depends b.txt -inputs [make-local b.in] -do {
+    cat $inputs >$target
+  }
 } {
 	target [make-local {*}$target] -depends {*}$args
 }
@@ -1913,6 +1958,8 @@ rule Phony {target args} {
 Phony target target-args...
 
 Creates a Phony, local target with the given additional target arguments.
+
+See Depends
 } {
 	show-this-rule
 	target [make-local {*}$target] -phony -depends {*}$args
@@ -1929,7 +1976,7 @@ e.g. DefaultOptions Executable --strip
 e.g. DefaultOptions SharedObject --strip=dynamic
 
 Allows default options to be supplied for commands.
-Note that currently only Executable, SharedObject and SharedLib are supported.
+Note that currently only Executable, SharedObject and SharedLib support DefaultOptions
 } {
 	set-default-opts $rule $args
 }
@@ -1959,10 +2006,10 @@ HostExecutable target sources ...
 
 A very simple version of Executable for building host (as opposed to target) applications.
 
-Imported variables: HOST_CFLAGS, HOST_SYSLIBS (from HostLibs)
-Used variables: CC_FOR_BUILD (default to cc)
+Bound variables: HOST_CFLAGS, HOST_SYSLIBS (from HostLibs)
+Used variables: CC_FOR_BUILD (defaults to gcc)
 
-Note: HostExecutable and HostLibs are stopgaps until separate build contexts are fully support
+Note: HostExecutable and HostLibs are stopgaps until separate build contexts are fully supported
 } {
 	set localtarget [make-local $target]
 
@@ -2106,13 +2153,8 @@ rule Configure {args} {
 Configure ?--configure=configscript? ?--output=filename? ?--logfile=logfile? {targets} {inputs} {do rules} ...
 
 Runs an autoconf-compatible ./configure (defaults to "configure") to produce the given
-targets. The given inputs, if any are added as dependencies.
+targets. The given inputs (if any) are added as dependencies.
 Runs the "do" rules, with the $configure variable set to the name of the configure script.
-
-If --output is given, the output from the configure command is assumed to be written
-to that file, and it is displayed if the configure fails.
-
-If --logfile is given, 'Distclean --source $logfile' is added to delete the logfile on distclean.
 
 Additional 'target' arguments may be appended.
 
@@ -2121,6 +2163,11 @@ Typical usage for autoconf is:
   Configure --output=config.out --logfile=config.log include/config.h {} {
     run $configure >config.out
   }
+
+The following options are supported:
+  --output=filename    The output from the configure command is assumed to be written to 'filename',
+                       and it is displayed if the configure fails.
+  --logfile=filename   'Distclean --source $logfile' is added to delete the logfile on distclean.
 } {
 	getopt {--output: --logfile: --configure: targets inputs rules args} args
 
@@ -2145,19 +2192,20 @@ Typical usage for autoconf is:
 rule Autosetup {args} {
 Autosetup ?--verbose? {targets} ...
 
-Runs an autosetup-compatible configure to produce settings.conf plus the addition given $targets.
-
-Normally output is sent to config.out and only shown on error, but --verbose
-causes the output to be sent directly to stdout instead.
+Runs an autosetup-compatible configure to produce settings.conf plus the additional given targets.
 
 Be sure to add something similar to the following to your auto.def file:
 
   use tmake
   ...
-  make-tmake-settings [get-env BUILDDIR objdir]/settings.conf {[A-Z]*}
+  make-tmake-settings [get-env BUILDDIR objdir]/settings.conf {[A-Z]*} *dir lib_*
 
+The following options are supported:
+  --verbose  Normally output is sent to config.out and only shown on error,
+             but --verbose causes the output to be sent directly to stdout instead.
 
-Imported variables: CONFIGURE_ENV is checked for changes to force configure to rerun
+Bound variables: CONFIGURE_ENV is checked for changes to force configure to rerun
+Used variables: AUTOREMAKE is the configure command to run
 } {
 	getopt {--verbose targets args} args
 
@@ -2174,7 +2222,7 @@ Imported variables: CONFIGURE_ENV is checked for changes to force configure to r
 	Configure {*}$opts --logfile=config.log [list settings.conf {*}$targets] auto.def {
 		# $CONFIGURE_ENV
 		run $AUTOREMAKE [set redirect]
-	} -getvars CONFIGURE_ENV -vars redirect $redirect {*}$args
+	} -getvars CONFIGURE_ENV -nofork -vars redirect $redirect {*}$args
 
 	# If not configured, configure with default options
 	# Note that it is expected that configure will normally be run
