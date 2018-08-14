@@ -10,12 +10,16 @@ If any of these change, dependent commands need to be re-run.
 This can be done in 'proc run', but means that we need to be able to interpret
 that PATH and determine if something is really executable.
 
-This is done. The result is stored in tmakecache under the 'exec' key.
+This is now supported via CheckExternalCommands on|off.
+The result is stored in tmakecache under the 'exec' key.
 However it isn't perfect.
 
 - An external command may simply be a front end to another command that has actually changed.
   (e.g. ccache which calls the actual compiler later in the path)
 - It only covers commands run via 'proc run'
+
+Could allow some customisation over the method. e.g. could hash the file rather than
+just look at time/size. Could use the output of a command (cc --version) instead.
 
 Local vs non-local
 ------------------
@@ -26,6 +30,24 @@ Is there some way to allow local names to be easily used?
 
 I think that all names should be considered local, unless explicitly qualified as /global.
 Needs some rethinking of how 'target' works'
+
+I started implementing support for -local/-global that would affect how the following
+-inputs or -depends are treated (it's in a stash). This didn't help a lot because:
+
+- often it is the target that needs to be localised and target -local didn't quite fit
+  (but perhaps needs to be made to do so).
+- often it is useful to find the actual path.
+
+Need to revisit this
+
+Tracking Variables
+------------------
+While we do a great job of tracking the location of rules, we don't track
+the location of variables. Does it make sense to track all the locations
+where a variable was set or modified. Perhaps output this with -dV or perhaps
+there is some query like --find. At the moment -dv doesn't report 'define', but
+only 'define-append' and friends because it is too noise. Fix it so that -dv is
+more useful without being too noisy.
 
 Cleaning files from the source tree
 -----------------------------------
