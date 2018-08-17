@@ -20,7 +20,8 @@
 set topdir [pwd]
 set tmpdir $topdir/_build_
 set filedefs {}
-set tmake $topdir/../tmake
+#set tmake_cmd [list jimsh $topdir/../tmake]
+set tmake_cmd tmake
 
 proc readfile {filename {default_value ""}} {
 	set result $default_value
@@ -103,7 +104,7 @@ proc checkbuilt {args} {
 
 proc build {args} {
 	# Now run tmake with the given targets
-	exec jimsh $::tmake --quiet {*}$args >build.out 2>@stderr
+	exec {*}$::tmake_cmd --quiet {*}$args >build.out 2>@stderr
 
 	# Ugly!
 	array unset ::built
@@ -115,5 +116,7 @@ proc build {args} {
 		set ::built([lindex $line end]) $line
 	}
 	set ::builtfiles [lsort [array names ::built]]
-	sleep 1
+	# If using a filesystem with 1 second timestamp resolution, need to sleep
+	# for that long!
+	#sleep 1
 }

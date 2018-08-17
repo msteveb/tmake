@@ -102,9 +102,9 @@ filedef y/a.h y/a.h {
 }
 
 runtest "Dyndeps with false positives" {
-	# Here, a.h we make a.h accessible via multiple include paths
-	# The dyndep scanner can't be sure which one will be included.
-	# (Is this true? Isn't the confusion only around . vs not .?)
+	# Here we make a.h accessible via multiple include paths
+	# The dyndep scanner determines which one is a dependency
+	# based on the include path
 	msg "initial build, a.h locally"
 	makefiles proj-empty build-a1 a.c a.h x/a.h
 	build all
@@ -131,4 +131,46 @@ runtest "Dyndeps with false positives" {
 	build all
 	checkbuilt
 
+}
+
+filedef proj-hashing project.spec {
+	UseHashes on
+}
+
+runtest "Hashing" {
+	# Enable hashing and verify that rewriting the file with the same
+	# contents doesn't cause a rebuild
+	msg "initial build"
+	makefiles proj-hashing build-a1 a.c a.h
+	build all
+	checkbuilt a a.o
+
+	msg "rewrite unchanged a.c"
+	makefiles a.c
+	build all
+	checkbuilt
+
+	msg "rewrite unchanged a.h"
+	makefiles a.h
+	build all
+	checkbuilt
+}
+
+runtest "No hashing" {
+	# Disable hashing and verify that rewriting the file with the same
+	# contents causes a rebuild
+	msg "initial build"
+	makefiles proj-empty build-a1 a.c a.h
+	build all
+	checkbuilt a a.o
+
+	msg "rewrite unchanged a.c"
+	makefiles a.c
+	build all
+	checkbuilt a a.o
+
+	msg "rewrite unchanged a.h"
+	makefiles a.h
+	build all
+	checkbuilt a a.o
 }
