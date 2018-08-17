@@ -1,4 +1,6 @@
 # vim:set syntax=tcl:
+# vi:se noet sw=4 ts=4:
+#
 # These are the built-in rules
 #
 # They can be replaced if necessary by creating rulebase.spec
@@ -571,7 +573,8 @@ proc load-config-file {filename} {
 				set value [lindex $value 0]
 			}
 			dputs c "define $name $value"
-			define $name $value
+			# Add source info here for tracking purposes
+			define $name [info-source $value $filename $n]
 		} else {
 			user-notice purple "$filename:$n: Warning: Failed to parse $line"
 		}

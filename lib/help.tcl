@@ -42,7 +42,7 @@ proc show-help {argv} {
    # --findall
    # --delta
    # --force
-   # --showvars
+   # --showvars?=where?
    # --showaliases
    # --warnings
    # --commands

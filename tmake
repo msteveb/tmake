@@ -62,6 +62,7 @@ set tmake(usehashes) 0
 set tmake(cachecleanup) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
+set tmake(varloc) {}
 set tmake(emptycache) {
 	file {} cmd {} deps {} target {} headerscan {} warnings {}
 	exec {} version 0 writecache 0 srchash {} dephash {} usehashes 0
@@ -149,7 +150,10 @@ proc make-parse-options {argv} {
 			incr tmake(force)
 		}
 		--showvars {
-			incr tmake(showvars)
+			set tmake(showvars) 1
+		}
+		--showvars=* {
+			set tmake(showvars) 2
 		}
 		--hash {
 			incr tmake(usehashes)
@@ -478,7 +482,7 @@ proc make {argv} {
 		tmake-exit 0
 	}
 	if {$tmake(showvars)} {
-		show-all-defines
+		show-all-defines $tmake(showvars)
 		tmake-exit 0
 	}
 	if {$tmake(showaliases)} {
@@ -1705,7 +1709,10 @@ proc num-nonphony-targets {} {
 #
 proc define {name args} {
 	if {![dict exists $::tmake(fixedvars) $name]} {
+		dict set ::tmake(varloc) $name {}
+		dict set ::tmake(varloc) $name [info source $name] 1
 		if {[llength $args]} {
+			dict set ::tmake(varloc) $name [info source [lindex $args 0]] 1
 			set value [join $args]
 		} else {
 			set value 1
@@ -1722,13 +1729,15 @@ proc define {name args} {
 # @define! name arg ...
 #
 # Like 'define', but marks the variable as fixed. It won't be overwritten by 'define'.
-#
+# Should be reserved for variables set directly by the user from the commandline,
+# possibly indirectly
 proc define! {name args} {
+	dict set ::tmake(varloc) $name cmdline 1
 	set value [join $args]
-	dputs v "define! $name $value"
 	dict set ::tmake(fixedvars) $name 1
 	dict set ::tmake(defines) $name $value
 	uplevel #1 [list set $name $value]
+	dputs v "define! $name $value"
 }
 
 # @define? name arg ...
@@ -1737,11 +1746,10 @@ proc define! {name args} {
 # or set to an empty value.
 #
 proc define? {name args} {
-	global $name
-	dputs v "define? $name $args"
 	if {[get-define $name] eq ""} {
 		define $name {*}$args
 	}
+	dputs v "define? $name $args"
 }
 
 # @define-append name arg ...
@@ -1751,10 +1759,10 @@ proc define? {name args} {
 # separated by a space.
 #
 proc define-append {name args} {
-	dputs v "define-append $name $args"
 	set value [get-define $name]
 	append-with-space value [join $args]
 	define $name $value
+	dputs v "define-append $name $args"
 }
 # @define-list-append value ...
 #
@@ -1798,10 +1806,36 @@ proc get-all-defines {} {
 	return $::tmake(defines)
 }
 
-proc show-all-defines {} {
+# Returns a list of all the locations that contributed
+# to the definition of the given define.
+# Each element of the list is of the form path:line
+# Returns an empty list of no source information is available
+proc get-define-locs {name} {
+	set locs {}
+	if {[dict exists $::tmake(varloc) $name]} {
+		foreach loc [dict keys [dict get $::tmake(varloc) $name]] {
+			if {[lindex $loc 0] ne ""} {
+				lappend locs [join $loc :]
+			}
+		}
+	}
+	lsort $locs
+}
+
+proc show-all-defines {what} {
 	set d [get-all-defines]
 	foreach k [lsort [dict keys $d]] {
-		puts "$k=[dict get $d $k]"
+		set val [dict get $d $k]
+		if {$what == 2} {
+			puts -nonewline [colout colnote $k=$val]
+			set locs [get-define-locs $k]
+			if {[llength $locs]} {
+				puts -nonewline " [join $locs ,]"
+			}
+			puts ""
+		} else {
+			puts "$k=$val"
+		}
 	}
 }
 
