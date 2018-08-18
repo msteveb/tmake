@@ -1481,6 +1481,7 @@ proc show-rule {target} {
 		set ruletarget $target
 	}
 	if {[is-rule? $ruletarget]} {
+		global tmakecache
 		set t [get-rule $ruletarget]
 		set flags {}
 		set lines {}
@@ -1523,6 +1524,18 @@ proc show-rule {target} {
 						lappend lines "$n=$v"
 					}
 				}
+				dyndep {
+					if {$v ne ""} {
+						lappend lines "$n=[string trim $v]"
+					}
+					# Should we always show cached dyndeps?
+					if {[dict exists $tmakecache(deps) $ruletarget]} {
+						set dyndeps [lsort [dict get $tmakecache(deps) $ruletarget]]
+						foreach dep $dyndeps {
+							lappend lines "       $dep"
+						}
+					}
+				}
 				default {
 					if {$v ne ""} {
 						lappend lines "$n=[string trim $v]"
@@ -1540,6 +1553,7 @@ proc show-rule {target} {
 		foreach do $t(do) {
 			show-rule-commands $do
 		}
+
 	} else {
 		puts "No rule for $ruletarget"
 	}
