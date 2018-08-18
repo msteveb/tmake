@@ -620,25 +620,25 @@ And a.h
   #include "b.h"
 
 The built-in rulebase automatically associates the built-in recursive regex scanner with
-rules to build object files (.o) from source files (.c) via a rule which looks like:
+rules to build object files (.o) from source files (.c) via a rule that looks like:
 
 a.o: a.c
-dyndep=header-scan-regexp-recursive $INCPATHS "" $HDRPATTERN
+dyndep=header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
   var INCPATHS=publish/include .
     run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
 
-Note that the 'dyndep' attribute specifies a command prefix to run which will
+Note that the 'dyndep' attribute specifies a command prefix to run that will
 return a list of dependent targets/files.
 
 The built-in scanner:
 
-* Uses a regex to scan for dependencies of the form #include <abc.h> or #include "abc.h"
+* Uses a regular expression to scan for dependencies of the form #include <abc.h> or #include "abc.h"
 * Ignores conditional compilation (#ifdef, etc.)
-  * And thus is conservative in that it make create an unnecessary dependency (but not the reverse)
+  * And thus is conservative in that it can make create an unnecessary dependency (but not the reverse)
 * Is recursive, so that in the example above, a.o depends upon both a.h and b.h
 * Knows if a dependency is:
   * a target, and thus must be generated before being scanned recursively
-  * an existing source file, and thus creates a time-based dependeny
+  * an existing source file, and thus creates a time or hash-based dependeny
   * missing, and thus assumed to be a system header, and ignored
 * Caches the results of the scan to avoid unnecessary scanning
 * Carefully checks to see that the scan would return the same results as
@@ -647,10 +647,12 @@ The built-in scanner:
 
 Dynamic dependencies:
 
-* Are cached, along with the command (paths, pattern, ...), so that the (small) cost of scanning is only incurred when the file changes
+* Are cached, along with the command (paths, pattern, ...), so that the (small) cost of scanning is
+  only incurred when the file changes
 * The set of dependencies is cached. If this set changes, the target is rebuilt.
   This can occur if a system header was previously shadowed by a source file, but
-  the build changes so that this no longer occurs.
+  the build changes so that this no longer occurs, or if a new header file is added
+  in a directory earlier in the set of include paths.
 
 XXX: Note that "#include INCLUDEFILENAME" is not supported. Suggest workarounds.
 
@@ -704,7 +706,7 @@ define-append - defines a var if it doesn't exist or is "", or appends (with a s
 
 Note that only variables defined in the top level project.spec and
 build.spec, and the rulebase (rulebase.default or rulebase.spec)
-are propagated to subdirectories. Any variables defined subdirectory
+are propagated to subdirectories. Any variables defined in subdirectory
 build.spec files are only valid for the remainder of that build.spec
 file.
 
@@ -716,7 +718,7 @@ Also see the -vars and -getvar rule options which allow a variable to be bound t
 
 Multiple Targets on the Command Line
 ------------------------------------
-Explain how rulebase is parsed, then the build descriptions, 
+Explain how rulebase is parsed, then the build descriptions,
 then any 'Load' targets are built, and if necessary, the build descriptions are re-read.
 Also, the target status is reset after every target.
 

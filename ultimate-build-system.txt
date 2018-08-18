@@ -114,13 +114,13 @@ Now the tmake equivalent
     ===========================================
     HostExecutable processor processor.c
 
-	foreach src [Glob *.in] {
-		set dest [file rootname $src]
-		Generate $dest processor $src {
-			run $script $inputs $target
-		}
-		Depends all [make-local $outfile]
-	}
+    foreach src [Glob *.in] {
+        set dest [file rootname $src]
+        Generate $dest processor $src {
+            run $script $inputs $target
+        }
+        Depends all [make-local $outfile]
+    }
     ===========================================
 
 waf is great if you feel like writing a python script
@@ -268,7 +268,7 @@ Now I am working in the 'main' directory, and I modify the generator
 
     =========================================
     $ cd main
-    $ touch ../gen/gen.c 
+    $ touch ../gen/gen.c
     $ tmake
     tmake: Entering directory `/Volumes/Development/tmake/test8'
     Publish bin/gen
@@ -341,10 +341,10 @@ Compare:
     def build(bld):
             bld.program(
                 source       = ['a.c b.c', bld.path.ant_glob('*.c')],
-                target       = 'a', 
-                includes     = ['.'], 
-                install_path = '${SOME_PATH}/bin', 
-                cflags       = ['-DTEST'], 
+                target       = 'a',
+                includes     = ['.'],
+                install_path = '${SOME_PATH}/bin',
+                cflags       = ['-DTEST'],
         )
     =========================================
 
@@ -441,7 +441,7 @@ tmake -dg traces the build reasoning, including the dependency chain
 which led to the target being rebuilt.
 
     =========================================
-    $ touch ../sub/x.c 
+    $ touch ../sub/x.c
     $ tmake -dg
     [g] main/all --> main/a --> <lib>x --> sub/libx.a --> sub/x.o (older sub/x.c)
     Cc sub/x.o
