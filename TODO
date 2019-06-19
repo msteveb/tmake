@@ -49,6 +49,12 @@ there is some query like --find. At the moment -dv doesn't report 'define', but
 only 'define-append' and friends because it is too noise. Fix it so that -dv is
 more useful without being too noisy.
 
+Currently this is supported with --showvars=full to show the location
+that each variables is defined. Although support for multiple
+locations (e.g. from define-append) is broken.
+
+Doesn't address bound variables in rules.
+
 Cleaning files from the source tree
 -----------------------------------
 
