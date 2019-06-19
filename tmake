@@ -1715,6 +1715,39 @@ proc num-nonphony-targets {} {
 # Variable Handling
 # ==================================================================
 
+# Internal implementation of define-related commands
+proc define-var {name value src addsrc force} {
+	global tmake
+	if {[dict exists $tmake(fixedvars) $name] && !$force} {
+		dputs v "define $name => not overwriting fixed value"
+		return
+	}
+	# Normally we try to take source info from the value, but if there is none,
+	# use source info from the name
+	if {$src eq "" || [lindex $src 0] eq ""} {
+		set src [info source $name]
+	}
+	if {!$addsrc} {
+		dict set tmake(varloc) $name {}
+	}
+	dict set tmake(varloc) $name $src 1
+	dict set tmake(defines) $name $value
+	# Ensure that the value is visibile the current spec file
+	uplevel #1 [list set $name $value]
+}
+
+# Internal command. If $list is empty, returns 1 (e.g. for "define ABC")
+# otherwise returns the joined list, but preserving source information.
+proc define-get-value {list} {
+	if {[llength $list]} {
+		set src [info source [lindex $list 0]]
+		set value [join $list]
+		list $value $src
+	} else {
+		list 1 ""
+	}
+}
+
 # @define name arg ...
 #
 # Set a variable to the given value, unless it was defined with define!
@@ -1722,22 +1755,9 @@ proc num-nonphony-targets {} {
 # e.g. define CC arm-linux-gcc -mbig-endian
 #
 proc define {name args} {
-	if {![dict exists $::tmake(fixedvars) $name]} {
-		dict set ::tmake(varloc) $name {}
-		dict set ::tmake(varloc) $name [info source $name] 1
-		if {[llength $args]} {
-			dict set ::tmake(varloc) $name [info source [lindex $args 0]] 1
-			set value [join $args]
-		} else {
-			set value 1
-		}
-		#dputs v "define $name $value"
-		dict set ::tmake(defines) $name $value
-		# Ensure that the value is visibile the current spec file
-		uplevel #1 [list set $name $value]
-	} else {
-		dputs v "define $name => not overwriting fixed value"
-	}
+	set valueinfo [define-get-value $args]
+	define-var $name {*}$valueinfo 0 0
+	dputs v "define $name [join $args]"
 }
 
 # @define! name arg ...
@@ -1746,12 +1766,10 @@ proc define {name args} {
 # Should be reserved for variables set directly by the user from the commandline,
 # possibly indirectly
 proc define! {name args} {
-	dict set ::tmake(varloc) $name cmdline 1
-	set value [join $args]
 	dict set ::tmake(fixedvars) $name 1
-	dict set ::tmake(defines) $name $value
-	uplevel #1 [list set $name $value]
-	dputs v "define! $name $value"
+	set valueinfo [define-get-value $args]
+	define-var $name {*}$valueinfo 0 1
+	dputs v "define! $name [join $args]"
 }
 
 # @define? name arg ...
@@ -1761,9 +1779,10 @@ proc define! {name args} {
 #
 proc define? {name args} {
 	if {[get-define $name] eq ""} {
-		define $name {*}$args
+		set valueinfo [define-get-value $args]
+		define-var $name {*}$valueinfo 0 0
 	}
-	dputs v "define? $name $args"
+	dputs v "define? $name [join $args]"
 }
 
 # @define-append name arg ...
@@ -1773,10 +1792,16 @@ proc define? {name args} {
 # separated by a space.
 #
 proc define-append {name args} {
+	lassign [define-get-value $args] newvalue src
 	set value [get-define $name]
-	append-with-space value [join $args]
-	define $name $value
-	dputs v "define-append $name $args"
+	if {$value eq ""} {
+		set appendsrc 0
+	} else {
+		set appendsrc 1
+	}
+	append-with-space value $newvalue
+	define-var $name $value $src $appendsrc 0
+	dputs v "define-append $name [join $args]"
 }
 # @define-list-append value ...
 #
@@ -1787,14 +1812,20 @@ proc define-append {name args} {
 # where the -I would be omitted
 #
 proc define-list-append {name args} {
+	lassign [define-get-value $args] newvalue src
 	set value [get-define $name]
+	if {$value eq ""} {
+		set appendsrc 0
+	} else {
+		set appendsrc 1
+	}
 	# Avoid duplicates
 	foreach arg $args {
 		if {$arg ni $value} {
 			append-with-space value $arg
 		}
 	}
-	define $name $value
+	define-var $name $value $src $appendsrc 0
 	dputs v "$name += [join $args] => $value"
 }
 
@@ -1844,7 +1875,7 @@ proc show-all-defines {what} {
 			puts -nonewline [colout colnote $k=$val]
 			set locs [get-define-locs $k]
 			if {[llength $locs]} {
-				puts -nonewline " [join $locs ,]"
+				puts -nonewline " [join $locs ", "]"
 			}
 			puts ""
 		} else {
