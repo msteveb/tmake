@@ -654,6 +654,24 @@ Dynamic dependencies:
   the build changes so that this no longer occurs, or if a new header file is added
   in a directory earlier in the set of include paths.
 
+Note that only inputs are passed to the dynamic dependency scanner, not all dependencies.
+For example, if a rule uses a generator, we typically don't want to scan the generator
+for dynamic dependencies, only the input files.
+
+XXX: Is this really true? We could imagine a case where the script generator "includes"
+other scripts and it would be useful to add those other files as dynamic dependencies.
+But the scanner would need to be different for the generator vs the input files. Currently
+a rule can have only one dyndep rule, so there isn't a good mechanism for scanning
+the generator vs the inputs. Perhaps instead of -dyndeps, we should have a dyndeps rule
+that explains how to scan additional dependencies for a file. e.g.
+
+  dyndeps abc.c {header-scan-regexp-recursive $incpath $pattern}
+
+Then whenever abc.c is a dependency of a rule, it would be scanned to add additional dyndeps.
+But where do incpaths and pattern come from? Since this is outside a rule, and abc.c could
+be used in multiple different ways, including to generate documentation. Need to think about
+this some more.
+
 XXX: Note that "#include INCLUDEFILENAME" is not supported. Suggest workarounds.
 
 Reliability

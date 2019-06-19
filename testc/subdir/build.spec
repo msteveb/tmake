@@ -4,8 +4,7 @@
 Generate test1.out parser test1.in {
 	run $script $inputs >$target
 } -dyndep {
-	# We use the path to the first file as INCPATH
-	header-scan-regexp-recursive [file dirname [lindex $inputs 0]] "" $PARSER_INC_PATTERN
+	parser-dyndep-scan $PARSER_INC_PATTERN
 }
 
 PublishBin --script parser

@@ -2595,7 +2595,9 @@ proc calc-dyndeps {vardict target} {
 
 	set dyndeps {}
 	if {$t(dyndep) ne ""} {
-		foreach i $t(depends) {
+		# Note that we only look at $inputs when scanning for dyndeps, not $depends
+		# XXX: Is this correct?
+		foreach i $t(inputs) {
 			lassign [run-do $vardict [concat $t(dyndep) $i]] rc result opts
 			if {$rc == 0} {
 				lappend dyndeps {*}$result
