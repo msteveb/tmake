@@ -1,0 +1,27 @@
+#!/usr/bin/env jimsh
+
+# A simple parser that replaces: include filename with the contents of that file
+# How to find the location of include files? We assume they are relative to the
+# original source file
+
+package require fileutil
+
+set filename [lindex $argv 0]
+set INCDIR [file dirname $filename]
+
+proc output_lines {filename} {
+	set path [file join $::INCDIR $filename]
+	if {![file exists $path]} {
+		error "Could not find $path"
+	}
+	foreach line [split [readfile $path] \n] {
+		if {[string match "include *" $line]} {
+			lassign $line include filename
+			output_lines $filename
+		} else {
+			puts $line
+		}
+	}
+}
+
+output_lines [file tail $filename]

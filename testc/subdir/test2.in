@@ -1,0 +1,4 @@
+test2: line1
+include test4.in
+extra line
+test2: line3

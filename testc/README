@@ -1,0 +1,21 @@
+Testing recursive dynamic dependencies
+
+There was previously currently a bug in tmake where we have this situation
+(where <-- represents "includes")
+
+file1 <-- file2 <-- file3
+
+Then when file2 is modified, file1 dependencies are correctly
+rebuilt, but the cached dynamic dependencies for file1 aren't
+updated (say, to remove file3 and add file4)
+
+i.e. the caching is too aggressive
+
+We need to include the hash of each scanned file as part of the cached
+results so we can check if the file has changed and need rescanning.
+
+This is now done by storing {type path hash} for each entry.
+If the hash changes, a scan is forced.
+Note that we don't need to bump the tmake cache version since any existing
+.makecache will simply have {} for the hash, which forces a rescan.
+

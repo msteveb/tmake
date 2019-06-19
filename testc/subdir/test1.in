@@ -1,0 +1,3 @@
+test1: line1
+include test2.in
+test1: line3

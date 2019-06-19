@@ -3410,7 +3410,7 @@ proc header-scan-regexp {suffix regex filename} {
 	return $headers
 }
 
-# Returns a list of {type path-to-filename}
+# Returns a list of {type path-to-filename hash}
 # where type is "target" or "source"
 #
 # If the $path/$filename is neither a target nor source, the empty list is returned
@@ -3425,7 +3425,7 @@ proc find-file-on-path {filename path} {
 		if {$status in {built uptodate}} {
 			# with tmake -n, the file may not have actually been built
 			set filepath [file-build $f]
-			set result [list target $f]
+			set result [list target $f [calc-file-hash $f]]
 		} else {
 			dputs-D "failed to build $f"
 			if {$::tmake(quickstop)} {
@@ -3436,18 +3436,15 @@ proc find-file-on-path {filename path} {
 		}
 	} else {
 		if {[file exists $f]} {
-			set result [list source $f]
+			set result [list source $f [get-file-hash $f]]
 		}
 	}
-	#puts "find-file-on-path $filename + $path ($f) => $result "
+	#dputs-D "find-file-on-path: file=$filename, path=$path ($f) => $result"
 	return $result
 }
 
-# Returns a list of {type path mtime ...}
-# where type is "target" or "source" and the path is:
-#
-# target -  $path-to-filename
-# source -  $path-to-filename
+# Returns a list of {type path hash}
+# where type is "target" or "source".
 #
 # Note that the current directory (.) is special.
 # We return both the first match along $paths and any match on [file dirname $filename]
@@ -3459,37 +3456,35 @@ proc find-file {filename paths} {
 	# First check the per-run cache
 	set cachekey "$filename $paths"
 	if {[dict exists $::tmake(depfindcache) $cachekey]} {
-		#puts "=> (cached) [dict get $::tmake(depfindcache) $cachekey]"
-		return [dict get $::tmake(depfindcache) $cachekey]
+		set result [dict get $::tmake(depfindcache) $cachekey]
+		#puts "find-file (cached) filename=$filename, paths=$paths => $result"
+		return $result
 	}
 
 	set result {}
 	set filedir [file dirname $filename]
 	set seendot 0
 
+	# Add $filedir to the end of paths if not already there
+	if {$filedir ni $paths} {
+		lappend paths $filedir
+	}
+
+	set result {}
 	# First search the given paths
 	foreach p $paths {
-		if {$p eq $filedir} {
-			incr seendot
-		}
-		lappend result {*}[find-file-on-path $filename $p]
+		set result [find-file-on-path $filename $p]
 		if {[llength $result]} {
 			break
 		}
 	}
 
-	# If we didn't search $filedir, do it now
-	if {!$seendot} {
-		lappend result {*}[find-file-on-path $filename $filedir]
-	}
+	#puts "find-file filename=$filename, paths=$paths => $result"
 
 	if {[llength $result] == 0} {
 		dputs-D "Not a file and not a target, $filename"
 	}
-	if {[debug-is-set D] && [llength $result] > 3} {
-		dputs-D "Note: Found multiple locations for $filename: [join $result]"
-	}
-	#puts "find-file filename=$filename, paths=$paths => $result"
+
 	# Cache this result
 	dict set ::tmake(depfindcache) $cachekey $result
 
@@ -3521,17 +3516,17 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 		lassign [dict get $tmakecache(headerscan) $filename] cache_stamp headers cachedresults
 		if {$cache_stamp eq $stamp} {
 			# Need to verify that find-file returns the same result as last time
-			#puts "---- $filename ----"
-			#parray cachedresults
 			dputs-D "verifying up-to-date cached results for $filename"
 			set ok 1
-			foreach {cfile ctypepath} $cachedresults {
-				set typepath [find-file $cfile $incpaths]
-				if {$typepath ne $ctypepath} {
-					dputs-d "previously $cfile resolved to {$ctypepath}, but now resolves to {$typepath} -  forcing rescan"
+			#cachedresults=test2.in {source subdir/test2.in 1560901841973445} test4.in {source subdir/test4.in 1560899705528444}
+			foreach {cname cinfo} $cachedresults {
+				set finfo [find-file $cname $incpaths]
+				if {$cinfo ne $finfo} {
+					dputs-d "$cname has changed from {$cinfo} => {$finfo} -- rescan"
 					set ok 0
 					break
 				}
+				dputs-D "ok, $cname still resolves to {$cinfo}"
 			}
 			if {$ok} {
 				# Can reuse the cache
@@ -3558,7 +3553,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 				set scanned($d) 1
 				set findfiles [find-file $d $incpaths]
 				set results($d) $findfiles
-				foreach {type deppath} $findfiles {
+				foreach {type deppath hash} $findfiles {
 					set deps($deppath) 1
 					lappend newscan {*}[header-scan-regexp $suffix $regex $deppath]
 				}
