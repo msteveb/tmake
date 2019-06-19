@@ -656,21 +656,9 @@ Dynamic dependencies:
 
 Note that only inputs are passed to the dynamic dependency scanner, not all dependencies.
 For example, if a rule uses a generator, we typically don't want to scan the generator
-for dynamic dependencies, only the input files.
-
-XXX: Is this really true? We could imagine a case where the script generator "includes"
-other scripts and it would be useful to add those other files as dynamic dependencies.
-But the scanner would need to be different for the generator vs the input files. Currently
-a rule can have only one dyndep rule, so there isn't a good mechanism for scanning
-the generator vs the inputs. Perhaps instead of -dyndeps, we should have a dyndeps rule
-that explains how to scan additional dependencies for a file. e.g.
-
-  dyndeps abc.c {header-scan-regexp-recursive $incpath $pattern}
-
-Then whenever abc.c is a dependency of a rule, it would be scanned to add additional dyndeps.
-But where do incpaths and pattern come from? Since this is outside a rule, and abc.c could
-be used in multiple different ways, including to generate documentation. Need to think about
-this some more.
+for dynamic dependencies, only the input files. If the generator has it's own dynamic
+dependencies, they should be included in the rule to build that generator. (If it is a script
+generator, the PublishBin rule can be used to add dynamic dependencies).
 
 XXX: Note that "#include INCLUDEFILENAME" is not supported. Suggest workarounds.
 
@@ -700,6 +688,12 @@ tmake --showcache
 Debugging
 ---------
 Explain the various debugging "types" and how to use them when things go wrong.
+
+This section on tracking variable definitions:
+
+Variable definitions can be printed with 'tmake -dv'. In addition,
+the location of all variable definitions are now tracked and available with
+tmake --showvars=full.
 
 Explain tmake --find=rule
 
@@ -999,9 +993,9 @@ There a few extra things to consider.
   will never be confused with a time.
 
 * Currently cache entries for old source files are never removed
-  from the cache (the as for dynamic dependencies). This should
+  from the cache (such as for dynamic dependencies). This should
   not be a big problem in practice, but the cache can be pruned with
-  tcache --cacheclean
+  tmake --cacheclean
 
 Hashes are compued by running 'md5sum' (or md5, for MacOS) because it is a fast hash
 with a low chance of collisions.

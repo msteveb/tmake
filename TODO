@@ -42,12 +42,6 @@ Need to revisit this
 
 Tracking Variables
 ------------------
-Variable definitions can be printed with 'tmake -dv'. In addition, 
-the location of all variable definitions are now tracked and available with
-tmake --showvars=full.
-
-Need to move this information into the docs and out of TODO.
-
 There is no support for finding how/where variables are bound in rules.
 
 Cleaning files from the source tree
@@ -101,6 +95,10 @@ files will be created as root.
 One file that will be updated as a result of make install is .makecache, but because that is
 an existing file that is rewritten, it won't change owner. Should we add something to prevent
 non-install rules running as root?
+
+Yes. We now have -rootok that can be used on install rules.
+We also have INSTALLDEPTARGET in rulebase.default to ensure that install deps can be built
+before installing.
 
 Propagating Defines
 -------------------
