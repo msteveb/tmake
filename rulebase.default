@@ -683,22 +683,29 @@ proc run-test-command {testcommand} {
 	return -code break
 }
 
-# @hard-link dest source ?target-args...?
+# @hard-link ?--copy? dest source ?target-args...?
 #
-# Creates a rule to link $dest to $source
+# Creates a rule to link $dest to $source (or copy if --copy is specified)
 # Additional arguments may be passed and are added to the target rule.
 #
 proc hard-link {args} {
 	#show-this-rule
 
-	getopt {dest source args} args
+	getopt {dest source --copy args} args
 
 	# XXX: If the platform doesn't support hard links,
 	# consider falling back to soft links and then to file copy
-	target $dest -inputs $source -do {
-		file delete $target
-		file-link $target $inputs
-	} {*}$args
+	if {$copy || ![exists -command file-link]} {
+		target $dest -inputs $source -do {
+			file delete $target
+			file copy $inputs $target
+		} {*}$args
+	} else {
+		target $dest -inputs $source -do {
+			file delete $target
+			file-link $target $inputs
+		} {*}$args
+	}
 
 	# Note that we can't use Clean here because $dest is already
 	# a local name
@@ -990,16 +997,17 @@ The following options are supported:
 }
 
 rule PublishBin {args} {
-PublishBin ?--script? name ...
+PublishBin ?--script? ?--copy? name ...
 
 Publishes one or more executables (either binaries or scripts)
 Unless --script is specified, the executable extension (e.g. .exe) is used.
+If --copy is specified, the target is copied. Otherwise it is hard linked (if supported).
 
 Note that 'name' can be 'target=src' to rename a file when published.
 } {
 	show-this-rule
 
-	getopt {--script args} args
+	getopt {--script --copy args} args
 
 	set destdir [publish-dir bin]
 
@@ -1008,11 +1016,14 @@ Note that 'name' can be 'target=src' to rename a file when published.
 	} else {
 		set exe [get-define EXEEXT]
 	}
-
+	set opts {}
+	if {$copy} {
+		set opts --copy
+	}
 
 	# XXX Currently does not support external sources
 	foreach {dest src} [expand-filespec $destdir $args 0] {
-		hard-link $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $targetname} -alias <bin>[file tail $dest]
+		hard-link {*}$opts $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $targetname} -alias <bin>[file tail $dest]
 		target $dest$exe -add -do {
 			chmodx-file $target
 		}

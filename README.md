@@ -658,7 +658,7 @@ Note that only inputs are passed to the dynamic dependency scanner, not all depe
 For example, if a rule uses a generator, we typically don't want to scan the generator
 for dynamic dependencies, only the input files. If the generator has it's own dynamic
 dependencies, they should be included in the rule to build that generator. (If it is a script
-generator, the PublishBin rule can be used to add dynamic dependencies).
+generator, PublishBin --copy can be used to add dynamic dependencies).
 
 XXX: Note that "#include INCLUDEFILENAME" is not supported. Suggest workarounds.
 

@@ -3,8 +3,11 @@
 # A simple parser that replaces: include filename with the contents of that file
 # How to find the location of include files? We assume they are relative to the
 # original source file
-
 package require fileutil
+
+# This is actually a dummy package designed to test the use
+# of dynamic dependencies for script generators
+package require parser-util
 
 set filename [lindex $argv 0]
 set INCDIR [file dirname $filename]

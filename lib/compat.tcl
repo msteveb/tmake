@@ -190,7 +190,7 @@ proc file-join {dir path} {
 # 'dest' -> 'target'
 if {"link" in [file -commands]} {
 	alias file-link file link
-} else {
+} elseif {![iswin]} {
 	proc file-link {{-symbolic|-hard -hard} newname target} {
 		set opt ${-symbolic|-hard}
 		switch -glob -- $opt {
