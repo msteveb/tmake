@@ -11,6 +11,7 @@
 #
 ## CC       - C compiler
 ## CXX      - C++ compiler
+## CPP      - C preprocessor
 ## CCACHE   - Set to "none" to disable automatic use of ccache
 ## CFLAGS   - Additional C compiler flags
 ## CXXFLAGS - Additional C++ compiler flags
@@ -29,11 +30,6 @@
 use system
 
 module-options {}
-
-# Note that the return code is not meaningful
-proc cc-check-something {name code} {
-	uplevel 1 $code
-}
 
 # Checks for the existence of the given function by linking
 #
@@ -155,7 +151,7 @@ proc cc-check-types {args} {
 
 # @cc-check-defines define ...
 #
-# Checks that the given preprocessor symbol is defined.
+# Checks that the given preprocessor symbols are defined.
 proc cc-check-defines {args} {
 	cc-check-some-feature $args {
 		cctest_define $each
@@ -218,7 +214,7 @@ proc cc-check-members {args} {
 # These libraries are not automatically added to 'LIBS'.
 #
 # Returns 1 if found or 0 if not.
-# 
+#
 proc cc-check-function-in-lib {function libs {otherlibs {}}} {
 	msg-checking "Checking libs for $function..."
 	set found 0
@@ -242,9 +238,8 @@ proc cc-check-function-in-lib {function libs {otherlibs {}}} {
 			}
 		}
 	}
-	if {$found} {
-		define [feature-define-name $function]
-	} else {
+	define-feature $function $found
+	if {!$found} {
 		msg-result "no"
 	}
 	return $found
@@ -309,6 +304,29 @@ proc cc-check-progs {args} {
 	expr {!$failed}
 }
 
+# @cc-path-progs prog ...
+#
+# Like cc-check-progs, but sets the define to the full path rather
+# than just the program name.
+#
+proc cc-path-progs {args} {
+	set failed 0
+	foreach prog $args {
+		set PROG [string toupper $prog]
+		msg-checking "Checking for $prog..."
+		set path [find-executable-path $prog]
+		if {$path eq ""} {
+			msg-result no
+			define $PROG false
+			incr failed
+		} else {
+			msg-result $path
+			define $PROG $path
+		}
+	}
+	expr {!$failed}
+}
+
 # Adds the given settings to $::autosetup(ccsettings) and
 # returns the old settings.
 #
@@ -328,14 +346,14 @@ proc cc-add-settings {settings} {
 		switch -exact -- $name {
 			-cflags - -includes {
 				# These are given as lists
-				lappend new($name) {*}$value
+				lappend new($name) {*}[list-non-empty $value]
 			}
 			-declare {
 				lappend new($name) $value
 			}
 			-libs {
 				# Note that new libraries are added before previous libraries
-				set new($name) [list {*}$value {*}$new($name)]
+				set new($name) [list {*}[list-non-empty $value] {*}$new($name)]
 			}
 			-link - -lang - -nooutput {
 				set new($name) $value
@@ -417,7 +435,7 @@ proc cc-with {settings args} {
 }
 
 # @cctest ?settings?
-# 
+#
 # Low level C/C++ compiler checker. Compiles and or links a small C program
 # according to the arguments and returns 1 if OK, or 0 if not.
 #
@@ -448,7 +466,6 @@ proc cc-with {settings args} {
 # Any failures are recorded in 'config.log'
 #
 proc cctest {args} {
-	set src conftest__.c
 	set tmp conftest__
 
 	# Easiest way to merge in the settings
@@ -490,9 +507,11 @@ proc cctest {args} {
 	lappend cmdline {*}[get-define CCACHE]
 	switch -exact -- $opts(-lang) {
 		c++ {
+			set src conftest__.cpp
 			lappend cmdline {*}[get-define CXX] {*}[get-define CXXFLAGS]
 		}
 		c {
+			set src conftest__.c
 			lappend cmdline {*}[get-define CC] {*}[get-define CFLAGS]
 		}
 		default {
@@ -679,6 +698,15 @@ if {[get-define CC] eq ""} {
 }
 
 define CCACHE [find-an-executable [get-env CCACHE ccache]]
+
+# If any of these are set in the environment, propagate them to the AUTOREMAKE commandline
+foreach i {CC CXX CCACHE CPP CFLAGS CXXFLAGS CXXFLAGS LDFLAGS LIBS CROSS CPPFLAGS LINKFLAGS CC_FOR_BUILD LD} {
+	if {[env-is-set $i]} {
+		# Note: If the variable is set on the command line, get-env will return that value
+		# so the command line will continue to override the environment
+		define-append AUTOREMAKE [quote-if-needed $i=[get-env $i ""]]
+	}
+}
 
 # Initial cctest settings
 cc-store-settings {-cflags {} -includes {} -declare {} -link 0 -lang c -libs {} -code {} -nooutput 0}
