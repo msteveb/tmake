@@ -5,8 +5,4 @@ use tmake
 options {
 }
 
-make-tmake-settings objdir/settings.conf *
-
-if {![file exists Makefile]} {
-	exec autosetup/tmake --init
-}
+make-tmake-settings [get-env BUILDDIR objdir]/settings.conf {[A-Z]*} *dir lib_*

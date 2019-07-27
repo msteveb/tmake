@@ -4,13 +4,14 @@
 # @synopsis:
 #
 # The 'cc' module supports checking various 'features' of the C or C++
-# compiler/linker environment. Common commands are cc-check-includes,
-# cc-check-types, cc-check-functions, cc-with, make-autoconf-h and make-template.
+# compiler/linker environment. Common commands are 'cc-check-includes',
+# 'cc-check-types', 'cc-check-functions', 'cc-with', 'make-config-header' and 'make-template'.
 #
 # The following environment variables are used if set:
 #
 ## CC       - C compiler
 ## CXX      - C++ compiler
+## CPP      - C preprocessor
 ## CCACHE   - Set to "none" to disable automatic use of ccache
 ## CFLAGS   - Additional C compiler flags
 ## CXXFLAGS - Additional C++ compiler flags
@@ -30,11 +31,6 @@ use system
 
 module-options {}
 
-# Note that the return code is not meaningful
-proc cc-check-something {name code} {
-	uplevel 1 $code
-}
-
 # Checks for the existence of the given function by linking
 #
 proc cctest_function {function} {
@@ -49,7 +45,8 @@ proc cctest_type {type} {
 # Checks for the existence of the given type/structure member.
 # e.g. "struct stat.st_mtime"
 proc cctest_member {struct_member} {
-	lassign [split $struct_member .] struct member
+	# split at the first dot
+	regexp {^([^.]+)[.](.*)$} $struct_member -> struct member
 	cctest -code "static $struct _s; return sizeof(_s.$member);"
 }
 
@@ -69,8 +66,8 @@ proc cctest_decl {name} {
 # @cc-check-sizeof type ...
 #
 # Checks the size of the given types (between 1 and 32, inclusive).
-# Defines a variable with the size determined, or "unknown" otherwise.
-# e.g. for type 'long long', defines SIZEOF_LONG_LONG.
+# Defines a variable with the size determined, or 'unknown' otherwise.
+# e.g. for type 'long long', defines 'SIZEOF_LONG_LONG'.
 # Returns the size of the last type.
 #
 proc cc-check-sizeof {args} {
@@ -110,10 +107,36 @@ proc cc-check-some-feature {list script} {
 
 # @cc-check-includes includes ...
 #
-# Checks that the given include files can be used
+# Checks that the given include files can be used.
 proc cc-check-includes {args} {
 	cc-check-some-feature $args {
-		cctest -includes $each
+		set with {}
+		if {[dict exists $::autosetup(cc-include-deps) $each]} {
+			set deps [dict keys [dict get $::autosetup(cc-include-deps) $each]]
+			msg-quiet cc-check-includes {*}$deps
+			foreach i $deps {
+				if {[have-feature $i]} {
+					lappend with $i
+				}
+			}
+		}
+		if {[llength $with]} {
+			cc-with [list -includes $with] {
+				cctest -includes $each
+			}
+		} else {
+			cctest -includes $each
+		}
+	}
+}
+
+# @cc-include-needs include required ...
+#
+# Ensures that when checking for '$include', a check is first
+# made for each '$required' file, and if found, it is included with '#include'.
+proc cc-include-needs {file args} {
+	foreach depfile $args {
+		dict set ::autosetup(cc-include-deps) $file $depfile 1
 	}
 }
 
@@ -128,7 +151,7 @@ proc cc-check-types {args} {
 
 # @cc-check-defines define ...
 #
-# Checks that the given preprocessor symbol is defined
+# Checks that the given preprocessor symbols are defined.
 proc cc-check-defines {args} {
 	cc-check-some-feature $args {
 		cctest_define $each
@@ -138,8 +161,8 @@ proc cc-check-defines {args} {
 # @cc-check-decls name ...
 #
 # Checks that each given name is either a preprocessor symbol or rvalue
-# such as an enum. Note that the define used for a decl is HAVE_DECL_xxx
-# rather than HAVE_xxx
+# such as an enum. Note that the define used is 'HAVE_DECL_xxx'
+# rather than 'HAVE_xxx'.
 proc cc-check-decls {args} {
 	set ret 1
 	foreach name $args {
@@ -158,7 +181,7 @@ proc cc-check-decls {args} {
 
 # @cc-check-functions function ...
 #
-# Checks that the given functions exist (can be linked)
+# Checks that the given functions exist (can be linked).
 proc cc-check-functions {args} {
 	cc-check-some-feature $args {
 		cctest_function $each
@@ -168,7 +191,7 @@ proc cc-check-functions {args} {
 # @cc-check-members type.member ...
 #
 # Checks that the given type/structure members exist.
-# A structure member is of the form "struct stat.st_mtime"
+# A structure member is of the form 'struct stat.st_mtime'.
 proc cc-check-members {args} {
 	cc-check-some-feature $args {
 		cctest_member $each
@@ -177,21 +200,21 @@ proc cc-check-members {args} {
 
 # @cc-check-function-in-lib function libs ?otherlibs?
 #
-# Checks that the given given function can be found in one of the libs.
+# Checks that the given function can be found in one of the libs.
 #
 # First checks for no library required, then checks each of the libraries
 # in turn.
 #
-# If the function is found, the feature is defined and lib_$function is defined
-# to -l$lib where the function was found, or "" if no library required.
-# In addition, -l$lib is added to the LIBS define.
+# If the function is found, the feature is defined and 'lib_$function' is defined
+# to '-l$lib' where the function was found, or "" if no library required.
+# In addition, '-l$lib' is prepended to the 'LIBS' define.
 #
 # If additional libraries may be needed for linking, they should be specified
-# as $extralibs as "-lotherlib1 -lotherlib2".
-# These libraries are not automatically added to LIBS.
+# with '$extralibs' as '-lotherlib1 -lotherlib2'.
+# These libraries are not automatically added to 'LIBS'.
 #
 # Returns 1 if found or 0 if not.
-# 
+#
 proc cc-check-function-in-lib {function libs {otherlibs {}}} {
 	msg-checking "Checking libs for $function..."
 	set found 0
@@ -206,7 +229,8 @@ proc cc-check-function-in-lib {function libs {otherlibs {}}} {
 					if {[cctest_function $function]} {
 						msg-result -l$lib
 						define lib_$function -l$lib
-						define-append LIBS -l$lib
+						# prepend to LIBS
+						define LIBS "-l$lib [get-define LIBS]"
 						incr found
 						break
 					}
@@ -214,9 +238,8 @@ proc cc-check-function-in-lib {function libs {otherlibs {}}} {
 			}
 		}
 	}
-	if {$found} {
-		define [feature-define-name $function]
-	} else {
+	define-feature $function $found
+	if {!$found} {
 		msg-result "no"
 	}
 	return $found
@@ -227,11 +250,13 @@ proc cc-check-function-in-lib {function libs {otherlibs {}}} {
 # Checks for existence of the given compiler tools, taking
 # into account any cross compilation prefix.
 #
-# For example, when checking for "ar", first AR is checked on the command
-# line and then in the environment. If not found, "${host}-ar" or
-# simply "ar" is assumed depending upon whether cross compiling.
-# The path is searched for this executable, and if found AR is defined
+# For example, when checking for 'ar', first 'AR' is checked on the command
+# line and then in the environment. If not found, '${host}-ar' or
+# simply 'ar' is assumed depending upon whether cross compiling.
+# The path is searched for this executable, and if found 'AR' is defined
 # to the executable name.
+# Note that even when cross compiling, the simple 'ar' is used as a fallback,
+# but a warning is generated. This is necessary for some toolchains.
 #
 # It is an error if the executable is not found.
 #
@@ -239,10 +264,16 @@ proc cc-check-tools {args} {
 	foreach tool $args {
 		set TOOL [string toupper $tool]
 		set exe [get-env $TOOL [get-define cross]$tool]
-		if {![find-executable $exe]} {
-			user-error "Failed to find $exe"
+		if {[find-executable {*}$exe]} {
+			define $TOOL $exe
+			continue
 		}
-		define $TOOL $exe
+		if {[find-executable {*}$tool]} {
+			msg-result "Warning: Failed to find $exe, falling back to $tool which may be incorrect"
+			define $TOOL $tool
+			continue
+		}
+		user-error "Failed to find $exe"
 	}
 }
 
@@ -250,10 +281,10 @@ proc cc-check-tools {args} {
 #
 # Checks for existence of the given executables on the path.
 #
-# For example, when checking for "grep", the path is searched for
-# the executable, 'grep', and if found GREP is defined as "grep".
+# For example, when checking for 'grep', the path is searched for
+# the executable, 'grep', and if found 'GREP' is defined as 'grep'.
 #
-# It the executable is not found, the variable is defined as false.
+# If the executable is not found, the variable is defined as 'false'.
 # Returns 1 if all programs were found, or 0 otherwise.
 #
 proc cc-check-progs {args} {
@@ -268,6 +299,29 @@ proc cc-check-progs {args} {
 		} else {
 			msg-result ok
 			define $PROG $prog
+		}
+	}
+	expr {!$failed}
+}
+
+# @cc-path-progs prog ...
+#
+# Like cc-check-progs, but sets the define to the full path rather
+# than just the program name.
+#
+proc cc-path-progs {args} {
+	set failed 0
+	foreach prog $args {
+		set PROG [string toupper $prog]
+		msg-checking "Checking for $prog..."
+		set path [find-executable-path $prog]
+		if {$path eq ""} {
+			msg-result no
+			define $PROG false
+			incr failed
+		} else {
+			msg-result $path
+			define $PROG $path
 		}
 	}
 	expr {!$failed}
@@ -292,16 +346,16 @@ proc cc-add-settings {settings} {
 		switch -exact -- $name {
 			-cflags - -includes {
 				# These are given as lists
-				lappend new($name) {*}$value
+				lappend new($name) {*}[list-non-empty $value]
 			}
 			-declare {
 				lappend new($name) $value
 			}
 			-libs {
 				# Note that new libraries are added before previous libraries
-				set new($name) [list {*}$value {*}$new($name)]
+				set new($name) [list {*}[list-non-empty $value] {*}$new($name)]
 			}
-			-link - -lang {
+			-link - -lang - -nooutput {
 				set new($name) $value
 			}
 			-source - -sourcefile - -code {
@@ -339,12 +393,12 @@ proc cc-update-settings {args} {
 
 # @cc-with settings ?{ script }?
 #
-# Sets the given 'cctest' settings and then runs the tests in 'script'.
-# Note that settings such as -lang replace the current setting, while
-# those such as -includes are appended to the existing setting.
+# Sets the given 'cctest' settings and then runs the tests in '$script'.
+# Note that settings such as '-lang' replace the current setting, while
+# those such as '-includes' are appended to the existing setting.
 #
 # If no script is given, the settings become the default for the remainder
-# of the auto.def file.
+# of the 'auto.def' file.
 #
 ## cc-with {-lang c++} {
 ##   # This will check with the C++ compiler
@@ -356,7 +410,7 @@ proc cc-update-settings {args} {
 ##   # back to just the C++ compiler
 ## }
 #
-# The -libs setting is special in that newer values are added *before* earlier ones.
+# The '-libs' setting is special in that newer values are added *before* earlier ones.
 #
 ## cc-with {-libs {-lc -lm}} {
 ##   cc-with {-libs -ldl} {
@@ -374,15 +428,15 @@ proc cc-with {settings args} {
 		set rc [catch {uplevel 1 [lindex $args 0]} result info]
 		cc-store-settings $save
 		if {$rc != 0} {
-			return $result -code [dict get $info -code]
+			return -code [dict get $info -code] $result
 		}
 		return $result
 	}
 }
 
 # @cctest ?settings?
-# 
-# Low level C compiler checker. Compiles and or links a small C program
+#
+# Low level C/C++ compiler checker. Compiles and or links a small C program
 # according to the arguments and returns 1 if OK, or 0 if not.
 #
 # Supported settings are:
@@ -396,8 +450,9 @@ proc cc-with {settings args} {
 ## -code code          Code to compile in the body of main()
 ## -source code        Compile a complete program. Ignore -includes, -declare and -code
 ## -sourcefile file    Shorthand for -source [readfile [get-define srcdir]/$file]
+## -nooutput 1         Treat any compiler output (e.g. a warning) as an error
 #
-# Unless -source or -sourcefile is specified, the C program looks like:
+# Unless '-source' or '-sourcefile' is specified, the C program looks like:
 #
 ## #include <firstinclude>   /* same for remaining includes in the list */
 ##
@@ -411,7 +466,6 @@ proc cc-with {settings args} {
 # Any failures are recorded in 'config.log'
 #
 proc cctest {args} {
-	set src conftest__.c
 	set tmp conftest__
 
 	# Easiest way to merge in the settings
@@ -453,9 +507,11 @@ proc cctest {args} {
 	lappend cmdline {*}[get-define CCACHE]
 	switch -exact -- $opts(-lang) {
 		c++ {
+			set src conftest__.cpp
 			lappend cmdline {*}[get-define CXX] {*}[get-define CXXFLAGS]
 		}
 		c {
+			set src conftest__.c
 			lappend cmdline {*}[get-define CC] {*}[get-define CFLAGS]
 		}
 		default {
@@ -463,19 +519,17 @@ proc cctest {args} {
 		}
 	}
 
-	if {!$opts(-link)} {
+	if {$opts(-link)} {
+		lappend cmdline {*}[get-define LDFLAGS]
+	} else {
 		set tmp conftest__.o
 		lappend cmdline -c
 	}
-	lappend cmdline {*}$opts(-cflags)
-
-	switch -glob -- [get-define host] {
-		*-*-darwin* {
-			# Don't generate .dSYM directories
-			lappend cmdline -gstabs
-		}
-	}
+	lappend cmdline {*}$opts(-cflags) {*}[get-define cc-default-debug ""]
 	lappend cmdline $src -o $tmp {*}$opts(-libs)
+	if {$opts(-link)} {
+		lappend cmdline {*}[get-define LIBS]
+	}
 
 	# At this point we have the complete command line and the
 	# complete source to be compiled. Get the result from cache if
@@ -495,7 +549,8 @@ proc cctest {args} {
 	writefile $src $lines\n
 
 	set ok 1
-	if {[catch {exec-with-stderr {*}$cmdline} result errinfo]} {
+	set err [catch {exec-with-stderr {*}$cmdline} result errinfo]
+	if {$err || ($opts(-nooutput) && [string length $result])} {
 		configlog "Failed: [join $cmdline]"
 		configlog $result
 		configlog "============"
@@ -520,7 +575,7 @@ proc cctest {args} {
 
 # @make-autoconf-h outfile ?auto-patterns=HAVE_*? ?bare-patterns=SIZEOF_*?
 #
-# Deprecated - see make-config-header
+# Deprecated - see 'make-config-header'
 proc make-autoconf-h {file {autopatterns {HAVE_*}} {barepatterns {SIZEOF_* HAVE_DECL_*}}} {
 	user-notice "*** make-autoconf-h is deprecated -- use make-config-header instead"
 	make-config-header $file -auto $autopatterns -bare $barepatterns
@@ -529,19 +584,19 @@ proc make-autoconf-h {file {autopatterns {HAVE_*}} {barepatterns {SIZEOF_* HAVE_
 # @make-config-header outfile ?-auto patternlist? ?-bare patternlist? ?-none patternlist? ?-str patternlist? ...
 #
 # Examines all defined variables which match the given patterns
-# and writes an include file, $file, which defines each of these.
+# and writes an include file, '$file', which defines each of these.
 # Variables which match '-auto' are output as follows:
-# - defines which have the value "0" are ignored.
+# - defines which have the value '0' are ignored.
 # - defines which have integer values are defined as the integer value.
-# - any other value is defined as a string, e.g. "value"
+# - any other value is defined as a string, e.g. '"value"'
 # Variables which match '-bare' are defined as-is.
-# Variables which match '-str' are defined as a string, e.g. "value"
+# Variables which match '-str' are defined as a string, e.g. '"value"'
 # Variables which match '-none' are omitted.
 #
-# Note that order is important. The first pattern which matches is selected
+# Note that order is important. The first pattern that matches is selected.
 # Default behaviour is:
 #
-#  -bare {SIZEOF_* HAVE_DECL_*} -auto HAVE_* -none *
+##  -bare {SIZEOF_* HAVE_DECL_*} -auto HAVE_* -none *
 #
 # If the file would be unchanged, it is not written.
 proc make-config-header {file args} {
@@ -565,7 +620,7 @@ proc make-config-header {file args} {
 				continue
 			}
 			-str {
-				set value \"$value\"
+				set value \"[string map [list \\ \\\\ \" \\\"] $value]\"
 			}
 			-auto {
 				# Automatically determine the type
@@ -574,7 +629,7 @@ proc make-config-header {file args} {
 					continue
 				}
 				if {![string is integer -strict $value]} {
-					set value \"$value\"
+					set value \"[string map [list \\ \\\\ \" \\\"] $value]\"
 				}
 			}
 			"" {
@@ -635,8 +690,6 @@ if {[env-is-set CXX]} {
 # CXXFLAGS default to CFLAGS if not specified
 define CXXFLAGS [get-env CXXFLAGS [get-define CFLAGS]]
 
-cc-check-tools ld
-
 # May need a CC_FOR_BUILD, so look for one
 define CC_FOR_BUILD [find-an-executable [get-env CC_FOR_BUILD ""] cc gcc false]
 
@@ -646,14 +699,34 @@ if {[get-define CC] eq ""} {
 
 define CCACHE [find-an-executable [get-env CCACHE ccache]]
 
+# If any of these are set in the environment, propagate them to the AUTOREMAKE commandline
+foreach i {CC CXX CCACHE CPP CFLAGS CXXFLAGS CXXFLAGS LDFLAGS LIBS CROSS CPPFLAGS LINKFLAGS CC_FOR_BUILD LD} {
+	if {[env-is-set $i]} {
+		# Note: If the variable is set on the command line, get-env will return that value
+		# so the command line will continue to override the environment
+		define-append AUTOREMAKE [quote-if-needed $i=[get-env $i ""]]
+	}
+}
+
 # Initial cctest settings
-cc-store-settings {-cflags {} -includes {} -declare {} -link 0 -lang c -libs {} -code {}}
+cc-store-settings {-cflags {} -includes {} -declare {} -link 0 -lang c -libs {} -code {} -nooutput 0}
+set autosetup(cc-include-deps) {}
 
 msg-result "C compiler...[get-define CCACHE] [get-define CC] [get-define CFLAGS]"
 if {[get-define CXX] ne "false"} {
 	msg-result "C++ compiler...[get-define CCACHE] [get-define CXX] [get-define CXXFLAGS]"
 }
 msg-result "Build C compiler...[get-define CC_FOR_BUILD]"
+
+# On Darwin, we prefer to use -g0 to avoid creating .dSYM directories
+# but some compilers may not support it, so test here.
+switch -glob -- [get-define host] {
+	*-*-darwin* {
+		if {[cctest -cflags {-g0}]} {
+			define cc-default-debug -g0
+		}
+	}
+}
 
 if {![cc-check-includes stdlib.h]} {
 	user-error "Compiler does not work. See config.log"

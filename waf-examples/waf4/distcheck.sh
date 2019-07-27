@@ -8,14 +8,13 @@ mkdir -p distcheckdir
 echo Unpacking $1.tar.gz
 gzcat $1.tar.gz | tar -C distcheckdir -xf -
 (
-	set -e
 	cd distcheckdir/$1
 	echo "Configuring..."
 	./configure >config.out
 	echo "Building..."
-	make DESTDIR=_install install
+	${MAKE:-make} DESTDIR=_install install
 	echo "Uninstalling..."
-	make DESTDIR=_install uninstall
+	${MAKE:-make} DESTDIR=_install uninstall
 	if test -d _install; then
 		echo 1>&2 "Uninstall did not remove all files"
 		exit 1
