@@ -542,7 +542,6 @@ proc expand-objects {objs} {
 			lappend result $obj
 		}
 	}
-	#puts "expand-objects $objs =>\n$result"
 	return $result
 }
 
@@ -871,16 +870,7 @@ proc find-project-bin {bin args} {
 
 	set localbin [make-local $bin]
 
-	if {[is-target? $localbin]} {
-		dputxs l {[find-source-location]: find-project-bin: $localbin is a local target}
-		if {$opts(-chdir)} {
-			set result [list $localbin ./$bin]
-		} else {
-			# Note: Use [build-dir] here rather than [file-build] to retain ./
-			#       if building in-tree
-			set result [list $localbin [build-dir]/$localbin]
-		}
-	} elseif {[regexp {^<bin>(.*)} $bin -> basename]} {
+	if {[regexp {^<bin>(.*)} $bin -> basename]} {
 		dputxs l {[find-source-location]: find-project-bin: $bin is a publish target}
 		set publishbin [publish-prefix bin]$basename
 		if {$opts(-chdir)} {
@@ -896,6 +886,15 @@ proc find-project-bin {bin args} {
 			set result [list $bin $reldir/$basename]
 		} else {
 			set result [list $bin [file-build $publishbin]]
+		}
+	} elseif {[is-target? $localbin]} {
+		dputxs l {[find-source-location]: find-project-bin: $localbin is a local target}
+		if {$opts(-chdir)} {
+			set result [list $localbin ./$bin]
+		} else {
+			# Note: Use [build-dir] here rather than [file-build] to retain ./
+			#       if building in-tree
+			set result [list $localbin [build-dir]/$localbin]
 		}
 	} elseif {[file exists $localbin]} {
 		dputxs l {[find-source-location]: find-project-bin: $localbin exists as source}

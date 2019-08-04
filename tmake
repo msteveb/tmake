@@ -7,7 +7,7 @@
 # Initialiation
 # ==================================================================
 
-set tmake(version) {0.7.6 (27-Jul-2018)}
+set tmake(version) {0.7.7 (4-Aug-2019)}
 set tmake(cacheversion) 4
 
 # Turn on debugging as early as possible
@@ -871,7 +871,20 @@ proc top-src-dir {} {
 }
 
 proc make-local {args} {
-	prefix [local-prefix] $args
+	set result [lmap p $args {
+		if {[string match <* $p]} {
+			# no need to add prefix to aliases
+			string cat $p
+		} elseif {[string match /* $p]} {
+			# project-root relative file
+			string range $p 1 end
+		} else {
+			# local file
+			string cat [local-prefix] $p
+		}
+	}]
+	#puts "make-local $args => $result"
+	return $result
 }
 
 proc make-local-dirs {args} {
@@ -1021,13 +1034,10 @@ proc UseHashes {onoff} {
 
 proc file-build {path} {
 	if {[string match <* $path]} {
-		# Special <lib>, <bin>, etc. are already build paths
-		# XXX But are all aliases build paths?
 		return $path
-	} else {
-		#puts "$::tmake(build) + $path => [file-join $::tmake(build) $path]"
-		return [file-join $::tmake(build) $path]
 	}
+	#puts "file-build $path: $::tmake(build) + $path => [file-join $::tmake(build) $path]"
+	return [file-join $::tmake(build) $path]
 }
 
 proc file-build-list {paths} {
