@@ -4,12 +4,14 @@
 # This module is always loaded.
 # 
 
-# @argparse argv { patterns code patterns code ... }
+# @argparse &argv { patterns code patterns code ... }
 #
-# The code is evaluated if the arg matches a correponding glob pattern
-# The current argument is available as $arg
-# Call [argnext argv] to get the next arg.
-# Call [argparam $arg] to extract the value from a parameter like --option=value
+# The code is evaluated if the arg matches a correponding glob pattern.
+# The current argument is available as $arg.
+#
+# - Call [argnext argv] to get the next arg.
+# - Call [argparam $arg] to extract the value from a parameter like --option=value.
+#
 # Leaves $argv with unconsumed args.
 
 proc argparse {&argv spec} {

@@ -425,7 +425,7 @@ Built 2 target(s) in 0.09 seconds
 
 If we don't change the flags, then no build is required.
 
-XXX: Talk more about how this is accomplished and how only variables are subsituted, and
+XXX: Talk more about how this is accomplished and how only variables are substituted, and
 what happens if subst fails.
 
 Tree Structure and 'local'
@@ -934,8 +934,11 @@ Differences with make
   then available to the command(s) at run time.
 - Commands are Tcl scripts, which means that many operations do not require a fork/exec
 - The 'run' built-in runs external commands
-- Commands used to build a target a cached so that if commands change, rules are re-run
+- Commands used to build a target are cached so that if commands change, rules are re-run
 - Automatic directory creation
+- Supports hashes for detecting source file changes
+- If using time-based dependencies, build cache is able to detect any change across
+  builds rather than relying on the accuracy of timestamps
 
 Future Plans
 ------------

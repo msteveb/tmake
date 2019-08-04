@@ -57,7 +57,7 @@ proc init-colour {} {
 
 # @colstr colour string
 #
-# Return a value that will output the string to an ANSI terminal with the given colour, or alias.
+# Return a value that will output $string to an ANSI terminal with the given colour (or colour alias).
 proc colstr {colour string} {
 	return [colget $colour]$string[colget none]
 }
@@ -99,7 +99,7 @@ proc colalias {name colour} {
 
 # @colget name
 #
-# Returns the ansi code for the given alias or base colour.
+# Returns the ansi code for the given colour alias or base colour.
 # The name must exist as an alias or base colour.
 proc colget {name} {
 	if {[dict exists $::tmake(colalias) $name]} {
