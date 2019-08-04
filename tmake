@@ -807,6 +807,9 @@ proc load-build-description {loadcache} {
 
 	process-build-spec-file . 1
 
+	dputs m "Found [num-nonphony-targets] target(s)"
+
+
 	unset tmake(prefix)
 	unset tmake(localdir)
 
