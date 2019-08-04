@@ -28,8 +28,6 @@ pkg-config readline
 set SRCS {}
 define? DESTDIR _install
 
-CFlags -I.
-
 ifconfig USE_LINENOISE {
 	define-append SRCS linenoise.c
 }
