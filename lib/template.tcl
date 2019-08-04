@@ -37,6 +37,8 @@
 #
 proc apply-template {infile outfile vars target} {
 
+	dputs m "apply-template $infile -> $outfile: vars=$vars"
+
 	# A stack of true/false conditions, one for each nested conditional
 	# starting with "true"
 	set condstack {1}
@@ -45,7 +47,6 @@ proc apply-template {infile outfile vars target} {
 	foreach line [split [readfile $infile] \n] {
 		incr linenum
 		if {[regexp {^@(if|else|endif)\s*(.*)} $line -> condtype condargs]} {
-			dputs m "condtype=$condtype, condargs=$condargs, vars=$vars"
 			if {$condtype eq "if"} {
 				if {[llength $condargs] == 1} {
 					# ABC => [dict get $vars ABC] ni {0 ""}
@@ -69,7 +70,6 @@ proc apply-template {infile outfile vars target} {
 							set condexpr 1
 						}
 					}
-					dputs m condexpr=$condexpr
 				} else {
 					# Translate alphanumeric ABC into [dict get $vars ABC] and leave the
 					# rest of the expression untouched
@@ -79,7 +79,7 @@ proc apply-template {infile outfile vars target} {
 					dputs m $condval
 					build-fatal-error "$infile:$linenum: Invalid expression: $line"
 				}
-				dputs m "@$condtype: $condexpr => $condval"
+				dputs m "$infile:$linenum: @$condtype $condargs ($condexpr) => $condval"
 			}
 			if {$condtype ne "if" && [llength $condstack] <= 1} {
 				build-fatal-error "$infile:$linenum: Error: @$condtype missing @if"
