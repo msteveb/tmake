@@ -44,6 +44,12 @@ Tracking Variables
 ------------------
 There is no support for finding how/where variables are bound in rules.
 
+Currently this is supported with --showvars=full to show the location
+that each variables is defined. Although support for multiple
+locations (e.g. from define-append) is broken.
+
+Doesn't address bound variables in rules.
+
 Cleaning files from the source tree
 -----------------------------------
 
