@@ -173,7 +173,7 @@ proc merge-vars {dict1 dict2} {
 #
 ## CFlags [quote-if-needed -DPROCESSOR_VERSION=\"[exec date]\"]
 proc quote-if-needed {str} {
-	if {[string match {*[\" \t]*} $str]} {
+	if {[string match *[\"\ \t\]* $str]} {
 		return \"[string map [list \" \\" \\ \\\\] $str]\"
 	}
 	return $str
