@@ -1789,10 +1789,20 @@ proc define! {name args} {
 #
 # Like 'define', but only sets the variable if it is undefined
 # or set to an empty value.
+# Note that before setting the variable, a check is first made
+# to see if the corresponding environment variable is set.
+# If it is, that value is used in preference.
 #
 proc define? {name args} {
 	if {[get-define $name] eq ""} {
-		set valueinfo [define-get-value $args]
+		# Not set. Is it set in the environment?
+		set value [getenv $name ""]
+		if {$value ne ""} {
+			dputs v "define (env) $name $value"
+			set valueinfo [list $value {}]
+		} else {
+			set valueinfo [define-get-value $args]
+		}
 		define-var $name {*}$valueinfo 0 0
 	}
 	dputs v "define? $name [join $args]"
