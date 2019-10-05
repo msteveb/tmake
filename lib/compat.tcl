@@ -470,10 +470,24 @@ proc is-uid-root {} {
 
 # Returns 1 if md5sum hashing is available
 proc init-md5sum {} {
+	set nullmd5 "d41d8cd98f00b204e9800998ecf8427e"
+	catch -noreturn {
+		package require md5
+		if {[md5 -hex ""] eq $nullmd5} {
+			proc md5sum {filename} {
+				if {![file exists $filename]} {
+					build-error "md5sum $filename does not exist"
+				}
+				md5 -hex [readfile $filename]
+			}
+			dputs {h m} "Using md5 module for hashing"
+			return 1
+		}
+	}
 	foreach cmd {md5sum md5} {
 		if {[catch [list exec $cmd /dev/null] result] == 0} {
 			lassign $result sum
-			if {$sum eq "d41d8cd98f00b204e9800998ecf8427e"} {
+			if {$sum eq $nullmd5} {
 				# OK. Create the md5sum proc
 				proc md5sum {filename} cmd {
 					if {![file exists $filename]} {
@@ -481,6 +495,7 @@ proc init-md5sum {} {
 					}
 					lindex [exec $cmd $filename] 0
 				}
+				dputs {h m} "Using external $cmd for hashing"
 				return 1
 			}
 		}
