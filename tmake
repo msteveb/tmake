@@ -3567,7 +3567,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 
 	dputs-D "Scanning $filename for headers: incpaths=$incpaths"
 	# Can we get the result from the cache?
-	set stamp [list [get-file-hash $filepath] $incpaths $suffix $regex]
+	set stamp [list [calc-file-hash $filename] $incpaths $suffix $regex]
 	if {[dict exists $tmakecache(headerscan) $filename]} {
 		lassign [dict get $tmakecache(headerscan) $filename] cache_stamp headers cachedresults
 		if {$cache_stamp eq $stamp} {
@@ -3663,7 +3663,7 @@ set rc [catch -signal {
 		}
 	}
 	if {$tmake(usehashes)} {
-		dputs T "Time spending hashing sources: [format %.2f $($tmake(hashtime) / 1e6)] seconds"
+		dputs T "Time spent hashing sources: [format %.3f $($tmake(hashtime) / 1e6)] seconds"
 	}
 	# This is to support unit testing
 	if {[env TMAKE_ERROR ""] eq "late"} {
