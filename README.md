@@ -254,7 +254,7 @@ Note that the environment is saved/restored for each '-do' command.
 
 Variables available during parsing
 ----------------------------------
-Add 'define' variables are available as Tcl variables during the parsing phase.
+All 'define' variables are available as Tcl variables during the parsing phase.
 This includes the system defined variables:
 
 $TOPSRCDIR          Absolute path to the root of the project
