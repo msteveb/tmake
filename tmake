@@ -2969,7 +2969,7 @@ proc build-deps {target ruletarget status depends phony &reason} {
 		switch $ret {
 			failed {
 				if {$tmake(exitcode) == 0} {
-					build-error "[make-source-location $ruletarget]: Error: Don't know how to build $dep: [join [lreverse $tmake(current)] { <= }]"
+					build-error "[make-source-location $ruletarget]: Error: Failed to build build $dep, required by $ruletarget: [join [lreverse $tmake(current)] { <= }]"
 				}
 				if {$tmake(quickstop)} {
 					tmake-exit 1 "*** Error: Targets failed to build"
