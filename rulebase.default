@@ -614,7 +614,8 @@ proc get-test-id {} {
 # @run-test-command testcommand
 #
 # This is a helper for running test commands.
-# The environment is set up with setup-test-env
+# It is used by the Test rule.
+# The environment should first be set up with setup-test-env
 # Then SRCDIR is exported to the environment
 # stdout, stderr and errok are checked from the caller to determine
 # how output/errors are handled/checked
@@ -762,14 +763,6 @@ proc install-file {args} {
 proc chmodx-file {target} {
 	vputs "Chmod $target"
 	exec chmod +x $target
-}
-
-# @strip-file flags target
-#
-# Invokes '$STRIP $flags $target' to strip the given executable
-#
-# If $STRIP is not set, does nothing
-proc strip-file {flags target} {
 }
 
 # @remove-empty-directories filename-list
