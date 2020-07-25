@@ -391,9 +391,9 @@ proc publish-prefix {dir} {
 # Creates a rule to publish $src as $dest (build relative name) by creating a hard link.
 # e.g. publish-one-file include/header.h header.h
 #
-proc publish-one-file {dest src} {
+proc publish-one-file {args dest src} {
 	#dputs m "publish-one-file dest=$dest, src=$src, realdest=[publish-dir $dest]"
-	hard-link [publish-dir $dest] $src -msg {note Publish $targetname}
+	hard-link [publish-dir $dest] $src -msg {note Publish $targetname} {*}$args
 }
 
 # @publish-lib libname alias
@@ -1034,7 +1034,7 @@ Note that 'name' can be 'target=src' to rename a file when published.
 }
 
 rule Publish {args} {
-Publish ?--keepdir? dir name...
+Publish ?--keepdir --hash? dir name...
 
 Publishes one or more files to directory $PUBLISH/$dir
 
@@ -1046,11 +1046,14 @@ Accepts the following file names:
 Normally files are published directly into $PUBLISH/$dir, but if --keepdir is
 specified, the relative source directory is kept and replicated under $PUBLISH/$dir
 
+If --hash is specified, the publish target uses hash-based comparison rather
+than time-based comparison (if 'UseHashes on' is set)
+
 Note: Libraries and Binaries should not be published with this rule.
 Rather Publishlib and PublishBin should be used.
 } {
 	show-this-rule
-	getopt {--keepdir dir args} args
+	getopt {--keepdir --hash dir args} args
 
 	if {$dir eq "bin"} {
 		user-notice purple [warning-location "Warning: Use PublishBin to publish binaries"]
@@ -1058,10 +1061,14 @@ Rather Publishlib and PublishBin should be used.
 	if {$dir eq "lib" && [string match lib* $args]} {
 		user-notice purple [warning-location "Warning: Use Lib --publish to publish libraries"]
 	}
+	set options {}
+	if {$hash} {
+		lappend options -hash
+	}
 
 	# XXX Does not support external sources
 	foreach {dest src} [expand-filespec $dir $args $keepdir] {
-		publish-one-file $dest $src
+		publish-one-file {*}$options $dest $src
 	}
 }
 
@@ -1587,15 +1594,15 @@ PublishIncludes ?--keepdir? name ...
 
 Shorthand for:
 
-  Publish ?--keepdir? include name ...
+  Publish ?--keepdir? --hash include name ...
 } {
 	getopt {--keepdir args} args
 
+	set options {}
 	if {$keepdir} {
-		Publish --keepdir include {*}$args
-	} else {
-		Publish include {*}$args
+		lappend options --keepdir
 	}
+	Publish {*}$options --hash include {*}$args
 }
 
 rule PrecompiledHeader {header} {
