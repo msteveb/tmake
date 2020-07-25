@@ -42,11 +42,9 @@ Need to revisit this
 
 Tracking Variables
 ------------------
-There is no support for finding how/where variables are bound in rules.
-
-Currently this is supported with --showvars=full to show the location
-that each variables is defined. Although support for multiple
-locations (e.g. from define-append) is broken.
+It is useful to be able to determine where variables are set.
+This is supported with --showvars=full to show the location
+that each variables is defined.
 
 Doesn't address bound variables in rules.
 
@@ -105,6 +103,8 @@ non-install rules running as root?
 Yes. We now have -rootok that can be used on install rules.
 We also have INSTALLDEPTARGET in rulebase.default to ensure that install deps can be built
 before installing.
+
+This isn't documented anywhere.
 
 Propagating Defines
 -------------------
@@ -173,6 +173,8 @@ changes from the previous build, the target is out of date and needs to be rebui
 This simplifies the logic as the same algorithm is used in both time-based and
 hash-based builds, simply with a different "hash" calculation.
 
+This is done and simply needs documenting.
+
 tmake TODO
 ----------
 * Does it make sense to support "IncludePaths /abc" to add paths
@@ -209,3 +211,32 @@ tmake TODO
   rebuilding if nothing has changes, and just outputting the previously captured errors?
   I'm inclined not to since ccache already does a good job of this and I don't
   think it's big use case to keep recompiling with no changes.
+* meson does clever things with examining the ABI of a shared library to determine
+  if it needs to be relinked (i.e. an application or shared library needs to be relinked
+  against it). We would do this by using a special hash generator that hashed the ABI
+  rather than the contents. Would need to include some other info too such as the architecture,
+  etc.
+  There is some reference to this here: https://groups.google.com/forum/#!msg/bazel-discuss/8Wt3l9zfksY/E0HJNnWECwAJ
+  Basically if we had an ifso tool that created an interface shared library from a shared library,
+  we could link against the shared that instead of the real shared library. This would still create
+  the correct NEEDED entry, but if we use hashing for the ifso library we would detect that it hadn't
+  changed since last time so we don't need to relink the dependencies.
+  This does seem to be what clank-ifso is supposed to do (see here: http://lists.llvm.org/pipermail/cfe-dev/2019-April/061953.html)
+  There is also reference to llvm-elfabi that seems to do the same thing
+  Why can't we produce a shared library with objcopy, just dropping the unused text and data sections?
+  Something like: objcopy -g --remove-section=.text --remove-section=.data  libfdcallback.so.1.2.3 libfdcallback.so
+  I tried this in vbox:tmake/test1/objdir/fdcallback and as far as I can tell it works.
+  I will consider testing this with a patch to tmake to change publish-shared-lib.
+  Will need to split into two separate rules, one which creates the symlinks, and one which
+  generates the linkable so (e.g. libfdcallback.so.1.2.3 -> libfdcallback.so)
+  - actually, it doesn't work. If the implmentation changes, it still changes the ifsl a bit
+    since it includes the size of each function. Even though the linker doesn't strictly need
+	this information. I think I would instead need to build something smarter than objcopy which can
+	zero out these unneeded sizes, or else use a custom hash calculator for this target that looks
+	only at the parts I want to look at.
+  - I'll look at how meson implements this.
+	- It has a command called 'symbolextractor'
+	- On linux, this does: readelf -d $libfile | grep SONAME
+	- Then: nm --dynamic --extern-only --defined-only --format=posix $libname | remove column 3 (size of text symbol)
+  - Need to think about how this would work for tmake. If we supported custom hashing I could run a command to extract this
+    info and then md5 the result.
