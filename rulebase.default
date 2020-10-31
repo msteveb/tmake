@@ -921,6 +921,15 @@ add-deferred-action {
 	IncludePaths --build [publish-dir include]
 }
 
+# Don't allow the same rule to be specified twice
+# Avoids accidental merging of, e.g., Executable rules
+proc check-dup-rule {rule} {
+	if {[is-rule? $rule]} {
+		set info [get-rule $rule]
+		parse-error "A rule for $rule already exists at $info(source)"
+	}
+}
+
 # ==================================================================
 # HIGH LEVEL RULES
 # ==================================================================
@@ -957,6 +966,8 @@ The following options are supported:
 	set objects [Objects [Glob --all [join $args]]]
 
 	define? CCLD [get-define CC]
+
+	check-dup-rule $localtargetexe
 
 	# Capture the current value of CCLD, LD_FLAGS and SYSLIBS
 	target $localtargetexe -inputs {*}$objects [get-define LOCAL_LIBS] -depends [get-define PROJDEPS] -msg {note Link $targetname} -do {
@@ -1085,6 +1096,9 @@ The following options are supported:
 	set libalias <lib>$basename
 
 	set locallibname [make-local $libname]
+
+	check-dup-rule $locallibname
+
 	target $locallibname -inputs {*}$objects -msg {note Ar $targetname} -do {
 		file delete $target
 		run $AR $ARFLAGS $target {*}[expand-objects $inputs]
@@ -1174,6 +1188,8 @@ The following options are supported:
 	set objects [Objects [Glob --all [join $args]]]
 
 	set locallibname [make-local $libname]
+	check-dup-rule $locallibname
+
 	set srcs [join $args]
 	set libalias <lib>$basename
 	ObjectCFlags $srcs [get-define SH_CFLAGS]
@@ -1273,6 +1289,7 @@ The following options are supported:
 	ObjectCFlags $srcs [get-define SHOBJ_CFLAGS]
 
 	set localtarget [make-local $target]
+	check-dup-rule $localtarget
 
 	target $localtarget -inputs {*}[Objects $srcs] -depends [get-define PROJDEPS] -msg {note SharedObject $targetname} -do {
 		run $CCLD $LD_FLAGS $SHOBJ_LDFLAGS -o $target {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
