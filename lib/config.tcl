@@ -5,10 +5,15 @@
 #
 # Provides 'ifconfig', a mechanism for simple conditional statements based on defines.
 
-# @is-defined? name
+# @config-is-defined? name
 #
 # Returns 1 if the define exists and is not set to "" or 0
-proc is-defined? {name} {
+# First checks there for CONFIG_$name, then if that is not defined,
+# checks for $name
+proc config-is-defined? {name} {
+	if {[get-define CONFIG_$name] ni {"" 0}} {
+		return 1
+	}
 	if {[get-define $name] ni {"" 0}} {
 		return 1
 	}
@@ -17,7 +22,7 @@ proc is-defined? {name} {
 
 # @ifconfig expr ?code? ?else-code?
 #
-# Evaluates the given expression, where each term is substituted with [is-defined? term].
+# Evaluates the given expression, where each term is substituted with [config-is-defined? term].
 # If 'code' is not specified and the expression is false, the rest of the file is skipped.
 #
 # Otherwise evaluates either 'code' or 'else-code' depending on the result of the expression.
@@ -32,7 +37,7 @@ proc is-defined? {name} {
 ## }
 proc ifconfig {expr args} {
 	# convert the simple expression into something we can evaluate
-	regsub -all {([A-Z][A-Z0-9_]*)} $expr {[is-defined? \1]} tclexpr
+	regsub -all {([A-Z][A-Z0-9_]*)} $expr {[config-is-defined? \1]} tclexpr
 
 	dputs c "ifconfig: expr='$expr' tclexpr='$tclexpr'"
 
