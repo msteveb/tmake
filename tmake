@@ -1623,7 +1623,9 @@ proc show-cache {} {
 			set warnings [dict get $tmakecache(warnings) $i]
 			if {[llength $warnings]} {
 				foreach msg $warnings {
-					pputs colrunwarn $msg
+					foreach line [split $msg \n] {
+						pputs colrunwarn $line
+					}
 				}
 			}
 		}
