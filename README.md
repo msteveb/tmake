@@ -485,7 +485,7 @@ Note that the publish dir can be changed from the project.spec file. e.g.
 
 Cross Compiling
 ---------------
-Currently tmake has poor support for intermixing host and target build "entities".
+Currently tmake has limited support for intermixing host and target build "entities".
 For example, if a complex generator application needs to be built on the host which
 involved multiple libraries, and the use of autoconf/autosetup, this can't be done.
 
@@ -508,63 +508,6 @@ b. Use a simple host-executable rule such as the following:
 
 For comparison, cmake has some support for option (1). See http://www.vtk.org/Wiki/CMake_Cross_Compiling
 section "Using executables in the build created during the build"
-
-In the future a "context"-based approach could be used. The idea is that each separate context
-has it's own:
-
-- set of define variables
-- targets
-- build directory tree
-
-Consider the following (mythical) build fragment:
-
-  Context default {
-    define CPFLAGS -f
-    target a -inputs b -do {
-        run cp $CPFLAGS $inputs $target
-    } -getvars CPFLAGS
-  }
-
-  Context host {
-    define CPFLAGS -p
-    target a -inputs b -do {
-        run cp $CPFLAGS $inputs $target
-    } -getvars CPFLAGS
-  }
-
-This keeps two distinct rules. If we use #xxx#name to represent 'name' in context 'xxx', we have:
-
-  a: b
-    var CPFLAGS=-f
-      run cp $CPFLAGS $inputs $target
-
-  #host#a: #host#b
-    var CPFLAGS=-p
-      run cp $CPFLAGS $inputs $target
-
-
-The 'default' context omits the #context# prefix for simplicity, but can be name explicitly if required.
-Sources and targets with different contexts can be used by using an explicit prefix.
-
-All this means it is possible to do:
-
-  Context host {
-    define CC $CC_FOR_BUILD
-    Executable --publish generator generator.c
-  }
-
-  Generate out <bin>#host#generator in {
-    run $script $inputs $target
-  }
-
-Anything declared outside 'Context' uses the 'default' context.
-There would need to be convention for mapping context to output directory.
-If we simply use objdir/<context>/... there may be a naming conflict.
-Could use object.<context> or could use objdir/default/ for the default
-context instead of just objdir/
-
-How does Load work? For example, $CC_FOR_BUILD may be loaded only in the default
-context. Do we need to use ${#default#CC_FOR_BUILD} ?
 
 symlink targets
 ---------------
@@ -1007,14 +950,3 @@ There a few extra things to consider.
 
 Hashes are computed by running 'md5sum' (or md5, for MacOS) because it is a fast hash
 with a low chance of collisions.
-
-Known Issues
-------------
-Slows down with a large project
-
-No support for non-unix platforms, e.g. msvc
-
-Changing --build means that all orphans are forgotten since
-the cached targets only include the path relative to $BUILDDIR.
-
-The integration with autosetup works, but could be more seamless
