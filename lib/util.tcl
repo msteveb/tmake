@@ -163,18 +163,23 @@ proc merge-vars {dict1 dict2} {
 
 # @quote-if-needed string
 #
-# Returns a new string that is escaped according to shell
+# Returns a new string that is minimally escaped according to shell
 # escaping rules. That is, double quotes and backslashes are
-# escape with backslash and the result is quoted if it contains double quotes.
+# escape with backslash and the result is quoted if it contains white space.
 #
-## quote-if-needed {-DT=13 "Oct"} => {"-DT=13 \"Oct\""}
+## quote-if-needed {-DT="13 Oct"} => {"-DT=\"13 Oct\""}
 #
 # Useful in cases like this:
 #
 ## CFlags [quote-if-needed -DPROCESSOR_VERSION=\"[exec date]\"]
 proc quote-if-needed {str} {
-	if {[string match *\[\"\ \t\]* $str]} {
-		return \"[string map [list \" \\" \\ \\\\] $str]\"
+	if {[string match {*[\"\\]*} $str]} {
+		# Need to escape quotes and backslashes
+		set str [string map [list \" \\" \\ \\\\] $str]
+	}
+	if {[string match "*\[ \t\]*" $str]} {
+		# Need to quote
+		set str \"$str\"
 	}
 	return $str
 }
