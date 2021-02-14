@@ -2247,18 +2247,22 @@ Used variables: AUTOREMAKE is the configure command to run
 	if {!$verbose} {
 		set redirect >[file-build config.out]
 		lappend opts --output=config.out
+	} else {
+		set redirect ">@stdout >@stderr"
 	}
 
+	# Note that we use exec here instead of run to avoid misinterpetation
+	# of AUTOREMAKE arguments, that will often contain spaces
 	Configure {*}$opts --logfile=config.log [list settings.conf {*}$targets] auto.def {
 		# $CONFIGURE_ENV
-		run $AUTOREMAKE [set redirect]
+		exec {*}$AUTOREMAKE {*}[set redirect]
 	} -getvars CONFIGURE_ENV -nofork -vars redirect $redirect {*}$args
 
 	# If not configured, configure with default options
 	# Note that it is expected that configure will normally be run
 	# separately. This is just a convenience.
 	# project.spec can redefine AUTOREMAKE if required
-	define? AUTOREMAKE configure
+	define? AUTOREMAKE ./configure
 	Load settings.conf
 }
 
