@@ -1420,7 +1420,9 @@ proc pputs {{col {}} msg} {
 	if {$col eq {}} {
 		puts $msg
 	} else {
-		puts [colout $col $msg]
+		foreach line [split $msg \n] {
+			puts [colout $col $line]
+		}
 	}
 	flush stdout
 }
@@ -1636,9 +1638,7 @@ proc show-cache {} {
 			set warnings [dict get $tmakecache(warnings) $i]
 			if {[llength $warnings]} {
 				foreach msg $warnings {
-					foreach line [split $msg \n] {
-						pputs colrunwarn $line
-					}
+					pputs colrunwarn $msg
 				}
 			}
 		}
