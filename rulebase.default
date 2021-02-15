@@ -2251,19 +2251,26 @@ Used variables: AUTOREMAKE is the configure command to run
 		set redirect ">@stdout >@stderr"
 	}
 
-	# Note that we use exec here instead of run to avoid misinterpetation
-	# of AUTOREMAKE arguments, that will often contain spaces
-	Configure {*}$opts --logfile=config.log [list settings.conf {*}$targets] auto.def {
-		# $CONFIGURE_ENV
-		exec {*}$AUTOREMAKE {*}[set redirect]
-	} -getvars CONFIGURE_ENV -nofork -vars redirect $redirect {*}$args
+	set alltargets [list settings.conf {*}$targets]
 
 	# If not configured, configure with default options
 	# Note that it is expected that configure will normally be run
 	# separately. This is just a convenience.
 	# project.spec can redefine AUTOREMAKE if required
 	define? AUTOREMAKE ./configure
+
+	# Create the rule
+	Depends $alltargets
+
+	# Now load the settings
 	Load settings.conf
+
+	# Note that we use exec here instead of run to avoid misinterpetation
+	# of AUTOREMAKE arguments, that will often contain spaces
+	Configure {*}$opts --logfile=config.log $alltargets auto.def {
+		# $CONFIGURE_ENV
+		exec {*}$AUTOREMAKE {*}[set redirect]
+	} -getvars CONFIGURE_ENV -nofork -vars redirect $redirect {*}$args
 }
 
 # ==================================================================
