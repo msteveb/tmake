@@ -1,0 +1,81 @@
+#!/usr/bin/env jimsh
+
+package require tcltest
+
+source [env SRCDIR]/util.tcl
+
+test compare-versions-1.1 {basic} {
+	compare-versions 1 2
+} -1
+
+test compare-versions-1.2 {basic} {
+	compare-versions 2 1
+} 1
+
+test compare-versions-1.3 {basic} {
+	compare-versions 2 2
+} 0
+
+test compare-versions-1.4 {two level, same major} {
+	compare-versions 1.1 1.2
+} -1
+
+test compare-versions-1.5 {two level, same major} {
+	compare-versions 1.2 1.1
+} 1
+
+test compare-versions-1.6 {two level, same major} {
+	compare-versions 1.2 1.2
+} 0
+
+test compare-versions-1.7 {two level, different major} {
+	compare-versions 1.1 2.2
+} -1
+
+test compare-versions-1.8 {two level, different major} {
+	compare-versions 1.1 2.0
+} -1
+
+test compare-versions-1.9 {two level, different major} {
+	compare-versions 1.1 2.1
+} -1
+
+test compare-versions-1.10 {two level, different major} {
+	compare-versions 10.1 2.2
+} 1
+
+test compare-versions-1.11 {two level, different major} {
+	compare-versions 10.1 2.0
+} 1
+
+test compare-versions-1.12 {two level, different major} {
+	compare-versions 10.1 2.1
+} 1
+
+test compare-versions-1.13 {one level vs two level} {
+	compare-versions 1 1.0
+} 0
+
+test compare-versions-1.14 {one level vs two level} {
+	compare-versions 1 1.1
+} -1
+
+test compare-versions-2.1 {three level, extra chars} {
+	# Here 4 is compared against 4+ as a string comparison
+	compare-versions 1.7.4 1.7.4+
+} -1
+
+test compare-versions-2.2 {three level, extra chars} {
+	compare-versions 1.7.4 1.7.4b1
+} -1
+
+test compare-versions-2.2 {three level, extra chars} {
+	compare-versions 1.7.4b2 1.7.4b1
+} 1
+
+test compare-versions-2.2 {three level, extra chars} {
+	# 4b10 compares less than 4b2 with a string comparison
+	compare-versions 1.7.4b10 1.7.4b2
+} -1
+
+testreport
