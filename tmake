@@ -529,7 +529,6 @@ proc make {argv} {
 			set reload 1
 			set reloadcount 0
 			while {$reload} {
-				incr reloadcount
 				# Try to build all Load files
 				# If any files specified to Load are targets,
 				# build them before anything else
@@ -537,9 +536,6 @@ proc make {argv} {
 				# This continues until all Load files are
 				# up-to-date, something can't be built or this has been
 				# retried too many times
-				if {$reloadcount >= 5} {
-					build-fatal-error "Error: Load files failed to stabilise after $reloadcount iterations"
-				}
 				set reload 0
 				set tmake(ignoreforce) 1
 				foreach {t nocare} $tmake(projfiles) {
@@ -563,6 +559,11 @@ proc make {argv} {
 				set tmake(ignoreforce) 0
 
 				if {$reload} {
+					if {$reloadcount >= 5} {
+						build-fatal-error "Error: Load files failed to stabilise after $reloadcount iterations"
+					}
+					incr reloadcount
+
 					# Restore the state
 					set tmake $tmake_save
 					tmake-reset-defines
