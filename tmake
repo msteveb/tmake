@@ -526,45 +526,58 @@ proc make {argv} {
 		if {$target in $tmake(clean-targets)} {
 			set tmake(cleaning) 1
 		} else {
-			# Try to build all Load files
-			# If any files specified to Load are targets,
-			# build them before anything else
-			# Note that these targets ignore --force
-			set reload 0
-			set tmake(ignoreforce) 1
-			foreach {t nocare} $tmake(projfiles) {
-				if {$nocare && ![is-target? $t]} {
-					dputs-n "Load --nocare $t, not a target"
-					continue
+			set reload 1
+			set reloadcount 0
+			while {$reload} {
+				incr reloadcount
+				# Try to build all Load files
+				# If any files specified to Load are targets,
+				# build them before anything else
+				# Note that these targets ignore --force
+				# This continues until all Load files are
+				# up-to-date, something can't be built or this has been
+				# retried too many times
+				if {$reloadcount >= 5} {
+					build-fatal-error "Error: Load files failed to stabilise after $reloadcount iterations"
 				}
-				dputs {b T} "Building Load target $t"
-				set status [build-sync $t]
-				if {$status eq "failed"} {
-					if {$tmake(exitcode) == 0} {
-						build-fatal-error "Error: Failed to build $t"
+				set reload 0
+				set tmake(ignoreforce) 1
+				foreach {t nocare} $tmake(projfiles) {
+					if {$nocare && ![is-target? $t]} {
+						dputs-n "Load --nocare $t, not a target"
+						continue
 					}
-					break
+					dputs {b T} "Building Load target $t"
+					set status [build-sync $t]
+					if {$status eq "failed"} {
+						if {$tmake(exitcode) == 0} {
+							build-fatal-error "Error: Failed to build $t"
+						}
+						break
+					}
+					if {$status eq "built"} {
+						dputs m "$t has changed, reloading..."
+						set reload 1
+					}
 				}
-				if {$status eq "built"} {
-					dputs m "$t has changed, reloading..."
-					set reload 1
+				set tmake(ignoreforce) 0
+
+				if {$reload} {
+					# Restore the state
+					set tmake $tmake_save
+					tmake-reset-defines
+
+					# reinitialise the rulebase
+					rulebase-invoke init
+
+					dputs T "Reinitialised rulebase"
+
+					load-build-description 0
+
+					dputs T "Reparsing phase complete, iteration $reloadcount"
+				} else {
+					dputs T "All Load targets are up-to-date"
 				}
-			}
-			set tmake(ignoreforce) 0
-
-			if {$reload} {
-				# Restore the state
-				set tmake $tmake_save
-				tmake-reset-defines
-
-				# reinitialise the rulebase
-				rulebase-invoke init
-
-				dputs T "Reinitialised rulebase"
-
-				load-build-description 0
-
-				dputs T "Reparsing phase complete"
 			}
 
 			# Discard orphans before building any non-cleaning target
