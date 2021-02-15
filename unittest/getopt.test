@@ -1,3 +1,5 @@
+#!/usr/bin/env jimsh
+
 package require tcltest
 
 source ../lib/getopt.tcl

@@ -2,7 +2,7 @@
 
 package require tcltest
 
-source [env SRCDIR]/util.tcl
+source ../lib/util.tcl
 
 test compare-versions-1.1 {basic} {
 	compare-versions 1 2
