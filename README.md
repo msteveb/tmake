@@ -110,13 +110,14 @@ Note that many keys are simple flags and do not expect any values.
 	See 'Variables available to commands'
 
 -hash
-    If 'UseHashes on' is set, tmake will only compute hashes for source files,
+	If 'UseHashes on' is set, tmake will only compute hashes for source files but
 	not targets. If this is set on a rule, any checks for the target being out
-	of date will be made using a hash rather than a timestamp.
+	of date will be made using a hash rather than a timestamp (regardless of the setting
+	of 'UseHashes').
 	This is useful if the build command updates the file with unchanged contents.
 
 -symlink
-    Should be set if the target is a symlink, so that the existence and timestamp
+	Should be set if the target is a symlink, so that the existence and timestamp
 	of the target is used rather than what the target points to.
 
 -phony

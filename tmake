@@ -463,13 +463,10 @@ proc make {argv} {
 	dputs T "Parsing phase complete"
 	set tmake(parsedone) 1
 
-	if {$tmake(usehashes)} {
-		if {[init-md5sum]} {
-			dputs h "Using hashes for file comparison"
-		} else {
-			set tmake(usehashes) 0
-			user-notice colwarn "Warning: no md5sum command - hashing is not available"
-		}
+	if {![init-md5sum]} {
+		user-notice colwarn "Warning: no md5sum command - hashing is not available"
+	} elseif {$tmake(usehashes)} {
+		dputs h "Using hashes for file comparison"
 	}
 
 	if {$tmake(cachecleanup)} {
@@ -2351,16 +2348,16 @@ proc parse-rule {target arglist} {
 
 # Returns the "hash" of the given file, that must exist.
 #
-# If hashing is disabled, simply returns file-mtime
+# If hashing is disabled and $usehashes is not set, simply returns file-mtime
 #
-# If hashing is enabled, first checks file-mtime, and if
+# If hashing is enabled or $userhashes is set, first checks file-mtime, and if
 # there is a srchash entry in the cache that matches, return the hash
 # from the cache. Otherwise calculate the hash, store it in the
 # cache and return it.
 #
-proc get-file-hash {file} {
+proc get-file-hash {file {usehashes 0}} {
 	set mtime [file-mtime $file]
-	if {!$::tmake(usehashes)} {
+	if {!$::tmake(usehashes) && !$usehashes} {
 		return $mtime
 	}
 
@@ -2391,7 +2388,7 @@ proc get-file-hash {file} {
 # Calculates the file hash as follows:
 # source               - get-file-hash $file
 # target is symlink    - link:[readlink [file-build $file]]
-# target with -hash    - get-file-hash of [file-build $file]
+# target with -hash    - get-file-hash of [file-build $file] with hash forced
 # target               - file-mtime of [file-build $file]
 #
 proc calc-file-hash {file} {
@@ -2403,7 +2400,7 @@ proc calc-file-hash {file} {
 			return link:[file readlink $realfile]
 		}
 		if {[dict get [get-target-rule $file] hash]} {
-			return [get-file-hash $realfile]
+			return [get-file-hash $realfile 1]
 		} elseif {$::tmake(norun) && $type eq "none"} {
 			return 0
 		} else {
