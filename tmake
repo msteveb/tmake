@@ -2401,10 +2401,10 @@ proc calc-file-hash {file} {
 			# symlinks aways hash to the link contents
 			return link:[file readlink $realfile]
 		}
-		if {[dict get [get-target-rule $file] hash]} {
-			return [get-file-hash $realfile 1]
-		} elseif {$::tmake(norun) && $type eq "none"} {
+		if {$::tmake(norun) && $type eq "none"} {
 			return 0
+		} elseif {[dict get [get-target-rule $file] hash]} {
+			return [get-file-hash $realfile 1]
 		} else {
 			return [file-mtime $realfile]
 		}
