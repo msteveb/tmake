@@ -146,7 +146,7 @@ the value of the corresponding defined variables, or the given value.
 Also supports conditionals, @if, @else and @endif. See 'apply-template' in the tmake reference.
 
 Note: If no variables are specified, all defined variables will be mapped but this is not recommended
-and produces a warning unless '--warn' is given.
+and produces a warning unless '--nowarn' is given.
 } {
 	show-this-rule
 
