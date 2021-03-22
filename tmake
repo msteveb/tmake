@@ -666,6 +666,15 @@ proc reset-target-status {} {
 	set tmake(resetstatus) 1
 }
 
+# @add-project-files filename nocare
+#
+# Adds the given "project" file with the boolean 'nocare' setting
+# All project files will be built (synchronously) after the build definitions
+# are loaded, but before other targets (except as needed due to dependencies).
+# If 'nocare' is 0, a missing file is ignored. Otherwise an error occurs.
+#
+# If any project files were built, the build definitions are reloaded and the
+# build begins again.
 proc add-project-file {filename nocare} {
 	global tmake
 	lappend tmake(projfiles) $filename $nocare
