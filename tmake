@@ -425,10 +425,10 @@ proc make {argv} {
 	set tmake(prefix) ""
 
 	if {[exists tmake(configure)]} {
-		dputs m "--configure options, so taking over targets"
-		# Put the command line in CONFIGURE_OPTS
+		dputs m "--configure options, so taking over targets with AUTOREMAKE=./configure $tmake(cmdline)"
+		# Set the command line in AUTOREMAKE
 		# and build configure
-		define! CONFIGURE_OPTS $tmake(cmdline)
+		define! AUTOREMAKE ./configure $tmake(cmdline)
 		set tmake(cmdline) configure
 	}
 

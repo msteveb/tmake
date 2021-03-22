@@ -2244,16 +2244,16 @@ Used variables: AUTOREMAKE is the configure command to run
 
 	# We use [set redirect] in the -do to avoid rebuilding settings.conf
 	# if just the verbosity setting changes
-	if {!$verbose} {
+	if {$verbose || $::tmake(verbose)} {
+		set redirect ">@stdout 2>@stderr"
+	} else {
 		set redirect >[file-build config.out]
 		lappend opts --output=config.out
-	} else {
-		set redirect ">@stdout >@stderr"
 	}
 
 	set alltargets [list settings.conf {*}$targets]
 
-	# If not configured, configure with default options
+	# If not configured, configure with default options (or options to --configure)
 	# Note that it is expected that configure will normally be run
 	# separately. This is just a convenience.
 	# project.spec can redefine AUTOREMAKE if required
@@ -2269,6 +2269,7 @@ Used variables: AUTOREMAKE is the configure command to run
 	# of AUTOREMAKE arguments, that will often contain spaces
 	Configure {*}$opts --logfile=config.log $alltargets auto.def {
 		# $CONFIGURE_ENV
+		vputs $AUTOREMAKE
 		exec {*}$AUTOREMAKE {*}[set redirect]
 	} -getvars CONFIGURE_ENV -nofork -vars redirect $redirect {*}$args
 }
