@@ -51,7 +51,15 @@ proc argparse {&argv spec} {
 						uplevel 1 $code
 					} on break {} {
 						incr done
+					} on error {msg opts} {
+						if {$::tmake(debug)} {
+							stderr puts [errorInfo $msg $opts(-errorinfo)]
+						} else {
+							stderr puts $msg
+						}
+						exit 1
 					}
+
 					break
 				}
 			}

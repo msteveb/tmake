@@ -7,60 +7,116 @@ proc show-version {} {
     return "tmake v$::tmake(version)"
 }
 
-proc show-help {argv} {
-    puts \
-{Usage: tmake [options] [name=value ...] [targets]
-
-   tmake builds projects based on simple, flexible build descriptions.
-
-   -h|--help             Show this help
-   -C|--directory=<dir>  Run as if from directory <dir>
-   -v|--verbose          Force "V=1" mode when building to show commands executed
-   -n|--dry-run          Show commands which would have been run, but don't execute
-   -N|-nn                Like -n, but don't show detailed commands
-   --force               Treat all targets to be built as out-of-date
-   -t|--time             Show build time even if nothing was run
-   -q|--quickstop        Stop on the first build error
-   -Q|--quiet            Don't show the build time
-   --targets[=all]       List all non-phony targets. If a parameter is given, include all targets and the rule location.
-   -p|--print            Show all known rules
-   --find=<target>       Show rules that contain the given substring as a target
-   --jobs=<n>            Limit parallel jobs to <n>. Defaults to the number of cpus, or $MAXJOBS if set.
-   --genie               Generate an initial build.spec from sources in the current dir
-   --commands            Show commands from the rulebase
-   -d...                 Enable various debugging "types"
-   -d?                   Show all individual debugging types
-   --debug               Alternative to "-dg"
-   --showcache           Dump the tmake cache in a readable form
-   --build=<objdir>      Specify the directory for build results (default: objdir)
-   --install=<dir>       Install tmake to the given directory as a single script: <dir>/tmake
-   --version             Show the tmake version
-   --rulebase            Output the builtin rulebase
-   --ref                 Show developer reference
+proc max {a b} {
+    expr {$a > $b ? $a : $b}
 }
-   # Note: The following are not documented. Should include these with --help=all
-   # --findall
-   # --delta
-   # --force
-   # --showvars?=where?
-   # --showaliases
-   # --warnings
-   # --commands
-   # --col
-   # --nocol
-   # --nopager
-   # --hash
 
+proc options-wrap-desc {text length firstprefix nextprefix initial} {
+    set len $initial
+    set space $firstprefix
+    foreach word [split $text] {
+        set word [string trim $word]
+        if {$word == ""} {
+            continue
+        }
+        if {$len && [string length $space$word] + $len >= $length} {
+            puts ""
+            set len 0
+            set space $nextprefix
+        }
+        incr len [string length $space$word]
+        puts -nonewline $space$word
+        set space " "
+    }
+    if {$len} {
+        puts ""
+    }
+}
+
+# Display options (list is a list of {option help ...}
+proc options-show {list} {
+    set local 0
+    # Determine the max option width
+    set max 0
+    foreach {opt desc} $list {
+        if {[string match =* $opt] || [string match \n* $desc]} {
+            continue
+        }
+        set max [max $max [string length $opt]]
+    }
+    set indent [string repeat " " [expr {$max+4}]]
+    set cols [getenv COLUMNS 80]
+    catch {
+        lassign [exec stty size] rows cols
+    }
+    incr cols -1
+    # Now output
+    foreach {opt desc} $list {
+        puts -nonewline "  [format %-${max}s $opt]"
+        if {[string match \n* $desc]} {
+            # Output a pre-formatted help description as-is
+            puts $desc
+        } else {
+            options-wrap-desc [string trim $desc] $cols "  " $indent [expr {$max+2}]
+        }
+    }
+}
+
+proc show-help {argv arg} {
+    puts {Usage: tmake [options] [name=value ...] [targets]}
+    puts "\ntmake builds projects based on simple, flexible build descriptions.\n"
+
+    options-show  {
+        {-h|--help[=all]}      {Show this help, or with --help=all, show uncommon options too.}
+        {--configure ...}      {Run autoconfiguration (if supported by the project) with the given options}
+        {--warnings}           {Output saved warning messages (for any targets that would be built)}
+        {-v|--verbose}         {Force "V=1" mode when building to show commands executed}
+        {-n|--dry-run}         {Show commands which would have been run, but don't execute}
+        {--force}              {Treat all targets to be built as out-of-date}
+        {-t|--time}            {Show build time even if nothing was run}
+        {-q|--quickstop}       {Stop on the first build error}
+        {-Q|--quiet}           {Don't show the build time}
+        {--targets[=all]}      {List all non-phony targets. If a parameter is given, include all targets and the rule location.}
+        {-p|--print}           {Show all known rules}
+        {--find=<target>}      {Show rules that contain the given substring as a target}
+        {--jobs=<n>}           {Limit parallel jobs to <n>. Defaults to the number of cpus, or $MAXJOBS if set}
+        {--genie}              {Generate an initial build.spec from sources in the current dir}
+        {--commands[=names]}   {Show commands from the rulebase, or just the given command}
+        {-d...}                {Enable various debugging "types"}
+        {-d?}                  {Show all individual debugging types}
+        {--debug}              {Alternative to "-dg"}
+        {--showcache}          {Dump the tmake cache in a readable form}
+        {--build=<objdir>}     {Specify the directory for build results (default: objdir)}
+        {--install=<dir>}      {Install tmake to the given directory as a single script: <dir>/tmake}
+        {--version}            {Show the tmake version}
+        {--rulebase}           {Output the builtin rulebase}
+        {--ref|--man}          {Show developer reference manual}
+    }
+    if {$arg ne ""} {
+        options-show {
+            {--findall=<target>}   {Like --find, but show all matches, even if there is an exact match}
+            {-C|--directory=<dir>}  {Run as if from directory <dir>}
+            {-N|-nn}               {Like -n, but don't show detailed commands}
+            {--col}                {Colour output even if stdout doesn't appear to be a terminal}
+            {--nocol}              {Don't colour output even if stdout appears to be a terminal}
+            {--nopager}            {Don't use a pager when displaying the reference manual}
+            {--delta}              {Use with -dT to show delta times}
+            {--showvars?=where?}   {Show the value of each defined variable, and location if =where is specified}
+            {--showaliases}        {List all aliases defined in the build specification}
+            {--hash}               {Force 'UseHashes on'}
+        }
+    }
+    puts ""
     puts [show-version]
     exit 0
 }
 
 # If not already paged and stdout is a tty, pipe the output through the pager
-# This is done by reinvoking autosetup with --nopager added
+# This is done by reinvoking the commandline with --nopager added
 proc use_pager {} {
     if {$::tmake(usepager) && [getenv PAGER ""] ne "" && [isatty? stdin] && [isatty? stdout]} {
         if {[catch {
-            exec [info nameofexecutable] $::argv0 --nopager {*}$::argv |& {*}[getenv PAGER] >@stdout <@stdin 2>@stderr
+            exec [info nameofexecutable] $::argv0 --nopager --col {*}$::argv |& {*}[getenv PAGER] >@stdout <@stdin 2>@stderr
         } msg opts] == 1} {
             if {[dict get $opts -errorcode] eq "NONE"} {
                 # an internal/exec error

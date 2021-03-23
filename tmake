@@ -168,6 +168,8 @@ proc make-parse-options {argv} {
 			incr tmake(showwarnings)
 		}
 		--rulebase {
+			use help
+			use_pager
 			set rulebase [get-rulebase]
 			if {[llength $rulebase] > 1} {
 				puts [lindex $rulebase 1]
@@ -241,12 +243,12 @@ proc make-parse-options {argv} {
 			pputs [show-version]
 			exit 0
 		}
-		{--help -h} {
+		{--help -h --help=*} {
 			use help
-			show-help $tmake(cli-options)
+			show-help $tmake(cli-options) [argparam $arg]
 			exit 0
 		}
-		--ref {
+		{--ref --man} {
 			use help
 			show-reference
 			exit 0
@@ -491,6 +493,8 @@ proc make {argv} {
 		tmake-exit 0
 	}
 	if {[info exists tmake(listcommands)]} {
+		use help
+		use_pager
 		show-matching-commands $tmake(listcommands)
 		tmake-exit 0
 	}
