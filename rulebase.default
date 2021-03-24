@@ -200,7 +200,7 @@ proc is-duplicate-obj-rule {obj src vars} {
 # The appropriate ObjectRule.<ext> is invoked from Object
 # (and hence Objects, Executable and Lib) based on the extension.
 #
-# Note that 'object' and 'source' are fully qualified names
+# Note that 'object' and 'source' are fully qualified names, not local names.
 
 rule ObjectRule.c {obj src} {
 ObjectRule.c object source
@@ -248,16 +248,24 @@ alias ObjectRule.cc ObjectRule.cpp
 alias ObjectRule.cxx ObjectRule.cpp
 alias ObjectRule.C ObjectRule.cpp
 
-rule ObjectRule.l {obj src} {
-ObjectRule.l object source
+rule Lex {args} {
+Lex [--prefix=.lex] source.l
 
-Generates an object file from a lexer source file
+Generates .c and .h from a lexer source file
 Note that $LEX must support --outfile and --header-file
+
+Returns the (local) generated files.
 
 Bound variables: LEX, LFLAGS
 } {
+	show-this-rule
+	getopt {--prefix: src} args
+	if {![exists prefix]} {
+		set prefix .lex
+	}
+	set src [make-local $src]
 	set base [file rootname $src]
-	set targets [list $base.lex.c $base.lex.h]
+	set targets [list $base$prefix.c $base$prefix.h]
 
 	# Build the output files with lex/flex
 	target $targets -inputs $src -msg {note Lex $targetname} -getvars LEX LFLAGS -do {
@@ -265,22 +273,39 @@ Bound variables: LEX, LFLAGS
 	}
 	add-clean [make-local clean] $targets
 	add-clean [make-local distclean] $targets
-
-	# And create the object through Object
-	Object [make-unlocal $base.lex.o] [make-unlocal $base.lex.c]
+	make-unlocal {*}$targets
 }
 
-rule ObjectRule.y {obj src} {
-ObjectRule.y object source
+rule ObjectRule.l {obj src} {
+ObjectRule.l object source
+
+Uses the Lex rule to create an object from lexer source.
+Note that the object name is ignored, and is instead derived from the source.
+} {
+	show-this-rule
+	lassign [Lex [make-unlocal $src]] csrc hsrc
+	Object [change-ext .o $csrc] $csrc
+}
+
+rule Yacc {args} {
+Yacc [--prefix=.tab] source.y
 
 Generates an object file from a yacc source file
 
 Note that $YACC must support --output and --defines
 
+Returns the (local) generated files.
+
 Bound variables: YACC, YFLAGS
 } {
+	show-this-rule
+	getopt {--prefix: src} args
+	if {![exists prefix]} {
+		set prefix .tab
+	}
+	set src [make-local $src]
 	set base [file rootname $src]
-	set targets [list $base.tab.c $base.tab.h]
+	set targets [list $base$prefix.c $base$prefix.h]
 
 	# Build the output files with yacc/bison
 	target $targets -inputs $src -msg {note Yacc $targetname} -getvars YACC YFLAGS -do {
@@ -289,8 +314,18 @@ Bound variables: YACC, YFLAGS
 	add-clean [make-local clean] $targets
 	add-clean [make-local distclean] $targets
 
-	# And create the object through Object
-	Object [make-unlocal $base.tab.o] [make-unlocal $base.tab.c]
+	make-unlocal {*}$targets
+}
+
+rule ObjectRule.y {obj src} {
+ObjectRule.y object source
+
+Uses the Yacc rule to create an object from yacc source.
+Note that the object name is ignored, and is instead derived from the source.
+} {
+	show-this-rule
+	lassign [Yacc [make-unlocal $src]] csrc hsrc
+	Object [change-ext .o $csrc] $csrc
 }
 
 # ==================================================================

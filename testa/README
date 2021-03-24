@@ -1,3 +1,6 @@
 This example from waf: demos/bisonflex
 
 Note the addition of %option noyywrap
+
+Also, move into a subdir to ensure that the
+interaction with local/unlocal is correct.
