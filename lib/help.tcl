@@ -77,8 +77,7 @@ proc show-help {argv arg} {
         {-q|--quickstop}       {Stop on the first build error}
         {-Q|--quiet}           {Don't show the build time}
         {--targets[=all]}      {List all non-phony targets. If a parameter is given, include all targets and the rule location.}
-        {-p|--print}           {Show all known rules}
-        {--find=<target>}      {Show rules that contain the given substring as a target}
+        {--find[=<target>]}    {Show all rules, or those that contain the given substring as a target}
         {--jobs=<n>}           {Limit parallel jobs to <n>. Defaults to the number of cpus, or $MAXJOBS if set}
         {--genie}              {Generate an initial build.spec from sources in the current dir}
         {--commands[=names]}   {Show commands from the rulebase, or just the given command}

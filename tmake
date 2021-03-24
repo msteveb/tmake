@@ -276,9 +276,6 @@ proc make-parse-options {argv} {
 		{-Q --quiet} {
 			incr tmake(quiet)
 		}
-		{-p --print*} {
-			incr tmake(showrules)
-		}
 		-C {
 			set arg [argnext argv]
 			# This will fail with a fatal error if not a dir
@@ -476,10 +473,6 @@ proc make {argv} {
 		tmake-exit 0
 	}
 
-	if {$tmake(showrules)} {
-		show-all-rules
-		tmake-exit 0
-	}
 	if {$tmake(showvars)} {
 		show-all-defines $tmake(showvars)
 		tmake-exit 0
@@ -1526,7 +1519,8 @@ proc show-rule {target} {
 		set t [get-rule $ruletarget]
 		set flags {}
 		set lines {}
-		puts [pad "-- $ruletarget " 60 -]--
+		set n [string length $ruletarget]
+		pputs colstatus "-- [pad "$ruletarget " 60 -]"
 		foreach n [lsort [dict keys $t]] {
 			set v $t($n)
 			set type [target-option-type $n]
@@ -1597,13 +1591,6 @@ proc show-rule {target} {
 
 	} else {
 		puts "No rule for $ruletarget"
-	}
-}
-
-proc show-all-rules {} {
-	foreach i [lsort [dict keys $::tmake(rules)]] {
-		show-rule $i
-		puts ""
 	}
 }
 
@@ -1734,9 +1721,9 @@ proc show-find-results {findtarget findall} {
 		}
 	}
 	dputs r "find: Showing all targets that match *$findtarget*"
-	foreach target [lsort [dict keys $tmake(targets)]] {
-		if {[string match *$findtarget* $target]} {
-			show-rule $target
+	foreach rule [lsort [dict keys $tmake(rules)]] {
+		if {[string match *$findtarget* $rule]} {
+			show-rule $rule
 			pputs ""
 		}
 	}
