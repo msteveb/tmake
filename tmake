@@ -1699,7 +1699,10 @@ proc show-matching-commands {pattern} {
 
 proc show-find-results {findtarget findall} {
 	global tmake
-	if {!$findall} {
+	set showphony 1
+	if {$findtarget eq ""} {
+		set showphony $findall
+	} elseif {!$findall} {
 		# Prefer a local exact match
 		foreach try [list [file-join $tmake(subdir) $findtarget] $findtarget] {
 			if {[is-target? $try]} {
@@ -1716,16 +1719,24 @@ proc show-find-results {findtarget findall} {
 					incr count -1
 					pputs colnote "Note: $count non-exact matches also exist, use --findall to show them"
 				}
-				tmake-exit 0
+				return
+			}
+		}
+		# Fall through to findall
+	}
+	dputs r "find: Showing all targets that match *$findtarget*"
+	set count 0
+	foreach rule [lsort [dict keys $tmake(rules)]] {
+		if {[string match *$findtarget* $rule]} {
+			if {$showphony || ![get-rule-attr $rule phony]} {
+				incr count
+				show-rule $rule
+				pputs ""
 			}
 		}
 	}
-	dputs r "find: Showing all targets that match *$findtarget*"
-	foreach rule [lsort [dict keys $tmake(rules)]] {
-		if {[string match *$findtarget* $rule]} {
-			show-rule $rule
-			pputs ""
-		}
+	if {!$showphony && $count == 0} {
+		pputs colnote "Note: No non-phony targets, use --findall to show them"
 	}
 }
 
