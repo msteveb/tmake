@@ -1830,16 +1830,18 @@ proc define? {name args} {
 # separated by a space.
 #
 proc define-append {name args} {
-	lassign [define-get-value $args] newvalue src
-	set value [get-define $name]
-	if {$value eq ""} {
-		set appendsrc 0
-	} else {
-		set appendsrc 1
+	if {[llength $args]} {
+		lassign [define-get-value $args] newvalue src
+		set value [get-define $name]
+		if {$value eq ""} {
+			set appendsrc 0
+		} else {
+			set appendsrc 1
+		}
+		append-with-space value $newvalue
+		define-var $name $value $src $appendsrc 0
+		dputs v "define-append $name [join $args]"
 	}
-	append-with-space value $newvalue
-	define-var $name $value $src $appendsrc 0
-	dputs v "define-append $name [join $args]"
 }
 # @define-list-append value ...
 #
@@ -1850,21 +1852,23 @@ proc define-append {name args} {
 # where the -I would be omitted
 #
 proc define-list-append {name args} {
-	lassign [define-get-value $args] newvalue src
-	set value [get-define $name]
-	if {$value eq ""} {
-		set appendsrc 0
-	} else {
-		set appendsrc 1
-	}
-	# Avoid duplicates
-	foreach arg $args {
-		if {$arg ni $value} {
-			append-with-space value $arg
+	if {[llength $args]} {
+		lassign [define-get-value $args] newvalue src
+		set value [get-define $name]
+		if {$value eq ""} {
+			set appendsrc 0
+		} else {
+			set appendsrc 1
 		}
+		# Avoid duplicates
+		foreach arg $args {
+			if {$arg ni $value} {
+				append-with-space value $arg
+			}
+		}
+		define-var $name $value $src $appendsrc 0
+		dputs v "$name += [join $args] => $value"
 	}
-	define-var $name $value $src $appendsrc 0
-	dputs v "$name += [join $args] => $value"
 }
 
 # @get-define name ?default?
