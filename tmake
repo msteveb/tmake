@@ -872,7 +872,7 @@ proc find-project-top {} {
 
 proc local-prefix {} {
 	if {![exists ::tmake(prefix)]} {
-		error "local-prefix invoked outside of parse phase - did you mean \$tmake(subdir)?"
+		error "local-prefix invoked outside of parse phase - did you mean \$local?"
 	}
 	return $::tmake(prefix)
 }
@@ -883,7 +883,7 @@ proc local-src-prefix {} {
 
 proc local-dir {} {
 	if {![exists ::tmake(localdir)]} {
-		error "local-dir invoked outside of parse phase - did you mean \$tmake(subdir)?"
+		error "local-dir invoked outside of parse phase - did you mean \$local?"
 	}
 	return $::tmake(localdir)
 }
