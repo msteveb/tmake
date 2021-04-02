@@ -1330,6 +1330,7 @@ proc user-error {{col colerror} msg} {
 #
 # Indicate that something failed to build and set exitcode=1
 proc build-error {{col colerror} msg} {
+	enter-new-dir $::tmake(topsrcdir)
 	if {$msg eq ""} {
 		set msg "-- no message --"
 	}
