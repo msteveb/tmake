@@ -2207,6 +2207,15 @@ proc target {ruletarget args} {
 		set orig(inputs) $info(inputs)
 		set orig(msg) $info(msg)
 	}
+
+	# Now perform some checks to see if the target rule is valid
+	if {[llength $orig(do)] == 0 && [llength $orig(inputs)]} {
+		parse-error "Rule for $ruletarget has '-inputs' but no '-do'"
+	}
+	if {[llength $orig(do)] == 0 && $orig(msg) ne ""} {
+		parse-error "Rule for $ruletarget has '-msg' but no '-do'"
+	}
+
 	update-rule $orig
 
 	# Return the rule target for composability
@@ -2347,13 +2356,6 @@ proc parse-rule {target arglist} {
 		set info(do) {}
 	} else {
 		set info(add-do) {}
-	}
-
-	if {[llength $info(do)] == 0 && [llength $info(inputs)]} {
-		parse-error "Rule for $target has '-inputs' but no '-do'"
-	}
-	if {[llength $info(do)] == 0 && $info(msg) ne ""} {
-		parse-error "Rule for $target has '-msg' but no '-do'"
 	}
 
 	return $info
