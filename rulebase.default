@@ -1713,15 +1713,13 @@ The following options are supported (all are optional):
 		lassign [find-project-bin $command -chdir $chdir -optional 0] cmddep scriptpath
 		set testcommand [list $filename $scriptpath {*}$args]
 
-		if {$dep ne ""} {
-			lappend deps $dep
-		}
+		lappend deps {*}$dep {*}$cmddep
 	} else {
 		# Find the local or published command and add it to the command and deps
 		lassign [find-project-bin $command -chdir $chdir -optional 0] dep filename
 
 		set testcommand [list $filename {*}$args]
-		lappend deps $dep
+		lappend deps {*}$dep
 	}
 
 	lappend vars testcommand $testcommand
