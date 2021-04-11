@@ -1059,13 +1059,17 @@ Note that 'name' can be 'target=src' to rename a file when published.
 		set opts --copy
 	}
 
+	set rules {}
+
 	# XXX Currently does not support external sources
 	foreach {dest src} [expand-filespec $destdir $args 0] {
 		hard-link {*}$opts $dest$exe $src$exe -vars dest bin/$dest -msg {note Publish $targetname} -alias <bin>[file tail $dest]
 		target $dest$exe -add -do {
 			chmodx-file $target
 		}
+		lappend rules $dest$exe
 	}
+	return $rules
 }
 
 rule Publish {args} {
