@@ -1356,6 +1356,7 @@ proc build-fatal-error {msg} {
 # Output the given message to stderr, possibly with the given colour.
 #
 proc user-notice {{col {}} msg} {
+	enter-new-dir $::tmake(topsrcdir)
 	if {$col eq {}} {
 		puts stderr $msg
 	} else {
