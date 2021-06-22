@@ -1328,7 +1328,7 @@ The following options are supported:
 
 	target $localtarget -inputs {*}[Objects $srcs] -depends [get-define PROJDEPS] -msg {note SharedObject $targetname} -do {
 		run $CCLD $LD_FLAGS $SHOBJ_LDFLAGS -o $target {*}[expand-objects $inputs] $PROJLIBS $SYSLIBS
-	} -getvars CCLD PROJLIBS SYSLIBS
+	} -getvars CCLD LD_FLAGS PROJLIBS SYSLIBS
 	Clean $target
 	Phony all $localtarget
 
