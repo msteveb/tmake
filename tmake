@@ -759,7 +759,11 @@ proc mark-cache-dirty {msg} {
 proc write-cache {} {
 	global tmake tmakecache
 	if {$tmakecache(writecache)} {
-		# This should never happend because it is hard to make any changes that require
+		if {$tmake(norun)} {
+			dputs C "Not writing cache due to --dry-run"
+			return
+		}
+		# This should never happen because it is hard to make any changes that require
 		# the cache to be updated if only install rules are -rootok
 		# Writing an existing file as root is fine
 		if {$tmake(isroot) && ![file exists $tmake(topbuilddir)/.makecache]} {
