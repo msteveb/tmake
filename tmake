@@ -110,6 +110,7 @@ set tmake(resetstatus) 0
 # Argument Processing
 # ==================================================================
 
+# internal
 proc make-parse-options {argv} {
 	global tmake
 	#puts "make-parse-options [list $argv]"
@@ -298,11 +299,13 @@ proc make-parse-options {argv} {
 	return $argv
 }
 
+# internal
 proc callmake {__argv} {
 	# This stack frame is designed specifically to hold 'define' variables
 	return [make $__argv]
 }
 
+# internal
 proc make {argv} {
 	global tmake
 
@@ -335,6 +338,8 @@ proc make {argv} {
 	colalias colnote cyan
 	colalias colrunwarn grey
 	colalias colstatus lyellow
+	colalias colhelpsection lyellow
+	colalias colhelpsubsection lgreen
 
 	set tmake(exe) [file-normalize $::argv0]
 	set tmake(dir) [file dirname $tmake(exe)]
@@ -621,6 +626,7 @@ proc make {argv} {
 	}
 }
 
+# internal
 proc load-tmakerc {} {
 	set tmakerc [getenv HOME]/.tmakerc
 	if {[file exists $tmakerc]} {
@@ -629,10 +635,12 @@ proc load-tmakerc {} {
 	}
 }
 
+# internal
 proc rulebase-invoke {cmd} {
 	dputs m "No rulebase-invoke, ignoring $cmd"
 }
 
+# internal
 proc get-rulebase {} {
 	global tmake
 	if {[file exists rulebase.spec]} {
@@ -695,6 +703,7 @@ proc set-default-target {target} {
 	set tmake(defaulttarget) $target
 }
 
+# internal
 proc load-cache {} {
 	global tmake tmakecache
 
@@ -724,6 +733,7 @@ proc load-cache {} {
 	}
 }
 
+# internal
 proc clean-cache {} {
 	global tmakecache
 
@@ -748,6 +758,7 @@ proc clean-cache {} {
 	}
 }
 
+# internal
 proc mark-cache-dirty {msg} {
 	global tmakecache
 	if {$tmakecache(writecache) == 0} {
@@ -756,6 +767,7 @@ proc mark-cache-dirty {msg} {
 	}
 }
 
+# internal
 proc write-cache {} {
 	global tmake tmakecache
 	if {$tmakecache(writecache)} {
@@ -788,6 +800,7 @@ proc write-cache {} {
 	}
 }
 
+# internal
 proc load-build-description {loadcache} {
 	global tmake tmakecache
 
@@ -851,6 +864,12 @@ proc load-build-description {loadcache} {
 	}
 }
 
+# @is-cleaning?
+#
+# Returns 1 if the current target is a "clean" target.
+# By default, this is clean, distclean and clean-orphans
+# but more may be added by add-clean-target
+#
 proc is-cleaning? {} {
 	return $::tmake(cleaning)
 }
@@ -859,6 +878,7 @@ proc is-cleaning? {} {
 # .spec file processing
 # ==================================================================
 
+# internal
 # Returns "" if project top not found
 proc find-project-top {} {
 	set topdir [pwd]
@@ -874,6 +894,13 @@ proc find-project-top {} {
 	return $topdir
 }
 
+# @local-prefix
+#
+# Returns the prefix associated with the current directory.
+# So "" for the top level and dir/ in subdirectory dir.
+#
+# May only be used during the parsing phase (creating targets, rules)
+# not during rule invocation. In that case use $local.
 proc local-prefix {} {
 	if {![exists ::tmake(prefix)]} {
 		error "local-prefix invoked outside of parse phase - did you mean \$local?"
@@ -881,10 +908,21 @@ proc local-prefix {} {
 	return $::tmake(prefix)
 }
 
+# @local-src-prefix
+#
+# Like local-prefix, but returns the absolute path as a prefix
 proc local-src-prefix {} {
 	return $::tmake(topsrcdir)/$::tmake(prefix)
 }
 
+# @local-dir
+#
+# Returns the current directory being processed during the parse phase as a relative
+# path.
+# So "." for the top level and dir in subdirectory dir.
+#
+# May only be used during the parsing phase (creating targets, rules)
+# not during rule invocation. In that case use $local.
 proc local-dir {} {
 	if {![exists ::tmake(localdir)]} {
 		error "local-dir invoked outside of parse phase - did you mean \$local?"
@@ -892,10 +930,22 @@ proc local-dir {} {
 	return $::tmake(localdir)
 }
 
+# @top-src-dir
+#
+# Returns the full path to the top of the project (the directory containing project.spec)
 proc top-src-dir {} {
 	return $::tmake(topsrcdir)
 }
 
+# @make-local ...
+#
+# Converts each target or path into a path relative to the top of the tree
+# and returns the result as a list.
+#
+# For each argument:
+# - If it is an alias (e.g. <bin>name), it is returned unchanged.
+# - If it is an absolute path (e.g. /dir/name), it is considered to be from the top of the project, so it is returned without the leading slash.
+# - Otherwise it is considered to be relative to the current directory so it is returned prefixed by [local-prefix].
 proc make-local {args} {
 	set result [lmap p $args {
 		if {[string match <* $p]} {
@@ -913,13 +963,19 @@ proc make-local {args} {
 	return $result
 }
 
-proc make-local-dirs {args} {
+# XXX internal - unused - to be removed
+proc xxx-make-local-dirs {args} {
 	lmap dir $args {
 		file-join [local-dir] $dir
 	}
 }
 
-# Reverses make-local
+# @make-unlocal ...
+#
+# Reverses make-local for each argument and returns the result as a list.
+#
+# Note that each argument *must* start with [local-prefix] as it is removed
+# without checking.
 proc make-unlocal {args} {
 	set striplen [string length [local-prefix]]
 	lmap name $args {
@@ -927,7 +983,12 @@ proc make-unlocal {args} {
 	}
 }
 
-# Reverses make-local-src
+# @make-unlocal-src ...
+#
+# Reverses make-local-src for each argument and returns the result as a list.
+#
+# Note that each argument *must* start with [local-src-prefix] as it is removed
+# without checking.
 proc make-unlocal-src {args} {
 	set striplen [string length [local-src-prefix]]
 	lmap name $args {
@@ -935,6 +996,10 @@ proc make-unlocal-src {args} {
 	}
 }
 
+# @make-prefix dir
+#
+# Returns the given directory as a path prefix.
+# So "." returns "" and "dir" returns "dir/"
 proc make-prefix {dir} {
 	if {$dir eq "."} {
 		return ""
@@ -943,6 +1008,9 @@ proc make-prefix {dir} {
 	}
 }
 
+# @make-local-src ...
+#
+# For each argument, prefixes it with [local-src-prefix] and returns the result as a list.
 proc make-local-src {args} {
 	prefix [local-src-prefix] $args
 }
@@ -988,6 +1056,8 @@ proc invoke-spec-file {filename args} {
 # build.spec files are automatically entered.
 #
 # If not enabled, SubDirs must be used to specifically select project subdirs.
+#
+# XXX This should be set/reset at each level rather than just being global in project.spec
 proc AutoSubDirs {onoff} {
 	switch -- $onoff {
 		on {
@@ -1017,6 +1087,7 @@ proc SubDirs {args} {
 	lappend ::tmake(subdirs) {*}$args
 }
 
+# internal
 proc get-onoff-flag {onoff} {
 	switch -- $onoff {
 		on {
@@ -1058,6 +1129,10 @@ proc UseHashes {onoff} {
 	}
 }
 
+# @file-build path
+#
+# If the path is an alias, it is returned as-is.
+# Otherwise the path is returned relative to the build directory.
 proc file-build {path} {
 	if {[string match <* $path]} {
 		return $path
@@ -1066,23 +1141,34 @@ proc file-build {path} {
 	return [file-join $::tmake(build) $path]
 }
 
+# @file-build-list pathlist
+#
+# Returns a new list by calling file-build for each path in 'pathlist'
 proc file-build-list {paths} {
 	lmap p $paths { file-build $p }
 }
 
+# @build-prefix
+#
+# Returns the build directory as a prefix
 proc build-prefix {} {
 	make-prefix $::tmake(build)
 }
 
+# @build-dir
+#
+# Returns the build directory (relative to the project top)
 proc build-dir {} {
 	return $::tmake(build)
 }
 
+# internal - XXX remove, unused
+#
 # If $srcdir is a dir from the top of the source tree,
 # (defaults to [local-dir])
 # return a relative path to $buildpath from the build tree.
 #
-proc file-build-relative {buildpath {srcdir {}}} {
+proc xxx-file-build-relative {buildpath {srcdir {}}} {
 	if {$srcdir eq ""} {
 		set srcdir [local-dir]
 	}
@@ -1096,9 +1182,11 @@ proc file-build-relative {buildpath {srcdir {}}} {
 	relative-path $build $src
 }
 
-# If $builddir is a dir from the top of the build tree,
-# (defaults to [local-dir])
-# return a relative path to $srcpath from the build tree.
+# @file-src-relative srcpath ?builddir?
+#
+# $builddir is a dir from the top of the build tree,
+# (defaults to [local-dir]).
+# Returns a relative path to $srcpath from the build tree.
 #
 proc file-src-relative {srcpath {builddir {}}} {
 	if {$builddir eq ""} {
@@ -1111,6 +1199,8 @@ proc file-src-relative {srcpath {builddir {}}} {
 	relative-path $there $here
 }
 
+# internal
+#
 # Restore all defines as local variables in stack frame #1
 proc tmake-reset-defines {} {
 	uplevel #1 {
@@ -1119,9 +1209,14 @@ proc tmake-reset-defines {} {
 	}
 }
 
-# @Scope { commands }
+# @Scope ?dir? { commands }
 #
-# XXX
+# Treat the given commands as though they were in a separate build.spec
+# in the given, relative directory (defaults to the current directory).
+# Note that that the given directory need not actually exist.
+#
+# Any 'define' variables within the scope are reset
+# when the scope ends.
 proc Scope {{dir ""} script} {
 	global tmake
 	# Save all defines
@@ -1144,7 +1239,8 @@ proc Scope {{dir ""} script} {
 	return $result
 }
 
-
+# internal
+#
 # Read in the given spec file in the given directory (relative to topdir)
 # Returns 1 if OK, or 0 if subdirs should be skipped
 proc process-build-spec-file {dir {optional 0}} {
@@ -1206,7 +1302,11 @@ proc process-build-spec-file {dir {optional 0}} {
 
 # @VirtualSubDir dir { ... build.spec rules ... }
 #
-# XXX
+# Behaves as though directory $dir containing a build.spec
+# file with the given contents.
+#
+# This could be useful if building third-party source where
+# we don't want to create the build.spec file in that directory.
 proc VirtualSubDir {dir code} {
 	Scope $dir {
 		rulebase-invoke prolog
@@ -1215,15 +1315,21 @@ proc VirtualSubDir {dir code} {
 	}
 }
 
+# @do-delete-orphans orphanlist
+#
+# Call delete-orphan-files for the files/targets in the given list.
+# Also removes knowledge of those takes from the cache.
 proc do-delete-orphans {orphans} {
 	if {[llength $orphans]} {
 		delete-orphan-files {*}[file-build-list $orphans]
 		note Clean removing [llength $orphans] orphan target(s)
 		dputs C $orphans
-		discard-orphan-targets
+		discard-orphan-targets $orphans
 	}
 }
 
+# @get-orphan-targets
+#
 # Returns a list of all files which were once a target but are no longer
 proc get-orphan-targets {} {
 	global tmakecache
@@ -1237,11 +1343,16 @@ proc get-orphan-targets {} {
 	return $result
 }
 
-proc discard-orphan-targets {} {
+# internal
+#
+# Removes the given orphan targets from the cache.
+# Then removes any build commands from the cache that
+# are no longer rules, and their targets and dependencies.
+proc discard-orphan-targets {orphans} {
 	global tmake tmakecache
 	set discard 0
 
-	foreach i [get-orphan-targets] {
+	foreach i $orphans {
 		#puts "Discarding orphan file $i"
 		dict unset tmakecache(file) $i
 		set discard 1
@@ -1270,12 +1381,13 @@ proc discard-orphan-targets {} {
 	}
 }
 
+# @file-mkdir ?-rootskip|-rooterr? path
+#
 # Like file mkdir except if the directory doesn't exist
 # and the current user is root, the option indicates what should happen.
 #
 ## -rootskip  do nothing
 ## -rooterr   fatal error
-
 proc file-mkdir {option name} {
 	if {![is-uid-root] || [file isdir $name]} {
 		tailcall file mkdir $name
@@ -1294,6 +1406,12 @@ proc file-mkdir {option name} {
 # Module Loading
 # ==================================================================
 
+# @use ...
+#
+# Load the given tmake modules.
+# Note that this only has an effect if tmake is not installed.
+# When installed, tmake automatically loads all installed modules
+# at startup.
 proc use {args} {
 	if {$::tmake(installed)} {
 		return
@@ -1368,7 +1486,10 @@ proc user-notice {{col {}} msg} {
 	}
 }
 
-# Incorrect usage in the build.spec file. Identify the location.
+# @parse-error msg
+#
+# Indicates incorrect usage in the build.spec file.
+# Outputs the error and exits with exitcode=1
 proc parse-error {msg} {
 	global tmake
 	# Message may contain a source reference relative to the top source dir
@@ -1378,6 +1499,10 @@ proc parse-error {msg} {
 	tmake-exit 1
 }
 
+# @parse-warning msg
+#
+# Like parse-error except the message is output as a warning
+# and continues.
 proc parse-warning {msg} {
 	user-notice colwarn [warning-location "Warning: $msg"]
 }
@@ -2453,7 +2578,7 @@ proc calc-deplist-hash {list} {
 # If this matches the saved hash, 0 is returned.
 # Otherwise:
 # - save/update the calculated hash in dephash
-# - append the details of the mismatch to 'reason' 
+# - append the details of the mismatch to 'reason'
 # - the ruletarget is out of date so 1 is returned.
 #
 proc needbuild? {ruletarget depends &reason} {
@@ -2947,7 +3072,7 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 		dputs b "build failed so deleting [file-build-list $ruletarget]"
 
 		# It's probably not necessary to do this since we just deleted the files,
-		# but it's probably better than leaving 
+		# but it's probably better than leaving the dephash as something incorrect
 		dputs h "target $ruletarget failed, so resetting dephash"
 		dict set tmakecache dephash $ruletarget failed
 		mark-cache-dirty "dephash updated on failed build"

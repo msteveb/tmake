@@ -55,17 +55,17 @@ proc codelines {lines} {
 proc nl {} {
     puts ""
 }
-proc underline {text char} {
+proc underline {{type {}} text char} {
     regexp "^(\[ \t\]*)(.*)" $text -> indent words
-    puts $text
+    pputs $type $text
     puts $indent[string repeat $char [string length $words]]
 }
 proc section {text} {
-    underline "[string trim $text]" -
+    underline colhelpsection "[string trim $text]" -
     nl
 }
 proc subsection {text} {
-    underline "$text" ~
+    underline colhelpsubsection "$text" ~
     nl
 }
 proc bullet {text} {

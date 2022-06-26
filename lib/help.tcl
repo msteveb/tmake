@@ -207,10 +207,52 @@ proc show-command-reference {} {
     exit 0
 }
 
+# combine type, text into the current command help dictionary
+proc add-cmd-help {&dict type text} {
+    if {$text eq "" || $dict(type) ne $type} {
+        if {[llength [dict getdef $dict lines {}]]} {
+            lappend dict(blocks) $dict(type) $dict(lines)
+        }
+        dict set dict type $type
+        if {$text eq ""} {
+            dict set dict lines {}
+        } else {
+            dict set dict lines [list $text]
+        }
+    } else {
+        lappend dict(lines) $text
+        #puts [list * $type $text]
+        #parray dict
+    }
+    if 0 {
+        if {$t ne $type || $desc eq ""} {
+            if {$cmd eq ""} {
+                if {[llength $lines]} {
+                    error "Got text for no command - $type $lines"
+                }
+            } else {
+                # Finish the current block
+                lappend cmdinfo($cmd) [list $type $lines]
+            }
+            set lines {}
+            set type $t
+        }
+        if {$desc ne ""} {
+            lappend lines $desc
+        }
+    }
+}
+
 proc show-command-reference-blob {name text} {
     set searching 1
     set lines {}
     set type p
+    # dictionary of subsection (command) name -> {type lines} ...
+    set cmdinfo {}
+
+    # This is the current command help info.
+    # It is a dictionary of name=cmd name, type=current type, lines=current lines, blocks=list of {type lines ...}
+    set current {}
 
     foreach line [split $text \n] {
         if {$searching} {
@@ -222,42 +264,46 @@ proc show-command-reference-blob {name text} {
 
             # Synopsis or command?
             if {$cmd eq "synopsis:"} {
-                section "Module: $name"
+                set current [dict create name "Module: $name" section section type p lines {} blocks {}]
             } else {
-                subsection $cmd
+                if {[dict exists $current name]} {
+                    error "Got command $cmd while previous command was pending"
+                }
+                # Command with no description yet
+                set current [dict create name $cmd section subsection type p lines {} blocks {}]
             }
-
-            set lines {}
-            set type p
             continue
         }
 
         # Now the description
-        if {![regexp {^#(#)? ?(.*)} $line -> hash cmd]} {
-            set cmd ""
+        if {![regexp {^#(#)? ?(.*)} $line -> hash desc]} {
+            # Not a command description line, so finish current if started
+            add-cmd-help current "" ""
+            if {[dict exists $current name]} {
+                dict set cmdinfo [dict get $current name] [list [dict get $current section] [dict get $current blocks]]
+            }
+            set current {}
             set searching 1
         } else {
             if {$hash eq "#"} {
-                set t code
-            } elseif {[regexp {^- (.*)} $cmd -> cmd]} {
-                set t list
+                add-cmd-help current code $desc
+            } elseif {[regexp {^- (.*)} $desc -> desc]} {
+                add-cmd-help current list $desc
             } else {
-                set t p
+                add-cmd-help current p $desc
             }
-
-            #puts "hash=$hash, oldhash=$oldhash, lines=[llength $lines], cmd=$cmd"
         }
 
-        if {$t ne $type || $cmd eq ""} {
-            # Finish the current block
-            output-help-block $type $lines
-            set lines {}
-            set type $t
-        }
-        if {$cmd ne ""} {
-            lappend lines $cmd
-        }
     }
 
-    output-help-block $type $lines
+    add-cmd-help current "" ""
+
+    # Now output in sorted order
+    foreach cmd [lsort [dict keys $cmdinfo]] {
+        lassign [dict get $cmdinfo $cmd] section blocks
+        $section $cmd
+        foreach {type lines} $blocks {
+            output-help-block $type $lines
+        }
+    }
 }

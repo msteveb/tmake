@@ -5,14 +5,17 @@
 #
 # Provide colourised output to ANSI-compatible terminals
 #
-# Colourised output will not be used if:- $NOCOLOR is set in the environment,
-# $TERM is one of dumb, emacs or cygwin, or if the channel (stdout, stderr)
-# is not a tty.
+# Colourised output will not be used if any of the following are true:
+# - $NOCOLOR is set in the environment,
+# - $TERM is one of dumb, emacs or cygwin,
+# - the channel (stdout, stderr) is not a tty.
 #
 # Note that tmake allows colour to be forced on with --col and forced off with --nocol
 #
 # Known colours are: none black red green yellow blue purple cyan normal gray grey lred
 # lgreen lyellow lblue lpurple lcyan white
+#
+# Use 'tmake --showcol' to show all colours and how they are used.
 
 # Should colourised output be used to stdout and stderr?
 set tmake(colout) 0
