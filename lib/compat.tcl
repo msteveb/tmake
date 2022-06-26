@@ -350,8 +350,8 @@ proc error-location {msg} {
 # warning-location is like error-location except
 # it does not show a stack trace, even when debugging is enabled
 #
-proc warning-location {msg {pattern *.spec}} {
-	set loc [find-source-location $pattern]
+proc warning-location {msg} {
+	set loc [lindex [find-source-location] 0]
 	if {$loc ne "unknown"} {
 		return "$loc: $msg"
 	}
@@ -359,23 +359,30 @@ proc warning-location {msg {pattern *.spec}} {
 	return $msg
 }
 
-# Look down the stack frame for the first location
-# which is in a file matching the pattern and return it as file:line
-# Returns "unknown" if not known.
+# Traverse stack frames and find each location in *.spec and *.default files,
+# starting with the top-most level.
+# 
+# Returns a list: {file:line ...} or "unknown" if none found.
 #
-proc find-source-location {{pattern *.spec}} {
-	# Search back through the stack for the first location in a .spec file
-	set result unknown
-
-	for {set i 1} {$i < [info level]} {incr i} {
+proc find-source-location {} {
+	set result {}
+	set level [expr {[info level] - 1}]
+	for {set i $level} {$i > 0} {incr i -1} {
 		lassign [info frame -$i] info(caller) info(file) info(line)
 		if {[string match *.spec $info(file)]} {
-			return [relative-path $info(file)]:$info(line)
+			lappend result [relative-path $info(file)]:$info(line)
+		} elseif {[string match *.default $info(file)]} {
+			# No need to include the location in rulebase.default if there are other locations
+			if {[llength $result] == 0} {
+				# rulebase.default is outside the prjoject so use the path directly
+				lappend result $info(file):$info(line)
+			}
+			# And only need one location from rulebase.default
+			break
 		}
-		# But use the last occurrence when searching in (e.g.) rulebase.default
-		if {[string match $pattern $info(file)]} {
-			set result $info(file):$info(line)
-		}
+	}
+	if {[llength $result] == 0} {
+		return unknown
 	}
 	return $result
 }

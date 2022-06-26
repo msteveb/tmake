@@ -2409,14 +2409,7 @@ proc parse-rule {target arglist} {
 	global tmake
 	set info $tmake(emptytarget)
 
-	# Note that we prefer build.spec over project.spec and rulebase.spec when
-	# finding the source of a rule
-	foreach pattern {build.spec *.spec *.default} {
-		set info(source) [find-source-location $pattern]
-		if {$info(source) ne "unknown"} {
-			break
-		}
-	}
+	set info(source) [find-source-location]
 	set info(target) $target
 
 	# split the arglist into a dictionary
