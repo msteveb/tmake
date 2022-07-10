@@ -57,7 +57,7 @@ proc apply-template {infile outfile vars target} {
 						set not 1
 					}
 					if {![dict exists $vars $condvar]} {
-						build-fatal-error "$infile:$linenum: No such variable: $condvar"
+						build-fatal-error "$infile:$linenum: Error: No such variable: $condvar"
 					}
 					set value [dict get $vars $condvar]
 					set condexpr 0
@@ -77,7 +77,7 @@ proc apply-template {infile outfile vars target} {
 				}
 				if {[catch [list expr $condexpr] condval]} {
 					dputs m $condval
-					build-fatal-error "$infile:$linenum: Invalid expression: $line"
+					build-fatal-error "$infile:$linenum: Error: Invalid expression: $line"
 				}
 				dputs m "$infile:$linenum: @$condtype $condargs ($condexpr) => $condval"
 			}

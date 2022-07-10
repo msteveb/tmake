@@ -1,7 +1,7 @@
 # vim:set syntax=tcl:
 define? DESTDIR _install
 
-define? AUTOREMAKE configure --host=arm-linux TOPBUILDDIR=$TOPBUILDDIR --conf=auto.def
+define? AUTOREMAKE ./configure --host=arm-linux-gnueabi TOPBUILDDIR=$TOPBUILDDIR --conf=auto.def
 
 Autosetup include/autoconf.h
 

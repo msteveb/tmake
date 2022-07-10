@@ -1448,16 +1448,37 @@ proc user-error {{col colerror} msg} {
 	tmake-exit 1
 }
 
-# @build-error ?colour? msg
+proc build-error-msgs {ruletarget msg} {
+	if {$ruletarget ne ""} {
+		set location [get-rule-source $ruletarget]
+		if {[llength $location]} {
+			set location [lassign $location first]
+			lappend msgs "${first}: $msg"
+			foreach loc $location {
+				lappend msgs "${loc}: note: further build definition for $ruletarget"
+			}
+			return $msgs
+		}
+	}
+	return [list $msg]
+}
+
+# @build-error ?ruletarget? msg
 #
 # Indicate that something failed to build and set exitcode=1
-proc build-error {{col colerror} msg} {
+#
+# If $ruletarget is given, shows source information for the rule
+proc build-error {{ruletarget {}} msg} {
 	enter-new-dir $::tmake(topsrcdir)
+	set msgs [build-error-msgs $ruletarget $msg]
+	set msg [lindex $msgs 0]
 	if {$msg eq ""} {
 		set msg "-- no message --"
 	}
 	dputs b "BUILD ERROR: $msg"
-	puts stderr [colerr $col $msg]
+	foreach msg $msgs {
+		puts stderr [colerr colerror $msg]
+	}
 	stderr flush
 	set ::tmake(exitcode) 1
 }
@@ -1465,13 +1486,10 @@ proc build-error {{col colerror} msg} {
 # @build-fatal-error msg
 #
 # Indicate that something failed to build and exit with exitcode=1
-proc build-fatal-error {msg} {
-	dputs b "BUILD FATAL ERROR: $msg"
-	puts stderr [colerr colerror $msg]
-	stderr flush
+proc build-fatal-error {{ruletarget {}} msg} {
+	build-error $ruletarget $msg
 	tmake-exit 1
 }
-
 
 # @user-notice ?colour? msg
 #
@@ -1786,7 +1804,7 @@ proc show-all-targets {detailed} {
 				puts $i
 			}
 		} else {
-			puts "$i @[make-source-location $i]"
+			puts "$i [make-source-location $i @]"
 		}
 	}
 	if {$shown == 0 && $detailed eq ""} {
@@ -2020,7 +2038,7 @@ proc define-list-append {name args} {
 #
 proc get-define {name {default ""}} {
 	if {$::tmake(parsedone)} {
-		build-fatal-error "get-define $name called during build phase"
+		build-fatal-error [error-location "Error: get-define $name called during build phase"]
 	}
 	if {[dict exists $::tmake(defines) $name]} {
 		#dputs v "get-define $name => [dict get $::tmake(defines) $name]"
@@ -2178,6 +2196,14 @@ proc show-this-rule {args} {
 }
 
 proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
+	set source [get-rule-source $ruletarget]
+	if {[llength $source]} {
+		return $prefix[join $source ", "]$suffix
+	}
+	return ""
+}
+
+proc get-rule-source {ruletarget} {
 	if {[is-rule? $ruletarget]} {
 		set source [get-rule-attr $ruletarget source]
 	} else {
@@ -2187,7 +2213,7 @@ proc make-source-location {ruletarget {prefix {}} {suffix {}}} {
 	if {$source eq "unknown"} {
 		return ""
 	}
-	return $prefix[join $source ", "]$suffix
+	return $source
 }
 
 # Defines a high level command.
@@ -2664,7 +2690,7 @@ proc tmake-require-version {needversion} {
 	global tmake
 	set haveversion [lindex $tmake(version) 0]
 	if {[compare-versions $haveversion $needversion] < 0} {
-		build-fatal-error "tmake $needversion required, but this is $tmake(version)"
+		build-fatal-error "Error: tmake $needversion required, but this is $tmake(version)"
 	}
 }
 
@@ -3034,7 +3060,7 @@ proc target-post-build {ruletarget rc {msg {}} {opts {}}} {
 			if {$mtime == 0} {
 				# XXX: Should onerror run here if --quickstop is set?
 				# XXX: Should the cache still be updated?
-				build-error "[make-source-location $ruletarget "" ": "]Error: Rule for $target failed to build target(s) $f ([file-build $f])"
+				build-error $ruletarget "Error: Rule for $target failed to build target(s) $f ([file-build $f])"
 				# Use break to indicate that we have already output the message
 				set rc 3
 			} elseif {!$t(nocache)} {
@@ -3125,7 +3151,7 @@ proc build-deps {target ruletarget status depends phony &reason} {
 		switch $ret {
 			failed {
 				if {$tmake(exitcode) == 0} {
-					build-error "[make-source-location $ruletarget]: Error: Failed to build $dep, required by $ruletarget: [join [lreverse $tmake(current)] { <= }]"
+					build-error $ruletarget "Error: Failed to build $dep, required by $ruletarget: [join [lreverse $tmake(current)] { <= }]"
 				}
 				if {$tmake(quickstop)} {
 					tmake-exit 1 "*** Error: Targets failed to build"
@@ -3211,7 +3237,7 @@ proc build {target {notifytarget {}}} {
 		}
 		checking {
 			set current [list {*}$tmake(current) $target]
-			build-fatal-error "[make-source-location $ruletarget]:Error: Recursive definition for [join [lreverse $current] { <= }]"
+			build-fatal-error $ruletarget "Error: Recursive definition for [join [lreverse $current] { <= }]"
 		}
 		failed {
 			dputs b "$target has previously failed to build"
@@ -3405,7 +3431,7 @@ proc build {target {notifytarget {}}} {
 		if {!$t(rootok) && $tmake(isroot)} {
 			dputs b "Running command for $target as root"
 			dputs b $t(do)
-			build-fatal-error "Error: [make-source-location $ruletarget] Refusing to run command for $target as root"
+			build-fatal-error $ruletarget "Error: Refusing to run command for $target as root"
 			set status failed
 		}
 	}
@@ -3415,7 +3441,7 @@ proc build {target {notifytarget {}}} {
 
 		set tmake(sync) 1
 
-		dputs b "Building [join [lreverse $tmake(current)] { <= }] [make-source-location $ruletarget "with rule @"]"
+		dputs b "Building [join [lreverse $tmake(current)] { <= }] with rule [make-source-location $ruletarget @]"
 		lassign [run-do $vardict $t(msg)] rc msg opts
 		if {$rc != 0} {
 			build-error [error-stacktrace $msg $opts(-errorinfo)]
@@ -3488,7 +3514,7 @@ proc build {target {notifytarget {}}} {
 				foreach do $t(do) {
 					set oldenv [env-save]
 					if {!$t(rootok) && $tmake(isroot)} {
-						build-fatal-error "Error: [make-source-location $ruletarget] Refusing to run command for $target as root"
+						build-fatal-error $ruletarget "Error: Refusing to run command for $target as root"
 					} else {
 						lassign [run-do $vardict $do] rc msg opts
 					}

@@ -1599,7 +1599,6 @@ parsing phase will be restarted.
 		lappend result $f
 	} elseif {![is-cleaning?] && !$nocare} {
 		build-fatal-error [warning-location "Error: Load $filename does not exist and is not a target"]
-		tmake-exit 1
 	}
 
 	if {[info exists f] && [file exists $f]} {
@@ -1788,7 +1787,7 @@ to be uninstalled with 'uninstall'
 
 	set destfile [get-define DESTDIR]$dest
 	if {[is-target? $destfile]} {
-		user-notice purple [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
+		user-notice purple [warning-location "Warning: Duplicate install rule for $dest [make-source-location $destfile @]"]
 		return
 	}
 
@@ -1838,7 +1837,7 @@ Note that the source can be an absolute path to install an external file.
 	}
 
 	if {[is-target? $destfile]} {
-		user-notice purple [warning-location "Warning: Duplicate install rule for $dest at [make-source-location $destfile]"]
+		user-notice purple [warning-location "Warning: Duplicate install rule for $dest [make-source-location $destfile @]"]
 		return
 	}
 
