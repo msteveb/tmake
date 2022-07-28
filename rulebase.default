@@ -214,7 +214,7 @@ Used variables:  CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
 	if {![is-duplicate-obj-rule $obj $src {CC C_FLAGS INCPATHS}]} {
 		# Capture the current value of CC, C_FLAGS and INCPATHS
 		target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
-			run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+			run $CCACHE $CC $CFLAGS $C_FLAGS -c $inputs -o $target
 		} -dyndep {
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 		} -depends [get-define PRECOMPILED_HEADER]
@@ -235,7 +235,7 @@ Used variables:  CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generatio
 	if {![is-duplicate-obj-rule $obj $src {CXX CXX_FLAGS INCPATHS}]} {
 		# Capture the current value of CXX, CXX_FLAGS and INCPATHS
 		target $obj -inputs $src -msg {note C++ $targetname} -getvars CXX CXX_FLAGS INCPATHS -do {
-			run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
+			run $CCACHE $CXX $CXXFLAGS $CXX_FLAGS -c $inputs -o $target
 		} -dyndep {
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 		} -depends [get-define PRECOMPILED_HEADER]
