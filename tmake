@@ -2738,6 +2738,9 @@ proc run {args} {
 		set cmdline ./$cmdline
 	} elseif {$tmake(checkexternalcmds)} {
 		# Update the cache with the details of this command
+		# XXX a limitation of this approach is that we only notice the first command
+		# For example ccache cc ... will only look at ccache without noticing that
+		# ccache invokes cc (and uses many things that are unknowable)
 		dict set tmakecache exec $tmake(currentruletarget) $cmd [stat-cmd-in-path $cmd]
 	}
 
@@ -3442,6 +3445,11 @@ proc build {target {notifytarget {}}} {
 		set tmake(sync) 1
 
 		dputs b "Building [join [lreverse $tmake(current)] { <= }] with rule [make-source-location $ruletarget @]"
+
+		if {$tmake(checkexternalcmds)} {
+			# Clear external command info before running
+			dict unset tmakecache exec $ruletarget
+		}
 		lassign [run-do $vardict $t(msg)] rc msg opts
 		if {$rc != 0} {
 			build-error [error-stacktrace $msg $opts(-errorinfo)]
