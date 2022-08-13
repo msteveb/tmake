@@ -2922,9 +2922,12 @@ proc wait-for-one-job {} {
 			set job [dict get $tmake(running) $pid]
 			dict unset tmake(running) $pid
 
-			lassign $job ruletarget notifytarget chdir outfile errfile
+			lassign $job ruletarget notifytarget chdir outfile errfile starttime
+			set ms $([clock millis] - $starttime)
+
 			dputs j "Job $pid building $ruletarget has finished with $status\($code), needed by $notifytarget"
 			if {$status eq "CHILDSTATUS" && $code == 0} {
+				dputs T "Built $ruletarget in ${ms}ms"
 				set rc 0
 			} else {
 				set rc 1
@@ -3019,7 +3022,7 @@ proc add-new-job {ruletarget notifytarget chdir} {
 		# Insert the job in the slot
 		set-rule-status $ruletarget running
 		if {$tmake(sepjobio)} {
-			dict set tmake(running) $pid [list $ruletarget $notifytarget $chdir [$fout filename] [$ferr filename]]
+			dict set tmake(running) $pid [list $ruletarget $notifytarget $chdir [$fout filename] [$ferr filename] [clock millis]]
 			$fout close
 			$ferr close
 		} else {
@@ -3530,6 +3533,7 @@ proc build {target {notifytarget {}}} {
 			}
 			if {$tmake(jobpid) <= 0} {
 				# child process or sync, so run the jobs
+				set starttime [clock millis]
 				foreach do $t(do) {
 					set oldenv [env-save]
 					if {!$t(rootok) && $tmake(isroot)} {
@@ -3550,6 +3554,10 @@ proc build {target {notifytarget {}}} {
 							break
 						}
 					}
+				}
+				if {$rc == 0 && $tmake(jobpid) < 0} {
+					set ms $([clock millis] - $starttime)
+					dputs T "Built $ruletarget in ${ms}ms"
 				}
 			}
 
@@ -3864,7 +3872,7 @@ set rc [catch -signal {
 		}
 	}
 	if {$tmake(usehashes)} {
-		dputs T "Time spent hashing sources: [format %.3f $($tmake(hashtime) / 1e6)] seconds"
+		dputs T "Time spent hashing sources: $(round($tmake(hashtime) / 1e3))ms"
 	}
 	# This is to support unit testing
 	if {[env TMAKE_ERROR ""] eq "late"} {
