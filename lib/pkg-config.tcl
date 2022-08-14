@@ -28,13 +28,15 @@
 ## }
 #
 proc pkg-config {name} {
-	set prefix PKG_[string toupper $name]
+	# This is the same as feature-define-name from autosetup
+	set prefix [string toupper pkg_[regsub -all {[^a-zA-Z0-9]} [regsub -all {[*]} $name p] _]]
+	set rc 0
 	ifconfig HAVE_$prefix {
 		UseSystemLibs {*}[get-define ${prefix}_LIBS]
 		CFlags {*}[get-define ${prefix}_CFLAGS]
 		C++Flags {*}[get-define ${prefix}_CFLAGS]
 		LinkFlags {*}[get-define ${prefix}_LDFLAGS]
-		return 1
+		set rc 1
 	}
-	return 0
+	return $rc
 }
