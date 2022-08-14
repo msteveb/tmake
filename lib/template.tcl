@@ -169,7 +169,7 @@ and produces a warning unless '--nowarn' is given.
 			lappend vars $name $value
 		} else {
 			if {![define-exists $var]} {
-				user-notice purple [warning-location "Warning: $target maps undefined variable $var" build.spec]
+				user-notice purple [warning-location "Warning: $target maps undefined variable $var"]
 			}
 			lappend vars $var [get-define $var]
 		}
