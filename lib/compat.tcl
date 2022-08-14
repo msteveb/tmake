@@ -163,6 +163,26 @@ proc file-normalize {path} {
 	return $result
 }
 
+if {"split" in [file -commands]} {
+    alias file-split file split
+} else {
+    proc file-split {path} {
+        if {[string match /* $path]} {
+            set parts [split $path /]
+            list / {*}$parts
+        } else {
+            split $path /
+        }
+    }
+}
+if {"join" in [file -commands]} {
+    alias file-join-raw file join
+} else {
+    proc file-join-raw {args} {
+        join $args /
+    }
+}
+
 # @file-join dir path
 #
 # Like 'file join' except will omit "." in either 'dir' or 'path'
@@ -175,7 +195,7 @@ proc file-normalize {path} {
 ## file-join abc/def ../ghi => abc/ghi
 proc file-join {dir path} {
 	set result {}
-	foreach part [list {*}[file split $dir] {*}[file split $path]] {
+	foreach part [list {*}[file-split $dir] {*}[file-split $path]] {
 		if {$part eq "."} {
 			continue
 		}
@@ -185,12 +205,15 @@ proc file-join {dir path} {
 				continue
 			}
 		}
+		if {[string match /* $part]} {
+			set result {}
+		}
 		lappend result $part
 	}
 	if {[llength $result] == 0} {
 		return "."
 	}
-	file join {*}$result
+	file-join-raw {*}$result
 }
 
 # @file-link ?-symbolic|-hard? newname target
