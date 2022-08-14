@@ -17,7 +17,9 @@ proc tmake_install {dir} {
 		if {[file exists autosetup-find-tclsh]} {
 			puts $f "#!/bin/sh"
 			puts $f "# \\"
-			puts $f {dir=`dirname "$0"`; exec "`$dir/autosetup-find-tclsh jimsh`" "$0" "$@"}
+			puts $f {dir=`dirname "$0"`; exec "`$dir/autosetup-find-tclsh tmake-test-jimsh`" "$0" "$@"}
+			file copy -force $::tmake(dir)/tmake-test-jimsh tmake-test-jimsh
+			exec chmod +x tmake-test-jimsh
 		}
 
 		# Write the main script, but only up until "CUT HERE"

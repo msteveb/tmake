@@ -70,7 +70,7 @@ proc show-help {argv arg} {
         {-h|--help[=all]}      {Show this help, or with --help=all, show uncommon options too.}
         {--configure ...}      {Run autoconfiguration (if supported by the project) with the given options}
         {--warnings}           {Output saved warning messages (for any targets that would be built)}
-        {-v|--verbose}         {Force "V=1" mode when building to show commands executed}
+        {-v|--verbose}         {Force "V=1" mode when building to show commands executed (also try -v -v)}
         {-n|--dry-run}         {Show commands which would have been run, but don't execute}
         {--force}              {Treat all targets to be built as out-of-date}
         {-t|--time}            {Show build time even if nothing was run}
