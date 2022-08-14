@@ -14,6 +14,12 @@ proc tmake_install {dir} {
 
 		set f [open tmake w]
 
+		if {[file exists autosetup-find-tclsh]} {
+			puts $f "#!/bin/sh"
+			puts $f "# \\"
+			puts $f {dir=`dirname "$0"`; exec "`$dir/autosetup-find-tclsh jimsh`" "$0" "$@"}
+		}
+
 		# Write the main script, but only up until "CUT HERE"
 		set in [open $::tmake(dir)/tmake]
 		while {[gets $in buf] >= 0} {
