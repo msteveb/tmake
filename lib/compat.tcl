@@ -166,19 +166,31 @@ proc file-normalize {path} {
 # @file-join dir path
 #
 # Like 'file join' except will omit "." in either 'dir' or 'path'
+# and will reduce ..
 # e.g.
 #
 ## file-join . abc => abc
 ## file-join abc/def . => abc/def
 ## file-join abc/def ghi => abc/def/ghi
+## file-join abc/def ../ghi => abc/ghi
 proc file-join {dir path} {
-	if {$dir eq "."} {
-		return $path
+	set result {}
+	foreach part [list {*}[file split $dir] {*}[file split $path]] {
+		if {$part eq "."} {
+			continue
+		}
+		if {$part eq ".."} {
+			if {[lindex $result end] ni {".." ""}} {
+				set result [lrange $result 0 end-1]
+				continue
+			}
+		}
+		lappend result $part
 	}
-	if {$path eq "."} {
-		return $dir
+	if {[llength $result] == 0} {
+		return "."
 	}
-	file join $dir $path
+	file join {*}$result
 }
 
 # @file-link ?-symbolic|-hard? newname target
