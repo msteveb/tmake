@@ -235,6 +235,15 @@ context instead of just objdir/
 How does Load work? For example, $CC_FOR_BUILD may be loaded only in the default
 context. Do we need to use ${#default#CC_FOR_BUILD} ?
 
+Virtual targets
+---------------
+
+Currently we support phony targets that are always out of date and normal targets
+were the target rule must generate the targets. But we may also want to have support
+for virtual targets, which are like a phony target except when the rule runs we record
+the dependencies and only rerun if the dependencies change even though there is no
+output produced.
+
 tmake TODO
 ----------
 * Does it make sense to support "IncludePaths /abc" to add paths
