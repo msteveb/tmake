@@ -106,6 +106,9 @@ set tmake(pending) {}
 set tmake(jobpid) -1
 set tmake(resetstatus) 0
 
+# We set this so that processes know they are running under tmake
+set env(TMAKE) [info script]
+
 # ==================================================================
 # Argument Processing
 # ==================================================================
