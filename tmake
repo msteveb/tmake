@@ -2933,10 +2933,10 @@ proc wait-for-one-job {} {
 			dict unset tmake(running) $pid
 
 			lassign $job ruletarget notifytarget chdir outfile errfile starttime
-			set ms $([clock millis] - $starttime)
 
 			dputs j "Job $pid building $ruletarget has finished with $status\($code), needed by $notifytarget"
 			if {$status eq "CHILDSTATUS" && $code == 0} {
+				set ms $([clock millis] - $starttime)
 				dputs T "Built $ruletarget in ${ms}ms"
 				set rc 0
 			} else {
@@ -3036,7 +3036,7 @@ proc add-new-job {ruletarget notifytarget chdir} {
 			$fout close
 			$ferr close
 		} else {
-			dict set tmake(running) $pid [list $ruletarget $notifytarget $chdir "" ""]
+			dict set tmake(running) $pid [list $ruletarget $notifytarget $chdir "" "" [clock millis]]
 		}
 		dict incr tmake(pending) $notifytarget
 	} elseif {$tmake(sepjobio)} {
