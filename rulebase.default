@@ -51,6 +51,7 @@ proc rulebase-init {} {
 	define? STRIPFLAGS ""
 	define? STRIPLIBFLAGS ""
 	define? ARFLAGS cr
+	define? CPPFLAGS ""
 	define? CFLAGS ""
 	define? CXXFLAGS ""
 	define? LDFLAGS ""
@@ -208,13 +209,13 @@ ObjectRule.c object source
 Generates an object file from a C source file
 
 Bound variables: CC, C_FLAGS (from CFlags, ObjectCFlags), INCPATHS (from IncludePaths)
-Used variables:  CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
+Used variables:  CPPFLAGS, CFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation)
                  PRECOMPILED_HEADER (see PrecompiledHeader)
 } {
 	if {![is-duplicate-obj-rule $obj $src {CC C_FLAGS INCPATHS}]} {
 		# Capture the current value of CC, C_FLAGS and INCPATHS
 		target $obj -inputs $src -msg {note Cc $targetname} -getvars CC C_FLAGS INCPATHS -do {
-			run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+			run $CCACHE $CC $C_FLAGS $CFLAGS $CPPFLAGS -c $inputs -o $target
 		} -dyndep {
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 		} -depends [get-define PRECOMPILED_HEADER]
@@ -229,13 +230,13 @@ ObjectRule.cpp object source
 Generates an object file from a C++ source file
 
 Bound variables: CXX, CXX_FLAGS (from C++Flags), INCPATHS (from IncludePaths)
-Used variables:  CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation),
+Used variables:  CPPFLAGS, CXXFLAGS, CCACHE, CHDRPATTERN (for dynamic dependency generation),
                  PRECOMPILED_HEADER (see PrecompiledHeader)
 } {
 	if {![is-duplicate-obj-rule $obj $src {CXX CXX_FLAGS INCPATHS}]} {
 		# Capture the current value of CXX, CXX_FLAGS and INCPATHS
 		target $obj -inputs $src -msg {note C++ $targetname} -getvars CXX CXX_FLAGS INCPATHS -do {
-			run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS -c $inputs -o $target
+			run $CCACHE $CXX $CXX_FLAGS $CXXFLAGS $CPPFLAGS -c $inputs -o $target
 		} -dyndep {
 			header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
 		} -depends [get-define PRECOMPILED_HEADER]
@@ -1404,6 +1405,10 @@ C_FLAGS only to the objects created from the given list of source files.
 Can also be used to apply directly to object files. e.g.
 
   ObjectCFlags {file1.c file2.o file3.cc} -O0
+
+Note that if used before the rule that creates the .o file, these flags will
+come before CFlags from project.spec and build.spec, otherwise they
+will come afterwards.
 } {
 	show-this-rule
 	foreach src $srcs {
