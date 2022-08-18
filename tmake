@@ -60,6 +60,7 @@ set tmake(showaliases) 0
 set tmake(showwarnings) 0
 set tmake(usehashes) 0
 set tmake(cachecleanup) 0
+set tmake(configure) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
 set tmake(varloc) {}
@@ -431,7 +432,7 @@ proc make {argv} {
 
 	set tmake(prefix) ""
 
-	if {[exists tmake(configure)]} {
+	if {$tmake(configure)} {
 		dputs m "--configure options, so taking over targets with AUTOREMAKE=./configure $tmake(cmdline)"
 		# Set the command line in AUTOREMAKE
 		# and build configure
@@ -1483,7 +1484,9 @@ proc build-error {{ruletarget {}} msg} {
 		puts stderr [colerr colerror $msg]
 	}
 	stderr flush
-	set ::tmake(exitcode) 1
+	if {!$::tmake(configure)} {
+		set ::tmake(exitcode) 1
+	}
 }
 
 # @build-fatal-error msg
@@ -1521,7 +1524,9 @@ proc parse-error {msg} {
     }
 
 	user-notice colerror [error-location "Error: $msg"]
-	tmake-exit 1
+	if {!$tmake(configure)} {
+		tmake-exit 1
+	}
 }
 
 # @parse-warning msg
