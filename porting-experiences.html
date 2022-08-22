@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Experiences with porting projects to tmake</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="porting-experiences.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="experiences-with-porting-projects-to-tmake">Experiences with porting projects to tmake</h1>
+<h2 id="polarssl">polarssl</h2>
+<p>Project has plain Makefile and cmake support.
+Currently configuration is done by manually modifing Makefile and
+include/polarssl/config.h</p>
+<ul>
+<li>Install autosetup and tmake</li>
+<li>Create basic auto.def to allow configuration of some options and checking
+some basic compiler settings. Most settings are still hard-coded here.</li>
+<li>Create settings.conf and include/polarssl/autoconf.h</li>
+<li>Modify include/polarssl/config.h to include autoconf.h (to avoid overwriting current version)</li>
+<li>tmake can build either static lib or shared lib</li>
+<li>Created polarsslwrap based on axtlswrap</li>
+<li>Test directory uses code generation. scripts/generate_code.pl was hard to work with
+because it wanted to generate output in the current dir.
+I changed it slightly to take the full path to the target on the command line.</li>
+</ul>
+<p>→ polarsslwrap does not work on Windows because of the lack of fork, exec, poll<br>
+→ Need to add all possible options to auto.def, including dependencies</p>
+<p>Build times:</p>
+<ul>
+<li>About 2 seconds for tmake</li>
+<li>About 4.5 seconds for cmake</li>
+</ul>
+<h2 id="libgit2">libgit2</h2>
+<p>Was waf, now cmake</p>
+<ul>
+<li>
+<p>Installed autosetup and tmake</p>
+</li>
+<li>
+<p>Converted autoconfig + user config from cmake to auto.def</p>
+</li>
+<li>
+<p>Required addition of building libraries from libraries</p>
+</li>
+<li>
+<p>Required addition of GlobRecursive (now Glob --recursive --exclude=...)</p>
+</li>
+<li>
+<p>Added Template support as tmake module for .pc (pkg-config)</p>
+</li>
+<li>
+<p>tests-clar/clar was awkward since it wouldn't generate sources out-of-tree.
+Needed to manually move them to the build tree. (Alternatively, could have modified clar).</p>
+</li>
+<li>
+<p>Probably need PublishIncludes --dir=<subdir></subdir></p>
+</li>
+</ul>
+<ul>
+<li>Didn't do thread support</li>
+<li>tmake currently doesn't support MSVC, but I left in as much support as possible</li>
+<li>Now uses pkg-config support for zlib searching</li>
+</ul>
+<h2 id="fossil">fossil</h2>
+<ul>
+<li>A number of HostExecutable generators are used</li>
+<li>Most of these could be easily replaced with Tcl commands or scripts</li>
+</ul>
+<h2 id="nethack4">nethack4</h2>
+<ul>
+<li>Avoiding 'sudo tmake install' creating build files as root</li>
+<li>There were some recursive dependencies that required subset libraries to be created</li>
+<li>date.h was being recreated every time</li>
+</ul>
+<p>Build times:</p>
+<ul>
+<li>About 19 seconds for tmake (clean build), 0.3 seconds (do nothing build)</li>
+<li>About 55 seconds for aimake (clean build), 5 seconds (do nothing build)</li>
+</ul>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

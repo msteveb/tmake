@@ -1,0 +1,1 @@
+urls_downloaded_cb({"token":"rulebase.spec","urls":[{"url":"tmake.html#projectspec-buildspec-rulebasespec-rulebasedefault-autosetup","node_type":"h2","context":{"gi-language":["default"]}},{"url":"tmake.html#variables","node_type":"p","context":{"gi-language":["default"]}},{"url":"tmake.html#what-happens","node_type":"ul","context":{"gi-language":["default"]}}]});

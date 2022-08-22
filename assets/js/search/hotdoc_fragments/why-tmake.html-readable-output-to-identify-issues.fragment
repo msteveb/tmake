@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"why-tmake.html#readable-output-to-identify-issues","fragment":"Readable output - to identify issues\nMostly we want to ignore the build output.\nJust enough so we know what is happening, but warnings and errors need to be\nvery clear.\nautomake falls down badly here, but all the other tools do a fine job.\n"});

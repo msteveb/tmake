@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"tmake.html#outoftree-builds","fragment":"Out-of-tree Builds\nDiscuss builddir, srcdir, --build, -chdir and implications\nIn particular, note that rules run from $TOPSRCDIR and should\ncreate targets under $build\n"});

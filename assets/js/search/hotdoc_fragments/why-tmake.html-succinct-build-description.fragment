@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"why-tmake.html#succinct-build-description","fragment":"Succinct build description\ncmake is the canonical example of a verbose build description.\nwaf also suffers from use of a scripting language which has a lot of syntax.\nA general purpose language is good, but it shouldn't get in the way when it isn't needed.\nCompare:\n"});

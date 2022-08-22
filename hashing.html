@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Hash-based Checking</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="hashing.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="hashbased-checking">Hash-based Checking</h1>
+<h2 id="introduction">Introduction</h2>
+<p>There are a number of good reasons to prefer hashing over time stamps to determine
+which files have changes.
+See <a href="https://medium.com/@buckaroo.pm/build-systems-should-use-hashes-over-timestamps-54d09f6f2c4">Build-Systems Should Use Hashes Over Timestamps</a>
+for example.</p>
+<p>(Although note that as <code>tmake</code> uses a cache for previous hashes/timestamps this mitigates some of the
+worst aspects of timestamp checking as it does not require time to always go forward to determine
+that a file has changed. Any change in timestamp is considered a change).</p>
+<p><code>tmake</code> provides both hash-based and time-based comparisons as suitable for the project.
+Hash-based comparison vs Time-based comparison can be enabled with <code>UseHashes on|off</code>
+in project.spec, or <code>tmake --hash</code> (for testing) . The default is time-based comparison.</p>
+<h2 id="when-to-use-hashing">When to use hashing</h2>
+<p>Use of hashing is a choice that will typically depend on whether the timestamps
+of files will often change without their contents changing. For example a revision
+control system may update the timestamp on many files when checking out versions/branches
+even if the contents don't change. If this is common for your project, adding <code>UseHashes on</code>
+to <code>project.spec</code> will use hashing within the project.</p>
+<h2 id="hashing-targets">Hashing targets</h2>
+<p>As explained above, even with hashing enabled (<code>UseHashes on</code>), <code>tmake</code> still only hashes
+sources, not targets (build products) by default. However sometimes it can be useful to hash
+targets. Consider the following (contrived) example:</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+use template
+
+define? VAR1 1
+define? VAR2 2
+
+# Note that VAR2 isn't used in config.h.in so changing the value
+# will cause the the rule to run but the file will be unchanged
+Template config.h config.h.in VAR1 VAR2
+
+Executable --test test-config test-config.c
+<span style="color: yellow">$ cat config.h.in</span>
+#define VAR1 @VAR1@
+</pre>
+<p>Notice that VAR2 isn't used in config.h.in so changing the value won't change the value
+of the generated config.h. First build with the default value of VAR2=2</p>
+<pre>
+<span style="color: yellow">$ tmake </span>
+    Template     config.h
+    Cc           test-config.o
+    Link         test-config
+<span style="color: cyan">Built 3 of 3 target(s) in 0.25 seconds</span>
+</pre>
+<p>Now build again, this time with VAR2=3</p>
+<pre>
+<span style="color: yellow">$ tmake VAR2=3</span>
+    Template     config.h
+    Cc           test-config.o
+    Link         test-config
+<span style="color: cyan">Built 3 of 3 target(s) in 0.13 seconds</span>
+</pre>
+<p>Notice that even though config.h didn't change test-config.o was
+rebuilt.  This is true even if hashing is used. So now adding <code>-hash</code>
+to the template causes the checking on this target to use hashing
+rather than timestamps.</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+use template
+
+define? VAR1 1
+define? VAR2 2
+
+# Note that VAR2 isn't used in config.h.in so changing the value
+# will cause the the rule to run but the file will be unchanged
+target [Template config.h config.h.in VAR1 VAR2] -hash
+
+Executable --test test-config test-config.c
+</pre>
+<p>The first time it is rebuilt, it is considered changed because the hash has
+changed from a timestamp to a hash:</p>
+<pre>
+<span style="color: yellow">$ tmake VAR2=4</span>
+    Template     config.h
+    Cc           test-config.o
+    Link         test-config
+<span style="color: cyan">Built 3 of 3 target(s) in 0.11 seconds</span>
+</pre>
+<p>However subsequent builds only cause the template to be regenerated.
+Because the hash is the same, and targets that depend on config.h are not rerun.</p>
+<pre>
+<span style="color: yellow">$ tmake VAR2=5 -dnh</span>
+<span style="color: cyan">    9ms</span> [h m] <span style="color: darkgoldenrod">Using md5 module for hashing</span>
+<span style="color: cyan">   10ms</span> [n] <span style="color: darkgoldenrod">test-config.c is not a target, but exists</span>
+<span style="color: cyan">   10ms</span> [n] <span style="color: darkgoldenrod">config.h.in is not a target, but exists</span>
+<span style="color: cyan">   10ms</span> [n] <span style="color: darkgoldenrod">Deps for config.h are unchanged, not building</span>
+    Template     config.h
+<span style="color: cyan">   12ms</span> [h] <span style="color: darkgoldenrod">md5sum objdir/config.h =&gt; md5:2ae0ef2fbd474679034fd10cad3ff00c</span>
+<span style="color: cyan">   12ms</span> [n] <span style="color: darkgoldenrod">Deps for test-config.o are unchanged, not building</span>
+<span style="color: cyan">   12ms</span> [n] <span style="color: darkgoldenrod">Commands for test-config.o are unchanged</span>
+<span style="color: cyan">   12ms</span> [n] <span style="color: darkgoldenrod">Deps for test-config are unchanged, not building</span>
+<span style="color: cyan">   12ms</span> [n] <span style="color: darkgoldenrod">Commands for test-config are unchanged</span>
+<span style="color: cyan">Built 1 of 3 target(s) in 0.01 seconds</span>
+</pre>
+<p>The use of target hashing can be particularly beneficial for generated header files
+that are included by many source files that may be regenerated often. For example
+the config header files generated by <a href="https://docs.kernel.org/kbuild/kconfig-language.html">Kconfig</a></p>
+<h2 id="how-tmake-implements-hashing">How tmake implements hashing</h2>
+<p>Consider the following rules (where ← means <em>depends on</em>):</p>
+<pre>
+a ← c d
+b ← c d
+</pre>
+<p>When deciding whether to build a target, <code>tmake</code> looks at the previous hashes and the current hashes of c and d.
+Consider the case where the target previously ran and the hash dependency hashes were
+recorded in the cache.</p>
+<pre><code>dephashes(a) = c hash(c)|d hash(d)
+</code></pre>
+<p>Now when deciding whether to build a target, <code>tmake</code> computes hashes of all it's dependencies.
+If the result is the same answer as the saved <code>dephashes(a)</code>, there is no need to build.
+If it is different, <code>tmake</code> updates dephashes(a) in the cache and continues to build.
+It is OK to update the cache and then have the build fail, because the build will rerun next time
+(for the same reason it ran this time).</p>
+<p>There a few extra things to consider.</p>
+<ul>
+<li>
+<p>If the targets need to be built for some other reason (e.g. does not exist), the
+hash of dependents is not computed immediately. Rather the check is done after
+all the dependents are successfully created.</p>
+</li>
+<li>
+<p>Rather than compute the hash every time, tmakes stores the mtime and hash of dependencies
+in the cache. If the mtime matches what is stored in the cache, the hash is used from the cache.
+Otherwise the hash is computed and the cache entry is updated.</p>
+</li>
+<li>
+<p>PublishIncludes uses "Publish --hash" to add -hash to the publish rules. Since the published
+header files are targets, normally they would use time-based comparison rather than hash-based
+comparison. But these published headers are really source (unless generated), so hash-based
+comparison is used to prevent unecessary rebuilds.</p>
+</li>
+<li>
+<p>It would be expensive to compute hashes of possibly large generated targets. Generated files
+are only be generated by the build system, so mtimes for these files will change when they are
+created/modified - thus <code>tmake</code> uses mtime as a proxy for the hash for targets. If the mtime changes
+(either forwards or backwards), the file is considered to have changed.
+If it is desired to use hashing on certain targets, <code>-hash</code> can be set on the target rule
+to force a hash check rather than a time check.</p>
+</li>
+<li>
+<p>Switching from hash-based to time-based and back to hash-based builds could cause problems with
+out-of-date hashes as these are not updated when running time-based builds.
+For this reason, when switching to time-based, hashes are removed from the cache.</p>
+</li>
+</ul>
+<p>Hashes are computed by running 'md5sum' (or md5, for MacOS) because it is a fast hash
+with a low chance of collisions. If the 'md5' module is available for jimsh, this is used instead.</p>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

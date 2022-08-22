@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Wildcarding sources</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="wildcards.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="wildcarding-sources">Wildcarding sources</h1>
+<p><code>tmake</code> attempts to allow both the simplest build description necessary while
+also being as correct and safe as possible. Consider a simple build description.</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+Executable prog *.c
+</pre>
+<p>For many projects (or directories within a project) this is a perfectly reasonable
+and correct build description. However many other modern build systems do not support
+this. Consider the explanation from <code>meson</code> - <a href="https://mesonbuild.com/FAQ.html#why-cant-i-specify-target-files-with-a-wildcard">No wildcards for meson</a></p>
+<blockquote>
+<p>Meson does not support this syntax and the reason for this is simple.
+This can not be made both reliable and fast. By reliable we mean
+that if the user adds a new source file to the subdirectory, Meson
+should detect that and make it part of the build automatically.</p>
+<p>One of the main requirements of Meson is that it must be fast. This
+means that a no-op build in a tree of 10 000 source files must take
+no more than a fraction of a second. This is only possible because
+Meson knows the exact list of files to check. If any target is
+specified as a wildcard glob, this is no longer possible. Meson
+would need to re-evaluate the glob every time and compare the list
+of files produced against the previous list. This means inspecting
+the entire source tree (because the glob pattern could be
+<code>src/\*/\*/\*/\*.cpp</code> or something like that). This is impossible to
+do efficiently.</p>
+<p>The main backend of Meson is Ninja, which does not support wildcard
+matches either, and for the same reasons.</p>
+<p>Because of this, all source files must be specified explicitly.</p>
+</blockquote>
+<p>However <code>tmake</code> does not force this either-or choice on you. Instead you can certainly
+list out all source files explicitly if desired (and this can improve build speed),
+however wildcards are also supported and they will be expanded during the parse phase
+with the results available in the build phase. This can be a very useful choice for
+small to medium size projects</p>
+<pre>
+<span style="color: yellow">$ ls</span>
+build.spec
+prog.c
+project.spec
+</pre>
+<pre>
+<span style="color: yellow">$ tmake </span>
+    Cc           prog.o
+    Link         prog
+<span style="color: cyan">Built 2 of 2 target(s) in 0.25 seconds</span>
+</pre>
+<p>Now adding a new file is simple.</p>
+<pre>
+<span style="color: yellow">$ touch add.c</span>
+<span style="color: yellow">$ tmake </span>
+    Cc           add.o
+    Link         prog
+<span style="color: cyan">Built 2 of 3 target(s) in 0.14 seconds</span>
+</pre>
+<p>And removing a file is also simple.</p>
+<pre>
+<span style="color: yellow">$ rm add.c</span>
+<span style="color: yellow">$ tmake </span>
+    Clean        removing 1 orphan target(s)
+    Link         prog
+<span style="color: cyan">Built 1 of 2 target(s) in 0.10 seconds</span>
+</pre>
+<p><code>tmake</code> notices that add.c no longer exists, and thereforce add.o is no longer a target.
+It automatically removes the previous add.o to avoid an inconsistent build.</p>
+<p>More sophisticated wildcards may be used with the <code>Glob</code> command.</p>
+<p>As a test of wildcarding performance, my Linux VM</p>
+<p>gen_src.py.txt -&gt; 1000 files</p>
+<p>With wildcarding:</p>
+<p>With explicit files: full build: 14.81s, do nothing build: 0.27s
+With wildcarding:    full build: 12.72s, do nothing build: 0.27s</p>
+<p>meson/ninja: full build: 6s, do nothing build: 0.01s</p>
+<p>On my build systems, it takes around 1-2ms to glob 1000 files (with a hot cache)</p>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

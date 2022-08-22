@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"why-tmake.html#fast","fragment":"Fast\nThe current (proof of concept) version of tmake is not as fast as it could be\ndue to the implementation in pure (Jim) Tcl, which is a slower than either compiled lanuages, or Python.\n"});

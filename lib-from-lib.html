@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Libraries from Archive Libraries</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="lib-from-lib.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="libraries-from-archive-libraries">Libraries from Archive Libraries</h1>
+<p>Under some circumstances it is necessary to build a target from targets
+across multiple subdirectories. Consider the following (abbreviated) example from libgit2.</p>
+<pre><code>$ tree libgit2
+libgit2
+|-- deps
+|   |-- http-parser
+|   `-- zlib
+|-- include
+|   `-- git2
+|-- src
+|   |-- transports
+|   |-- unix
+|   `-- win32
+|-- tests
+`-- tests-clar
+	|-- attr
+	|-- buf
+	|-- object
+	|   |-- commit
+	|   |-- raw
+	|   `-- tree
+	|-- odb
+	`-- status
+</code></pre>
+<p>The final target is either an archive library (libgit2.a) or a shared library (libgit2.so)
+It is composed of groups of objects from deps/http-parser, src, src/transports and possibly
+deps/zlib and src/unix or src/win32.</p>
+<p>It would be possible to build the library at the top level from objects in lower
+levels, for example:</p>
+<pre><code>Lib git2 deps/http-parser/*.c src/*.c src/unix/*.c
+</code></pre>
+<p>However this forces all of the build rules (CFlags, IncludePaths, etc.) to
+be specified at the top level. It is better if the components can be
+built individually and then combined to form the final library.
+tmake supports this by allowing library objects to be combined into other archive
+and shared libaries. This is done as follows.</p>
+<pre><code>=== deps/http-parser/build.spec ====================
+Lib --publish http-parser *.c
+====================================================
+
+=== src/build.spec =================================
+Lib --publish src *.c transports/*.c unix/*.c
+====================================================
+
+=== build.spec =====================================
+Lib git2 &lt;lib&gt;http-parser &lt;lib&gt;src
+====================================================
+</code></pre>
+<p>The special objects selector, <code>&lt;lib&gt;name</code>, is used
+to select all the objects from the corresponding published library.</p>
+<p>(Note that this is related to the mechanism which allows published
+libraries to be found by other components with UseLibs)</p>
+<p>When the inputs to the git2 library are collected, the selector
+such as <code>&lt;lib&gt;src</code> is replaced with the <em>objects</em> that are listed
+as inputs to the src library. In addition, a dependency on the 'src'
+library is added to the 'git2' library to ensure that the objects
+are available when required.</p>
+<p>This approach has the advantage that the aggregate library can be created
+in any directory, not just a parent of each of the component libraries.</p>
+<p>The same mechanism can be used for creating a shared libraries from other
+libraries, and both shared and archive libraries can be used as the component
+libraries.</p>
+<p>Note 1: The <lib> selector selects the <em>objects</em> from the component library, not the library itself.</lib></p>
+<p>Note 2: The component library must be published in order to be available.</p>
+<p>Note 3: When creating an aggregate shared library, the appropriate compile flags (e.g. <code>$(SH_CFLAGS)</code>
+must be added to objects in the component libraries. tmake is not able to automatically
+determine if this restriction has been followed.</p>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

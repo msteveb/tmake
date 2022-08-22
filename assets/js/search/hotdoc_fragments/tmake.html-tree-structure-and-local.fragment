@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"tmake.html#tree-structure-and-local","fragment":"Tree Structure and 'local'\nHigh-level rules assume that paths are local.\nWhen using 'target' directly, use of [make-local].\n"});

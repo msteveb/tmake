@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"tmake.html#future-plans","fragment":"Future Plans\nWhile the proof-of-concept works very well, performance can be an issue for large projects.\nI expect that a production version will either use a C/C++ implementation for the\ncore build engine, with an embedded Jim Tcl interpreter for scripting or be fully\nimplemented in Python.\n"});

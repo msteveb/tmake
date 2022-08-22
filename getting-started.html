@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Getting Started</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="getting-started.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="getting-started">Getting Started</h1>
+<p>It is easiest to start using tmake with an existing C or C++ project.  Consider the following simple project:</p>
+<pre>
+<span style="color: yellow">$ ls</span>
+api.c
+api.h
+test-api.c
+</pre>
+<p>api.c and api.h provide an implementation of a simple API and test-api.c
+provides unit testing of that API. We want to build a library (libapi.a), compile test-api.c, link it
+against the library and run it. While it is easy to write a build specification for this project, let's make
+use of <code>tmake --genie</code> to create a starting build definition.</p>
+<pre>
+<span style="color: yellow">$ tmake --genie</span>
+Created build.spec
+Not already in a project, so creating project.spec
+</pre>
+<p>tmake --genie notices that some C sources and header files exist and that no existing
+build files exist. So it creates a trivial, empty project.spec. And the following build.spec</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+# This is a sample build.spec file generated by tmake --genie
+# Edit it as required
+
+# Any non-private headers should be published
+#PublishIncludes api.h
+
+# If this library is only used by local executables, remove --publish
+Lib --publish api api.c
+
+Executable --test test-api test-api.c
+</pre>
+<p>Note that tmake --genie has identified that api.c is library source and needs to be built
+into a library. The current directory name is used as the default library name, thus "api".</p>
+<p>Next we see that tmake --genie noticed that test-api.c has main() and begins with "test" so
+is likely a test. Therefore it builds the executable with "--test".</p>
+<p>Finally we see that api.h may need to be a published as a public header file, but this
+is commented out. We can uncomment this. And removing the comments at the top, here is our final build.spec</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+PublishIncludes api.h
+
+Lib --publish api api.c
+
+Executable --test test-api test-api.c
+</pre>
+<p>One of the hallmarks of tmake is the compact build descriptions with no boiler plate, quoting or other noise. Let's build it.</p>
+<pre>
+<span style="color: yellow">$ tmake </span>
+    Publish      publish/include/api.h
+    Cc           test-api.o
+    Cc           api.o
+    Ar           libapi.a
+    Link         test-api
+<span style="color: cyan">Built 5 of 6 target(s) in 0.26 seconds</span>
+</pre>
+<p>By default, tmake builds the <code>all</code> target of the current directory. Executable and Lib targets are automatically added
+as dependencies of the <code>all</code> target, so libapi.a and test-api are built by default. Unit tests are not run by default, but we can
+run them now.</p>
+<pre>
+<span style="color: yellow">$ tmake test</span>
+    Test         objdir/test-api
+</pre>
+<p>No output means the test succeeded. Now what has been produced?</p>
+<pre>
+<span style="color: yellow">$ ls -F</span>
+api.c
+api.h
+build.spec
+objdir/
+project.spec
+test-api.c
+</pre>
+<p>We see that everything is built into the objdir directory (this is the default)
+leaving the source directory unchanged. Like all modern build systems it is important
+to keep the build artifacts and the sources separate. Let's look at how the outputs were arranged.</p>
+<pre>
+<span style="color: yellow">$ tree objdir</span>
+objdir
+├── api.o
+├── libapi.a
+├── publish
+│   └── include
+│       └── api.h
+├── test-api
+└── test-api.o
+
+2 directories, 5 files
+</pre>
+<p>We can see that apart from the objdir/publish directory, everything
+mirrors the source directory, except with the objdir directory.
+The publish directory acts as a common staging area for include
+files and libraries that are shared between directories so that we
+can change the source location easily without affecting other parts
+of the project.  We can also see the detailed commands that tmake
+ran for the build.  First let's clean out the build.</p>
+<pre>
+<span style="color: yellow">$ tmake clean</span>
+    Clean        .
+</pre>
+<p>And build again with <code>-v</code></p>
+<pre>
+<span style="color: yellow">$ tmake -v test</span>
+<span style="color: cyan">gcc -Iobjdir/publish/include -I. -Iobjdir   -c test-api.c -o objdir/test-api.o</span>
+<span style="color: cyan">gcc -Iobjdir/publish/include -I. -Iobjdir   -c api.c -o objdir/api.o</span>
+<span style="color: cyan">ar cr objdir/libapi.a objdir/api.o</span>
+<span style="color: gray">ranlib objdir/libapi.a</span>
+<span style="color: cyan">gcc   -o objdir/test-api objdir/test-api.o objdir/libapi.a</span>
+<span style="color: gray">objdir/test-api &gt;@stdout</span>
+<span style="color: cyan">Built 5 of 6 target(s) in 0.20 seconds</span>
+</pre>
+<p>Now we can see the commands that were used.  So what if we want to
+do a debug build? We can add some flags to the C compiler with
+<code>CFlags</code></p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+CFlags -g -O0
+PublishIncludes api.h
+
+Lib --publish api api.c
+
+Executable --test test-api test-api.c
+</pre>
+<p>By adding CFlags at the top of the file, these flags apply to any
+subsequent rules in this build.spec Now if we build again, tmake
+notices that the build commands have change and so runs the appropriate
+rules.</p>
+<pre>
+<span style="color: yellow">$ tmake </span>
+    Cc           test-api.o
+    Cc           api.o
+    Ar           libapi.a
+    Link         test-api
+<span style="color: cyan">Built 4 of 6 target(s) in 0.15 seconds</span>
+</pre>
+<p>Now let's dig into the rules that are driving the build.
+We are using the high level build commands from the built-in
+rulebase.default in our build specification. Taking a look at one of these rules:</p>
+<pre>
+<span style="color: yellow">$ tmake --commands=Executable</span>
+<span style="color: purple">Executable</span> <span style="color: darkgoldenrod">--test --chdir --nobuild --publish --no|strip --nofork --install=&lt;dir&gt; target sources...</span>
+
+Builds an executable from one or more source files. For each source, the appropriate ObjectRule is used
+to generate the object file, and these files are linked (along with any libraries) to create the executable.
+
+Bound variables: CCLD (from Linker), LD_FLAGS (from LinkFlags), PROJLIBS and PROJDEPS (from UseLibs)
+                 LOCAL_LIBS (from ArchiveLib), SYSLIBS (from UseSystemLibs)
+Used variables: LDFLAGS
+
+The following options are supported:
+  --test              Marks the executable as a test (see Test)
+  --nofork            With --test, uses Test --nofork
+  --chdir             With --test, uses Test --chdir
+  --nobuild           Don't make this executable dependent on phony 'all' (which is otherwise the default)
+  --publish           Publishes the executable (see PublishBin)
+  --install=&lt;dir&gt;     Install the executable to the given directory (see InstallFile)
+  --strip[=full|dynamic|none]  Sets the strip type on installation. --strip means full. omitted means none. (see InstallFile)
+</pre>
+<p>We can see that Executable takes a number of options and parameters
+that determine how the low level target rules are created. Let's
+use <code>tmake --targets</code> and <code>tmake --find</code> to see what it generated.
+First let's see all the final (non-phony) targets that tmake knows
+about.</p>
+<pre>
+<span style="color: yellow">$ tmake --targets</span>
+api.o
+libapi.a
+publish/include/api.h
+publish/lib/libapi.a
+test-api
+test-api.o
+</pre>
+<p>These are all the targets that can be built in objdir/. So let's examine the test-api target:</p>
+<pre>
+<span style="color: yellow">$ tmake --find=test-api</span>
+<span style="color: yellow">-- test-api ---------------------------------------------------</span>
+@build.spec:6
+test-api: test-api.o libapi.a
+local=.
+  var CCLD=gcc
+  var LD_FLAGS=
+  var PROJLIBS=
+  var SYSLIBS=
+	run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
+<span style="color: cyan">Note: 1 non-exact matches also exist, use --findall to show them</span>
+</pre>
+<p>Here we can see that Executable has generated a low level target rule to build test-api,
+with dependencies on test-api.o and libapi.a and the command line:</p>
+<pre><code>run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
+</code></pre>
+<p>Here, $target becomes test-api and $inputs becomes test-api.o. The
+variables CCLD, LD_FLAGS, PROJLIBS and SYSLIBS are "bound" variables.
+This means that the target rule captures the values of these variables
+when the rule is defined.  By contrast, LDFLAGS is an "unbound"
+variable. It is a global variable that has the same value across
+all rules.</p>
+<p>Now imagine that we would like to restructure our project to move api.c and api.h
+into their own subdirectory, lib/, and test-api.c into it's own directory, tests.
+How would this affect the build rules?  First let's move the sources.</p>
+<pre>
+<span style="color: yellow">$ mkdir lib tests</span>
+<span style="color: yellow">$ mv api.c api.h lib</span>
+<span style="color: yellow">$ mv test-api.c tests</span>
+</pre>
+<p>Now let's create lib/build.spec</p>
+<pre>
+<span style="color: yellow">$ cat lib/build.spec</span>
+PublishIncludes api.h
+Lib --publish api api.c
+</pre>
+<p>This is just the relevant lines moved to lib/.  Similarly for
+tests/build.spec. Here the only change we need to make here is that
+tests needs to be told to use libapi. Previously this was automatically
+handled because the library was defined earlier in the build.spec.
+So:</p>
+<pre>
+<span style="color: yellow">$ cat tests/build.spec</span>
+UseLibs api
+Executable --test test-api test-api.c
+</pre>
+<p>We now have:</p>
+<pre>
+<span style="color: yellow">$ tree</span>
+.
+├── build.spec
+├── lib
+│   ├── api.c
+│   ├── api.h
+│   └── build.spec
+├── objdir
+│   ├── api.o
+│   ├── libapi.a
+│   ├── publish
+│   │   └── include
+│   │       └── api.h
+│   ├── test-api
+│   └── test-api.o
+├── project.spec
+└── tests
+    ├── build.spec
+    └── test-api.c
+
+5 directories, 12 files
+</pre>
+<p>Now let's build:</p>
+<pre>
+<span style="color: yellow">$ tmake </span>
+    Clean        removing 4 orphan target(s)
+    Publish      publish/include/api.h
+    Cc           lib/api.o
+    Cc           tests/test-api.o
+    Ar           lib/libapi.a
+    Publish      publish/lib/libapi.a
+    Link         tests/test-api
+<span style="color: cyan">Built 6 of 6 target(s) in 0.18 seconds</span>
+</pre>
+<p>And the outputs were created:</p>
+<pre>
+<span style="color: yellow">$ tree objdir</span>
+objdir
+├── lib
+│   ├── api.o
+│   └── libapi.a
+├── publish
+│   ├── include
+│   │   └── api.h
+│   └── lib
+│       └── libapi.a
+└── tests
+    ├── test-api
+    └── test-api.o
+
+5 directories, 6 files
+</pre>
+<p>Notice how we didn't need to do a <code>clean</code> or remove
+any existing files. tmake noticed that the previous targets,
+test-api, test-api.o, libapi.a and api.o were no longer
+targets and so these outputs were automatically removed.
+In their place were build tests/test-api.o, tests/test-api,
+lib/libapi.a and lib/api.o</p>
+<p>Also notice that now publish/lib/libapi.a has been created.
+In order for test-api to find the library, it is published
+into the known location, publish/lib directory. This is what
+the <code>--publish</code> option to Lib did.</p>
+<p>Now a couple of other things we can do.
+Imagine we are working on test-api.c. Let's <code>cd</code> into the tests directory.</p>
+<pre>
+<span style="color: yellow">$ cd tests</span>
+</pre>
+<p>And now we simulate changing api.c</p>
+<pre>
+<span style="color: yellow">$ touch ../lib/api.c</span>
+</pre>
+<p>Let's rebuild. What will happen?</p>
+<pre>
+<span style="color: yellow">$ tmake test</span>
+    Cc           lib/api.o
+<span style="color: green">tmake: Entering directory `/private/tmp/tmakedocs/getting-started/api'</span>
+    Ar           lib/libapi.a
+    Publish      publish/lib/libapi.a
+    Link         tests/test-api
+    Test         objdir/tests/test-api
+<span style="color: cyan">Built 4 of 6 target(s) in 0.20 seconds</span>
+</pre>
+<p>tmake notices that lib/api.a is required by test-api and lib/api.a depends
+on lib/api.c, so that is automatically recompiled, followed by recreating the library
+and finally tests-api is relinked.</p>
+<p>By default, tmake will build the <code>all</code> target in the current directory, but if this
+depends on targets in other directories, those will be automatically built as required.</p>
+<p>We can also use one of the various debug flags to follow along and understand
+why tmake is building each target. If we had done the following and used <code>tmake -dg</code> we would see.</p>
+<pre>
+<span style="color: yellow">$ touch ../lib/api.c</span>
+<span style="color: yellow">$ tmake -dg</span>
+<span style="color: cyan">   13ms</span> [g] <span style="color: darkgoldenrod">tests/all --&gt; tests/test-api --&gt; &lt;lib&gt;api --&gt; lib/libapi.a --&gt; lib/api.o (changed lib/api.c)</span>
+    Cc           lib/api.o
+<span style="color: green">tmake: Entering directory `/private/tmp/tmakedocs/getting-started/api'</span>
+<span style="color: cyan">   29ms</span> [g] <span style="color: darkgoldenrod">tests/all --&gt; tests/test-api --&gt; &lt;lib&gt;api --&gt; lib/libapi.a (depend lib/api.o changed lib/api.o)</span>
+    Ar           lib/libapi.a
+<span style="color: cyan">   69ms</span> [g] <span style="color: darkgoldenrod">tests/all --&gt; tests/test-api --&gt; &lt;lib&gt;api (depend lib/libapi.a changed lib/libapi.a)</span>
+    Publish      publish/lib/libapi.a
+<span style="color: cyan">   70ms</span> [g] <span style="color: darkgoldenrod">tests/all --&gt; tests/test-api (depend &lt;lib&gt;api changed &lt;lib&gt;api)</span>
+    Link         tests/test-api
+<span style="color: cyan">Built 4 of 6 target(s) in 0.14 seconds</span>
+</pre>
+<p>Initially we see that the default target is tests/all, and by following dependencies, there is ultimately
+a dependency on lib/api.o via the chain:</p>
+<pre><code> tests/all --&gt; tests/test-api --&gt; &lt;lib&gt;api --&gt; lib/libapi.a --&gt; lib/api.o
+</code></pre>
+<p>lib/api.o depends on lib/api.c which has changed, and so lib/api.o is rebuilt.</p>
+<p>This process contains where now lib/libapi.a depends on lib/api.o which has changed and so it is rebuilt.
+This continues until the initial target is finally built.</p>
+<p>An alternative approach is to use <code>tmake -dG</code>. Instead of only showing the reasons why targets were build,
+this shows each target as it is attempted via the dependency tree.</p>
+<pre>
+<span style="color: yellow">$ touch ../lib/api.c</span>
+<span style="color: yellow">$ tmake -dG</span>
+<span style="color: cyan">   12ms</span> [G] <span style="color: darkgoldenrod">build tests/all</span>
+<span style="color: cyan">   12ms    </span> [G] <span style="color: darkgoldenrod">build tests/test-api</span>
+<span style="color: cyan">   12ms        </span> [G] <span style="color: darkgoldenrod">build &lt;lib&gt;api</span>
+<span style="color: cyan">   12ms            </span> [G] <span style="color: darkgoldenrod">build lib/libapi.a</span>
+<span style="color: cyan">   12ms                </span> [G] <span style="color: darkgoldenrod">build lib/api.o</span>
+<span style="color: cyan">   12ms                    </span> [G] <span style="color: darkgoldenrod">build lib/api.c</span>
+<span style="color: cyan">   13ms                    </span> [G] <span style="color: darkgoldenrod">build publish/include/api.h</span>
+<span style="color: cyan">   13ms                        </span> [G] <span style="color: darkgoldenrod">build lib/api.h</span>
+    Cc           lib/api.o
+<span style="color: green">tmake: Entering directory `/private/tmp/tmakedocs/getting-started/api'</span>
+<span style="color: cyan">   15ms        </span> [G] <span style="color: darkgoldenrod">build tests/test-api.o</span>
+<span style="color: cyan">   15ms            </span> [G] <span style="color: darkgoldenrod">build tests/test-api.c</span>
+<span style="color: cyan">   30ms</span> [G] <span style="color: darkgoldenrod">build tests/all</span>
+<span style="color: cyan">   30ms    </span> [G] <span style="color: darkgoldenrod">build tests/test-api</span>
+<span style="color: cyan">   30ms        </span> [G] <span style="color: darkgoldenrod">build &lt;lib&gt;api</span>
+<span style="color: cyan">   30ms            </span> [G] <span style="color: darkgoldenrod">build lib/libapi.a</span>
+    Ar           lib/libapi.a
+<span style="color: cyan">   69ms</span> [G] <span style="color: darkgoldenrod">build tests/all</span>
+<span style="color: cyan">   69ms    </span> [G] <span style="color: darkgoldenrod">build tests/test-api</span>
+<span style="color: cyan">   69ms        </span> [G] <span style="color: darkgoldenrod">build &lt;lib&gt;api</span>
+    Publish      publish/lib/libapi.a
+    Link         tests/test-api
+<span style="color: cyan">  142ms</span> [G] <span style="color: darkgoldenrod">build tests/all</span>
+<span style="color: cyan">Built 4 of 6 target(s) in 0.14 seconds</span>
+</pre>
+<p>Let's also take a look at a phony target. Targets line <code>all</code> and <code>clean</code> are phony targets.
+They are like "actions" that can have dependencies but don't have any corresponding outputs.
+Test targets are an example of phony targets.</p>
+<p>First let's look at the local test target.</p>
+<pre>
+<span style="color: yellow">$ tmake --find=test</span>
+<span style="color: yellow">-- tests/test -------------------------------------------------</span>
+@/Volumes/src/tmake/rulebase.default:345, tests/build.spec:2
+tests/test [phony]: tests/test#1
+local=tests
+<span style="color: cyan">Note: 10 non-exact matches also exist, use --findall to show them</span>
+</pre>
+<p>We see that tests/test is a phony target that depends on test/tests#1.
+Let's look at that one.</p>
+<pre>
+<span style="color: yellow">$ tmake --find=test#1</span>
+<span style="color: yellow">-- tests/test#1 -----------------------------------------------</span>
+@tests/build.spec:2
+tests/test#1 [phony slow]: tests/test-api 
+local=tests
+  var testcommand=objdir/tests/test-api
+  var SRCDIR=tests
+  var publishlib=/private/tmp/tmakedocs/getting-started/api/objdir/publish/lib
+  var LD_LIBRARY_PATH=
+	setup-test-env $publishlib $LD_LIBRARY_PATH
+	run-test-command $testcommand
+</pre>
+<p>This is the test target that was generated by Executable --test.
+We can see that it depends on tests/test-api (the executable) and
+has the bound variable testcommand=objdir/tests/test-api.
+Thus the command that will be run is:</p>
+<pre><code>run-test-command objdir/tests/test-api
+</code></pre>
+<p>This is part of the default rulebase (rulebase.default).
+We can find out more about this command with:</p>
+<pre>
+<span style="color: yellow">$ tmake --ref</span>
+</pre>
+<p>And searching for run-test-command we see:</p>
+<pre><code> run-test-command testcommand
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ This is a helper for running test commands. It is used by the Test rule. The
+ environment should first be set up with setup-test-env Then SRCDIR is exported
+ to the environment stdout, stderr and errok are checked from the caller to
+</code></pre>
+<p>In fact, <code>Executable --test prog prog.c</code> is shorthand for:</p>
+<pre><code> Executable prog prog.c
+ Test prog
+</code></pre>
+<p>As a final note, let's see how publish libraries are handled.</p>
+<pre>
+<span style="color: yellow">$ tmake --find=libapi.a</span>
+<span style="color: yellow">-- lib/libapi.a -----------------------------------------------</span>
+@lib/build.spec:2
+lib/libapi.a: lib/api.o
+local=lib
+	file delete $target
+	run $AR $ARFLAGS $target {*}[expand-objects $inputs]
+	run $RANLIB $target
+
+<span style="color: yellow">-- publish/lib/libapi.a ---------------------------------------</span>
+@lib/build.spec:2
+publish/lib/libapi.a: lib/libapi.a
+alias=&lt;lib&gt;api
+local=lib
+	file delete $target
+	file-link $target $inputs
+</pre>
+<p>Here we see that there are two rules associated with libapi.a
+The first creates lib/libapi.a from lib/api.o</p>
+<p>Secondly, publish/lib/libapi.a depends on lib/libapi.a and
+this rule creates a symlink to the library.
+Also note that the library as the "alias" <lib>api.
+This alias means that the UseLibs command can add a dependency on <lib>api
+and this will automatically resolve to publish/lib/libapi.a which in turn
+depends on lib/libapi.a</lib></lib></p>
+<p>Using this approach with aliases makes it easy to change between shared
+and archive libraries along with some other features. These will be covered
+in a later topic on aliases.</p>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

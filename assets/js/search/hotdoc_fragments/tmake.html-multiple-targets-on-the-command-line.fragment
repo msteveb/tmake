@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"tmake.html#multiple-targets-on-the-command-line","fragment":"Multiple Targets on the Command Line\nExplain how rulebase is parsed, then the build descriptions,\nthen any 'Load' targets are built, and if necessary, the build descriptions are re-read.\nAlso, the target status is reset after every target.\n"});

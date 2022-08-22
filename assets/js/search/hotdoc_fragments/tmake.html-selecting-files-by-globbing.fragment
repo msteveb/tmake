@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"tmake.html#selecting-files-by-globbing","fragment":"Selecting files by globbing\nGlob, Glob --recursive, etc.\nAutomatic Glob by ArchiveLib, SharedLib, Executable\nAutomatic Glob plus renaming for Publish, PublishIncludes, Install\n"});

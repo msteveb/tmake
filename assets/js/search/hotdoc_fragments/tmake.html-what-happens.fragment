@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"tmake.html#what-happens","fragment":"What happens\n\nparse options\nlocate project top (project.spec)\nparse project.spec, rulebase.spec or rulebase.default, build.spec files\nAny files specified with Load are built if necessary\nIf anything was built, the build.spec files are reparsed\nThe specified targets are built\n\n"});

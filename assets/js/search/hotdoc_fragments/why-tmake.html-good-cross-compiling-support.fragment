@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"why-tmake.html#good-cross-compiling-support","fragment":"Good cross compiling support\njam and waf have poor support for cross compilation.\n(See for example: https://groups.google.com/d/msg/waf-users/0CDcr17paRs/4IbKoOUkqk4J)\ntmake cross compilation supports requires autosetup\n"});

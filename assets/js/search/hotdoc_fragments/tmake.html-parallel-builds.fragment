@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"tmake.html#parallel-builds","fragment":"Parallel Builds\ntmake now supports parallel builds on platforms with os.fork.\n--jobs\ndefine MAXJOBS\n"});

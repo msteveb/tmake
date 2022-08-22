@@ -1,0 +1,1 @@
+fragment_downloaded_cb({"url":"why-tmake.html#build-outoftree-as-an-option","fragment":"Build out-of-tree as an option\nAvoid cluttering the source directory with build targets.\nVery useful when building multiple variants.\nNote that tmake builds out-of-tree by default, however it is possible to build in-tree\nwith tmake --build=.\n"});

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Advanced debug flags</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="debug-flags-advanced.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="advanced-debug-flags">Advanced debug flags</h1>
+<p>Some debug flags are generally only useful for debugging the high level rulebase
+or tmake internals. These flags are documented here for completeness.</p>
+<h2 id="print-parallel-job-debugging">Print (parallel) job debugging</h2>
+<pre><code>j    Parallel (job-based) builds
+</code></pre>
+<pre>
+<span style="color: yellow">$ tmake -dj</span>
+    Cc           test-api.o
+<span style="color: cyan">   12ms</span> [j] <span style="color: darkgoldenrod">Adding job 33383 for test-api.o</span>
+    Cc           api.o
+<span style="color: cyan">   15ms</span> [j] <span style="color: darkgoldenrod">Adding job 33385 for api.o</span>
+<span style="color: cyan">   15ms</span> [j] <span style="color: darkgoldenrod">libapi.a has 1 outstanding jobs - waiting</span>
+<span style="color: cyan">   15ms</span> [j] <span style="color: darkgoldenrod">test-api has 2 outstanding jobs - waiting</span>
+<span style="color: cyan">   16ms</span> [j] <span style="color: darkgoldenrod">all has 1 outstanding jobs - waiting</span>
+<span style="color: cyan">   16ms</span> [j] <span style="color: darkgoldenrod">Waiting for all to complete...</span>
+<span style="color: cyan">   49ms</span> [j] <span style="color: darkgoldenrod">Job 33385 building api.o has finished with CHILDSTATUS(0), needed by libapi.a</span>
+<span style="color: cyan">   50ms</span> [j] <span style="color: darkgoldenrod">Status of libapi.a changed from waiting =&gt; unknown</span>
+<span style="color: cyan">   51ms</span> [j] <span style="color: darkgoldenrod">test-api.o is still running</span>
+    Ar           libapi.a
+<span style="color: cyan">   52ms</span> [j] <span style="color: darkgoldenrod">Adding job 33403 for libapi.a</span>
+<span style="color: cyan">   53ms</span> [j] <span style="color: darkgoldenrod">test-api has 2 outstanding jobs - waiting</span>
+<span style="color: cyan">   53ms</span> [j] <span style="color: darkgoldenrod">all has 1 outstanding jobs - waiting</span>
+<span style="color: cyan">   53ms</span> [j] <span style="color: darkgoldenrod">Waiting for all to complete...</span>
+<span style="color: cyan">   84ms</span> [j] <span style="color: darkgoldenrod">Job 33383 building test-api.o has finished with CHILDSTATUS(0), needed by test-api</span>
+<span style="color: cyan">   85ms</span> [j] <span style="color: darkgoldenrod">libapi.a is still running</span>
+<span style="color: cyan">   85ms</span> [j] <span style="color: darkgoldenrod">test-api has 1 outstanding jobs - waiting</span>
+<span style="color: cyan">   85ms</span> [j] <span style="color: darkgoldenrod">all has 1 outstanding jobs - waiting</span>
+<span style="color: cyan">   85ms</span> [j] <span style="color: darkgoldenrod">Waiting for all to complete...</span>
+<span style="color: cyan">  143ms</span> [j] <span style="color: darkgoldenrod">Job 33403 building libapi.a has finished with CHILDSTATUS(0), needed by test-api</span>
+<span style="color: cyan">  144ms</span> [j] <span style="color: darkgoldenrod">Status of test-api changed from waiting =&gt; unknown</span>
+    Link         test-api
+<span style="color: cyan">  145ms</span> [j] <span style="color: darkgoldenrod">Adding job 33424 for test-api</span>
+<span style="color: cyan">  146ms</span> [j] <span style="color: darkgoldenrod">all has 1 outstanding jobs - waiting</span>
+<span style="color: cyan">  146ms</span> [j] <span style="color: darkgoldenrod">Waiting for all to complete...</span>
+<span style="color: cyan">  257ms</span> [j] <span style="color: darkgoldenrod">Job 33424 building test-api has finished with CHILDSTATUS(0), needed by all</span>
+<span style="color: cyan">  257ms</span> [j] <span style="color: darkgoldenrod">Status of all changed from waiting =&gt; unknown</span>
+<span style="color: cyan">Built 4 of 5 target(s) in 0.26 seconds</span>
+<span style="color: cyan">  258ms</span> [j] <span style="color: darkgoldenrod">All jobs have finished</span>
+</pre>
+<h2 id="miscellanous-debugging">Miscellanous debugging</h2>
+<pre><code>m    Miscellaneous (locating and parsing of files)
+</code></pre>
+<pre>
+<span style="color: yellow">$ tmake -dm</span>
+<span style="color: purple">    1ms</span> [m] <span style="color: darkgoldenrod">Project top found at /private/tmp/tmakedocs/debug-flags-advanced/api</span>
+<span style="color: purple">    1ms</span> [m] <span style="color: darkgoldenrod">Loading /Users/steveb/.tmakerc</span>
+<span style="color: cyan">    1ms</span> [m] <span style="color: darkgoldenrod">Setting --build=objdir</span>
+<span style="color: cyan">    7ms</span> [m] <span style="color: darkgoldenrod">Setting maxjobs=16</span>
+<span style="color: cyan">    8ms</span> [m] <span style="color: darkgoldenrod">process-build-spec .</span>
+<span style="color: cyan">   12ms</span> [m] <span style="color: darkgoldenrod">Found 5 target(s)</span>
+<span style="color: cyan">   12ms</span> [h m] <span style="color: darkgoldenrod">Using md5 module for hashing</span>
+</pre>
+<h2 id="locating-sources-and-targets">Locating sources and targets</h2>
+<pre><code>l    Locating sources and targets
+</code></pre>
+<pre>
+<span style="color: yellow">$ tmake -dl</span>
+<span style="color: cyan">   10ms</span> [l] <span style="color: darkgoldenrod">build.spec:10: find-project-bin: test-api is a local target</span>
+<span style="color: cyan">   10ms</span> [l] <span style="color: darkgoldenrod">build.spec:10: find-project-bin returning test-api objdir/test-api</span>
+</pre>
+<h2 id="ifconfig-expressions">ifconfig expressions</h2>
+<pre><code>c    Configuration expressions via ifconfig
+</code></pre>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+Lib --publish api api.c
+ifconfig TESTING
+Executable --test test-api test-api.c
+</pre>
+<pre>
+<span style="color: yellow">$ tmake -dc</span>
+<span style="color: cyan">    9ms</span> [c] <span style="color: darkgoldenrod">ifconfig: expr='TESTING' tclexpr='[config-is-defined? TESTING]'</span>
+<span style="color: cyan">    9ms</span> [c] <span style="color: darkgoldenrod">Expression is false</span>
+    Clean        removing 2 orphan target(s)
+</pre>
+<pre>
+<span style="color: yellow">$ tmake TESTING=1 -dc</span>
+<span style="color: cyan">    8ms</span> [c] <span style="color: darkgoldenrod">ifconfig: expr='TESTING' tclexpr='[config-is-defined? TESTING]'</span>
+<span style="color: cyan">    8ms</span> [c] <span style="color: darkgoldenrod">Expression is true, so executing </span>
+    Cc           test-api.o
+    Link         test-api
+<span style="color: cyan">Built 2 of 5 target(s) in 0.11 seconds</span>
+</pre>
+<h2 id="cache-and-orphan-handling">Cache and orphan handling</h2>
+<pre><code>C    Cache handling
+</code></pre>
+<pre>
+<span style="color: yellow">$ tmake -dC clean all</span>
+<span style="color: cyan">    6ms</span> [C] <span style="color: darkgoldenrod">Loaded cache, .makecache in 0ms</span>
+    Clean        removing 2 orphan target(s)
+<span style="color: cyan">   10ms</span> [C] <span style="color: darkgoldenrod">test-api.o test-api</span>
+<span style="color: cyan">   10ms</span> [C] <span style="color: darkgoldenrod">discarded orphan targets, marking cache dirty</span>
+    Clean        .trash
+    Clean        .
+    Cc           api.o
+    Ar           libapi.a
+<span style="color: cyan">Built 2 of 3 target(s) in 0.07 seconds</span>
+<span style="color: cyan">   65ms</span> [C] <span style="color: darkgoldenrod">Wrote cache, .makecache in 0ms</span>
+</pre>
+<pre>
+<span style="color: yellow">$ tmake --showcache</span>
+<span style="color: yellow">.makecache updated 4 times</span>
+
+<span style="color: cyan">File timestamp</span>
+-------------------------------------
+                              api.o  15:35:55.364 22-Aug-2022
+                           libapi.a  15:35:55.405 22-Aug-2022
+
+<span style="color: cyan">Commands used to build targets and warnings</span>
+-------------------------------------------
+api.o:
+	run  gcc -Iobjdir/publish/include -I. -Iobjdir   -c api.c -o objdir/api.o
+
+libapi.a:
+	file delete objdir/libapi.a
+	run ar cr objdir/libapi.a {*}[expand-objects objdir/api.o]
+	run ranlib objdir/libapi.a
+</pre>
+<h2 id="source-file-hashing">Source file hashing</h2>
+<pre><code>h    Hashing
+</code></pre>
+<pre>
+<span style="color: yellow">$ cat project.spec</span>
+UseHashes on
+</pre>
+<pre>
+<span style="color: yellow">$ tmake -dh</span>
+<span style="color: cyan">    8ms</span> [h m] <span style="color: darkgoldenrod">Using md5 module for hashing</span>
+<span style="color: cyan">    8ms</span> [h] <span style="color: darkgoldenrod">Using hashes for file comparison</span>
+<span style="color: cyan">    8ms</span> [h] <span style="color: darkgoldenrod">md5sum api.c =&gt; md5:984c9cb8c5b2c7143a74547722034cea</span>
+<span style="color: cyan">    9ms</span> [h] <span style="color: darkgoldenrod">md5sum api.h =&gt; md5:f4f5fac7b6f6e39818036d9fbe05f98d</span>
+    Cc           api.o
+    Ar           libapi.a
+<span style="color: cyan">Built 2 of 3 target(s) in 0.07 seconds</span>
+</pre>
+<pre>
+<span style="color: yellow">$ touch api.h</span>
+<span style="color: yellow">$ tmake -dh</span>
+<span style="color: cyan">    8ms</span> [h m] <span style="color: darkgoldenrod">Using md5 module for hashing</span>
+<span style="color: cyan">    8ms</span> [h] <span style="color: darkgoldenrod">Using hashes for file comparison</span>
+<span style="color: cyan">    9ms</span> [h] <span style="color: darkgoldenrod">md5sum api.h =&gt; md5:f4f5fac7b6f6e39818036d9fbe05f98d</span>
+</pre>
+<h2 id="timing">Timing</h2>
+<pre><code>T    Timing (add --delta for delta times)
+</code></pre>
+<p>The -dT debug flag is useful for timing both the build system operations
+and the build commands. Normally <code>tmake</code> will include a millisecond timestamp
+on each debug message. With '-dT' a message is printed at significant points
+to help determine the time spend in each. For example as each .spec files is
+parsed.</p>
+<pre>
+<span style="color: yellow">$ tmake --force -dT</span>
+<span style="color: cyan">    3ms</span> [T] <span style="color: darkgoldenrod">Parsed /Volumes/src/tmake/rulebase.default</span>
+<span style="color: cyan">    4ms</span> [T] <span style="color: darkgoldenrod">Parsed rulebase</span>
+<span style="color: cyan">    4ms</span> [T] <span style="color: darkgoldenrod">Initialised rulebase</span>
+<span style="color: cyan">    4ms</span> [T] <span style="color: darkgoldenrod">Parsed project.spec</span>
+<span style="color: cyan">    9ms</span> [T] <span style="color: darkgoldenrod">Parsed build.spec</span>
+<span style="color: cyan">   10ms</span> [T] <span style="color: darkgoldenrod">Parsing phase complete</span>
+<span style="color: cyan">   10ms</span> [T] <span style="color: darkgoldenrod">All Load targets are up-to-date</span>
+<span style="color: cyan">   10ms</span> [b T] <span style="color: darkgoldenrod">Building target all</span>
+    Cc           api.o
+<span style="color: cyan">   28ms</span> [T] <span style="color: darkgoldenrod">Built api.o in 15ms</span>
+    Ar           libapi.a
+<span style="color: cyan">   66ms</span> [T] <span style="color: darkgoldenrod">Built libapi.a in 36ms</span>
+<span style="color: cyan">Built 2 of 3 target(s) in 0.07 seconds</span>
+<span style="color: cyan">   67ms</span> [T] <span style="color: darkgoldenrod">Time spent hashing sources: 0ms</span>
+<span style="color: cyan">   68ms</span> [T] <span style="color: darkgoldenrod">Done</span>
+</pre>
+<p>With the <code>--delta</code> flag, the millisecond times in the first column represent
+the time since the previous message.</p>
+<pre>
+<span style="color: yellow">$ tmake --force -dT --delta</span>
+<span style="color: cyan">    2ms</span> [T] <span style="color: darkgoldenrod">Parsed /Volumes/src/tmake/rulebase.default</span>
+<span style="color: cyan">    1ms</span> [T] <span style="color: darkgoldenrod">Parsed rulebase</span>
+<span style="color: cyan">    0ms</span> [T] <span style="color: darkgoldenrod">Initialised rulebase</span>
+<span style="color: cyan">    0ms</span> [T] <span style="color: darkgoldenrod">Parsed project.spec</span>
+<span style="color: cyan">    4ms</span> [T] <span style="color: darkgoldenrod">Parsed build.spec</span>
+<span style="color: cyan">    0ms</span> [T] <span style="color: darkgoldenrod">Parsing phase complete</span>
+<span style="color: cyan">    1ms</span> [T] <span style="color: darkgoldenrod">All Load targets are up-to-date</span>
+<span style="color: cyan">    0ms</span> [b T] <span style="color: darkgoldenrod">Building target all</span>
+    Cc           api.o
+<span style="color: cyan">   15ms</span> [T] <span style="color: darkgoldenrod">Built api.o in 13ms</span>
+    Ar           libapi.a
+<span style="color: cyan">   48ms</span> [T] <span style="color: darkgoldenrod">Built libapi.a in 46ms</span>
+<span style="color: cyan">Built 2 of 3 target(s) in 0.07 seconds</span>
+<span style="color: cyan">    1ms</span> [T] <span style="color: darkgoldenrod">Time spent hashing sources: 0ms</span>
+<span style="color: cyan">    0ms</span> [T] <span style="color: darkgoldenrod">Done</span>
+</pre>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

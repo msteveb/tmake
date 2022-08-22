@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Orphan Targets</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="orphan-targets.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h2 id="orphan-targets">Orphan Targets</h2>
+<p><code>tmake</code> maintains a cache of all targets that have previously been built.
+This allows tmake to "know" when rules change such that a previous target
+is no longer a target, and thus the old file can be removed. By removing
+previous targets, <code>tmake</code> ensures that these files do not interfere with
+the new build.</p>
+<p>Consider the build.spec:</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+Executable prog main.c a.c b.c
+<span style="color: yellow">$ tmake </span>
+    Cc           a.o
+    Cc           b.o
+    Cc           main.o
+    Link         prog
+<span style="color: cyan">Built 4 of 4 target(s) in 0.25 seconds</span>
+</pre>
+<p>Now assume that <code>b.c</code> is no longer required:</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+Executable prog main.c a.c
+<span style="color: yellow">$ tmake </span>
+    Clean        removing 1 orphan target(s)
+    Link         prog
+<span style="color: cyan">Built 1 of 3 target(s) in 0.12 seconds</span>
+</pre>
+<p>Note that the orphan target <code>b.o</code> is deleted as it an no longer
+be generated by any rule.  And now change the name of the program.</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+Executable newprog main.c a.c
+<span style="color: yellow">$ tmake </span>
+    Clean        removing 1 orphan target(s)
+    Link         newprog
+<span style="color: cyan">Built 1 of 3 target(s) in 0.09 seconds</span>
+</pre>
+<p>Now <code>prog</code> is deleted and <code>newprog</code> is created in it's place.</p>
+<h3 id="rulebasedefault-orphan-handling">rulebase.default orphan handling</h3>
+<p>By default, the tmake core will simply delete orphan targets.
+However it is possible that an accidental rule change could cause
+files to be deleted unintentionally. For example, if a generated
+file is replaced with a source file and the source is misidentified as an orphan.</p>
+<p>To address this situation <code>rulebase.default</code>
+overrides <code>delete-orphan-files</code> to instead move orphans to <code>.trash/</code>.
+The deleted orphan can be manually reinstated from <code>.trash/</code>, until <code>tmake clean</code> is run,
+at which point all files from <code>.trash/</code> are deleted.</p>
+<p>From rulebase.default:</p>
+<pre><code class="language-tcl"># This callback is invoked to delete orphans
+# This version replaces the builtin version.
+# Instead of deleting files immediately, orphans are moved into
+# the .trash directory. This directory is only removed via the
+# 'clean', 'distclean' or 'clean-orphans' targets.
+proc delete-orphan-files {args} {
+        # Can't create .trash if it doesn't exist and we are root
+        file-mkdir -rooterr .trash
+        foreach file $args {
+                if {[file-type $file] in {file link}} {
+                        set trashfile .trash/[string map {/ _} $file]
+                        # Can't simple use file rename -force in case the files are hard links
+                        file delete $trashfile
+                        file rename $file $trashfile
+                }
+        }
+}
+</code></pre>
+<h3 id="an-example-of-the-importance-of-removing-orphans">An example of the importance of removing orphans</h3>
+<p>Consider the situation where a header file is being generated and used.</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+Generate test.h {} {} {
+	writefile $target {static const char TEST[] = __FILE__;}
+	
+}
+PublishIncludes test.h
+
+Executable --test tester test.c
+<span style="color: yellow">$ cat test.c</span>
+#include &lt;stdio.h&gt;
+#include &lt;test.h&gt;
+
+int main(void)
+{
+	printf("TEST is %s\n", TEST);
+	return 0;
+}
+<span style="color: yellow">$ tmake test</span>
+    Generate     test.h
+    Publish      publish/include/test.h
+    Cc           test.o
+    Link         tester
+    Test         objdir/tester
+<span style="color: gray">TEST is objdir/publish/include/test.h</span>
+<span style="color: cyan">Built 4 of 4 target(s) in 0.41 seconds</span>
+</pre>
+<p>Now imagine that we decide that <code>test.h</code> is no longer to be generated but
+will be a source file.</p>
+<pre>
+<span style="color: yellow">$ echo "static const char TEST[] = __FILE__;" &gt;test.h</span>
+<span style="color: yellow">$ cat build.spec</span>
+Executable --test tester test.c
+<span style="color: yellow">$ tmake -v -v test</span>
+    Clean        removing 2 orphan target(s)
+    Cc           test.o
+<span style="color: cyan">gcc -Iobjdir/publish/include -I. -Iobjdir   -c test.c -o objdir/test.o</span>
+    Link         tester
+<span style="color: cyan">gcc   -o objdir/tester objdir/test.o</span>
+    Test         objdir/tester
+<span style="color: gray">objdir/tester &gt;@stdout</span>
+<span style="color: gray">TEST is ./test.h</span>
+<span style="color: cyan">Built 2 of 2 target(s) in 0.39 seconds</span>
+</pre>
+<p>Note that because <code>-Iobjdir/publish/include</code> comes before <code>-I.</code>, if <code>test.h</code> had not been
+removed, the compiler would have used the old, generated <code>test.h</code> instead -- which would
+would have led to unintended consequences. By removing files build outputs that are no longer
+targets, <code>tmake</code> ensures that this situation cannot occur.</p>
+<p>This situation is particularly likely to occur when using <code>ifconfig</code> as targets are modified
+dynamically without any changes to the build description. If instead we have:</p>
+<pre>
+<span style="color: yellow">$ cat build.spec</span>
+ifconfig GENTEST {
+	Generate test.h {} {} {
+		writefile $target {static const char TEST[] = __FILE__;}
+		
+	}
+	PublishIncludes test.h
+}
+
+Executable --test tester test.c
+</pre>
+<p>Then we can dynamically choose where test.h comes from and <code>tmake</code> will ensure that
+a leftover generated file will not compromise the integrity of the build.</p>
+<pre>
+<span style="color: yellow">$ tmake GENTEST=1 test</span>
+    Generate     test.h
+    Publish      publish/include/test.h
+    Cc           test.o
+    Link         tester
+    Test         objdir/tester
+<span style="color: gray">TEST is ./test.h</span>
+<span style="color: cyan">Built 4 of 4 target(s) in 0.16 seconds</span>
+<span style="color: yellow">$ tmake test</span>
+    Clean        removing 2 orphan target(s)
+    Cc           test.o
+    Link         tester
+    Test         objdir/tester
+<span style="color: gray">TEST is ./test.h</span>
+<span style="color: cyan">Built 2 of 2 target(s) in 0.15 seconds</span>
+</pre>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

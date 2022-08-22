@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Debug flags</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="debug-flags.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="debug-flags">Debug flags</h1>
+<p>An important feature of <code>tmake</code> is the high level of introspection provided to determine
+what tmake is doing and <em>why</em>.  The available debug flags can be displayed.</p>
+<pre>
+<span style="color: yellow">$ tmake -d?</span>
+Debugging can be enabled with -d...
+The debugging categories are as follows:
+
+	*	Enable all debug
+	?	Display help for debug types
+	d	Dynamic dependencies
+	D	Dynamic dependencies (detailed)
+	n	Reasons for targets NOT built
+	b	Reasons for targets BUILT
+	B	Reasons for targets BUILT - changed commands or targets
+	r	Display rules when triggered
+	g	Depencency graph for each target
+	G	List goals (targets) as they are attempted
+	h	Show hashing
+	p	Print rules while parsing
+	m	Miscellaneous (locating and parsing of files)
+	l	Locating sources and targets
+	c	Configuration expressions via ifconfig
+	C	Cache handling
+	T	Timing (add --delta for delta times)
+	v	Variable definition
+	j	Parallel (job-based) builds
+</pre>
+<p>Each of these debug flags can be useful in different situations. They are examined in turn below.</p>
+<p>Start with our simple api project:</p>
+<pre>
+<span style="color: yellow">$ ls</span>
+api.c
+api.h
+build.spec
+project.spec
+test-api.c
+</pre>
+<h2 id="dependency-graph">Dependency Graph</h2>
+<pre><code>g    Depencency graph for each target
+</code></pre>
+<p>This option triggers each time a target needs to be built, to show the causation chain that
+led to that target being built. First a normal build.</p>
+<pre>
+<span style="color: yellow">$ tmake </span>
+    Cc           test-api.o
+    Cc           api.o
+    Ar           libapi.a
+    Link         test-api
+<span style="color: cyan">Built 4 of 5 target(s) in 0.24 seconds</span>
+</pre>
+<p>Now modify one file and explore the causation chain.</p>
+<pre>
+<span style="color: yellow">$ touch api.h</span>
+<span style="color: yellow">$ tmake -dg</span>
+<span style="color: cyan">   13ms</span> [g] <span style="color: darkgoldenrod">all --&gt; test-api --&gt; test-api.o (changed api.h)</span>
+    Cc           test-api.o
+<span style="color: cyan">   16ms</span> [g] <span style="color: darkgoldenrod">all --&gt; test-api --&gt; libapi.a --&gt; api.o (changed api.h)</span>
+    Cc           api.o
+<span style="color: cyan">   35ms</span> [g] <span style="color: darkgoldenrod">all --&gt; test-api --&gt; libapi.a (depend api.o changed api.o)</span>
+    Ar           libapi.a
+<span style="color: cyan">   90ms</span> [g] <span style="color: darkgoldenrod">all --&gt; test-api (depend test-api.o depend libapi.a changed libapi.a)</span>
+    Link         test-api
+<span style="color: cyan">Built 4 of 5 target(s) in 0.18 seconds</span>
+</pre>
+<p>We see that both api.o and test-apio depend on api.h (through dynamic dependency scanning)
+and these dependencies cause api.o and test-api.o to be rebuilt. Next we see that libapi.a
+depends on api.o and so it is rebuilt. And finally we see that test-api depends on both
+test-api.o and libapi.a and at least one has changed, so it is rebuilt.</p>
+<p>The causation chain is shown for each built target from the top level target that caused
+it to be built (in this case the default target, <code>all</code>). This can be different if a specific target is
+given.</p>
+<pre>
+<span style="color: yellow">$ touch api.h</span>
+<span style="color: yellow">$ tmake -dg libapi.a</span>
+<span style="color: cyan">   11ms</span> [g] <span style="color: darkgoldenrod">libapi.a --&gt; api.o (changed api.h)</span>
+    Cc           api.o
+<span style="color: cyan">   28ms</span> [g] <span style="color: darkgoldenrod">libapi.a (depend api.o changed api.o)</span>
+    Ar           libapi.a
+<span style="color: cyan">Built 2 of 5 target(s) in 0.06 seconds</span>
+</pre>
+<h2 id="build-goals">Build goals</h2>
+<pre><code>G    List goals (targets) as they are attempted
+</code></pre>
+<p>This option displays each goal (target) as it is examined in a hierarchical display.
+This is useful as it shows the entire target dependency tree as it is traversed, not
+just the targets that need to be built.</p>
+<pre>
+<span style="color: yellow">$ touch api.h</span>
+<span style="color: yellow">$ tmake -dG</span>
+<span style="color: cyan">   10ms</span> [G] <span style="color: darkgoldenrod">build all</span>
+<span style="color: cyan">   10ms    </span> [G] <span style="color: darkgoldenrod">build test-api</span>
+<span style="color: cyan">   10ms        </span> [G] <span style="color: darkgoldenrod">build test-api.o</span>
+<span style="color: cyan">   10ms            </span> [G] <span style="color: darkgoldenrod">build test-api.c</span>
+<span style="color: cyan">   11ms            </span> [G] <span style="color: darkgoldenrod">build api.h</span>
+    Cc           test-api.o
+<span style="color: cyan">   13ms        </span> [G] <span style="color: darkgoldenrod">build libapi.a</span>
+<span style="color: cyan">   13ms            </span> [G] <span style="color: darkgoldenrod">build api.o</span>
+<span style="color: cyan">   13ms                </span> [G] <span style="color: darkgoldenrod">build api.c</span>
+    Cc           api.o
+<span style="color: cyan">   29ms</span> [G] <span style="color: darkgoldenrod">build all</span>
+<span style="color: cyan">   29ms    </span> [G] <span style="color: darkgoldenrod">build test-api</span>
+<span style="color: cyan">   30ms        </span> [G] <span style="color: darkgoldenrod">build libapi.a</span>
+    Ar           libapi.a
+<span style="color: cyan">   32ms</span> [G] <span style="color: darkgoldenrod">build all</span>
+<span style="color: cyan">   32ms    </span> [G] <span style="color: darkgoldenrod">build test-api</span>
+<span style="color: cyan">   67ms</span> [G] <span style="color: darkgoldenrod">build all</span>
+<span style="color: cyan">   67ms    </span> [G] <span style="color: darkgoldenrod">build test-api</span>
+    Link         test-api
+<span style="color: cyan">  153ms</span> [G] <span style="color: darkgoldenrod">build all</span>
+<span style="color: cyan">Built 4 of 5 target(s) in 0.15 seconds</span>
+</pre>
+<h2 id="reasons-built">Reasons built</h2>
+<pre><code>b    Reasons for targets BUILT
+B    Reasons for targets BUILT - changed commands or targets
+</code></pre>
+<p>Need some text here for -db</p>
+<pre>
+<span style="color: yellow">$ touch api.h</span>
+<span style="color: yellow">$ tmake -db</span>
+<span style="color: cyan">   11ms</span> [b T] <span style="color: darkgoldenrod">Building target all</span>
+<span style="color: cyan">   11ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   12ms</span> [b] <span style="color: darkgoldenrod">Deps for test-api.o have changed, so rebuild</span>
+<span style="color: cyan">   12ms</span> [b] <span style="color: darkgoldenrod">Building test-api.o &lt;= test-api &lt;= all with rule @build.spec:10</span>
+    Cc           test-api.o
+<span style="color: cyan">   15ms</span> [b] <span style="color: darkgoldenrod">Deps for api.o have changed, so rebuild</span>
+<span style="color: cyan">   15ms</span> [b] <span style="color: darkgoldenrod">Building api.o &lt;= libapi.a &lt;= test-api &lt;= all with rule @build.spec:8</span>
+    Cc           api.o
+<span style="color: cyan">   34ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   35ms</span> [b] <span style="color: darkgoldenrod">Deps for libapi.a have changed, so rebuild</span>
+<span style="color: cyan">   35ms</span> [b] <span style="color: darkgoldenrod">Building libapi.a &lt;= test-api &lt;= all with rule @build.spec:8</span>
+    Ar           libapi.a
+<span style="color: cyan">   37ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   73ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   74ms</span> [b] <span style="color: darkgoldenrod">Deps for test-api have changed, so rebuild</span>
+<span style="color: cyan">   74ms</span> [b] <span style="color: darkgoldenrod">Building test-api &lt;= all with rule @build.spec:10</span>
+    Link         test-api
+<span style="color: cyan">  160ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">Built 4 of 5 target(s) in 0.16 seconds</span>
+</pre>
+<p>Need some text here for -db and -dB</p>
+<pre>
+<span style="color: yellow">$ tmake CFLAGS=-g -dbB</span>
+<span style="color: cyan">   10ms</span> [b T] <span style="color: darkgoldenrod">Building target all</span>
+<span style="color: cyan">   10ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   11ms</span> [b B] <span style="color: darkgoldenrod">Commands for test-api.o have changed, so forcing rebuild</span>
+=== old ===
+	run  gcc -Iobjdir/publish/include -I. -Iobjdir   -c test-api.c -o objdir/test-api.o
+=== new ===
+	run  gcc -Iobjdir/publish/include -I. -Iobjdir -g  -c test-api.c -o objdir/test-api.o
+-----------
+<span style="color: cyan">   11ms</span> [b] <span style="color: darkgoldenrod">Building test-api.o &lt;= test-api &lt;= all with rule @build.spec:10</span>
+    Cc           test-api.o
+<span style="color: cyan">   14ms</span> [b B] <span style="color: darkgoldenrod">Commands for api.o have changed, so forcing rebuild</span>
+=== old ===
+	run  gcc -Iobjdir/publish/include -I. -Iobjdir   -c api.c -o objdir/api.o
+=== new ===
+	run  gcc -Iobjdir/publish/include -I. -Iobjdir -g  -c api.c -o objdir/api.o
+-----------
+<span style="color: cyan">   14ms</span> [b] <span style="color: darkgoldenrod">Building api.o &lt;= libapi.a &lt;= test-api &lt;= all with rule @build.spec:8</span>
+    Cc           api.o
+<span style="color: cyan">   32ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   32ms</span> [b] <span style="color: darkgoldenrod">Deps for libapi.a have changed, so rebuild</span>
+<span style="color: cyan">   32ms</span> [B] <span style="color: darkgoldenrod">Changed api.o: 1661146555572364 -&gt; 1661146555750526</span>
+<span style="color: cyan">   33ms</span> [b] <span style="color: darkgoldenrod">Building libapi.a &lt;= test-api &lt;= all with rule @build.spec:8</span>
+    Ar           libapi.a
+<span style="color: cyan">   35ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   70ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">   71ms</span> [b] <span style="color: darkgoldenrod">Deps for test-api have changed, so rebuild</span>
+<span style="color: cyan">   71ms</span> [B] <span style="color: darkgoldenrod">Changed libapi.a: 1661146555617471 -&gt; 1661146555792894</span>
+<span style="color: cyan">   71ms</span> [B] <span style="color: darkgoldenrod">Changed test-api.o: 1661146555574244 -&gt; 1661146555751266</span>
+<span style="color: cyan">   71ms</span> [b] <span style="color: darkgoldenrod">Building test-api &lt;= all with rule @build.spec:10</span>
+    Link         test-api
+<span style="color: cyan">  147ms</span> [b] <span style="color: darkgoldenrod">all is phony, so rebuilding</span>
+<span style="color: cyan">Built 4 of 5 target(s) in 0.15 seconds</span>
+</pre>
+<h2 id="dynamic-dependencies">Dynamic dependencies</h2>
+<pre><code>d    Dynamic dependencies
+D    Dynamic dependencies (detailed)
+</code></pre>
+<p>Need some text here for -dd</p>
+<pre>
+<span style="color: yellow">$ tmake -dd</span>
+<span style="color: cyan">   11ms</span> [d] <span style="color: darkgoldenrod">header-scan-regexp test-api.c (cached) =&gt; api.h</span>
+<span style="color: cyan">   11ms</span> [d] <span style="color: darkgoldenrod">Dynamic dependencies for test-api.o: api.h</span>
+    Cc           test-api.o
+<span style="color: cyan">   13ms</span> [d] <span style="color: darkgoldenrod">header-scan-regexp api.c (cached) =&gt; api.h</span>
+<span style="color: cyan">   13ms</span> [d] <span style="color: darkgoldenrod">Dynamic dependencies for api.o: api.h</span>
+    Cc           api.o
+    Ar           libapi.a
+    Link         test-api
+<span style="color: cyan">Built 4 of 5 target(s) in 0.14 seconds</span>
+</pre>
+<p>Need some text here for -ddD and how assert.h is now considered source rather than external.</p>
+<pre>
+<span style="color: yellow">$ touch assert.h</span>
+<span style="color: yellow">$ tmake -ddD</span>
+<span style="color: cyan">    9ms</span> [D] <span style="color: darkgoldenrod">Scanning test-api.c for headers: incpaths=publish/include .</span>
+<span style="color: cyan">    9ms</span> [D] <span style="color: darkgoldenrod">verifying up-to-date cached results for test-api.c</span>
+<span style="color: cyan">    9ms</span> [D] <span style="color: darkgoldenrod">Not a file and not a target, stdio.h</span>
+<span style="color: cyan">    9ms</span> [D] <span style="color: darkgoldenrod">ok, stdio.h still resolves to {}</span>
+<span style="color: cyan">    9ms</span> [D] <span style="color: darkgoldenrod">Not a file and not a target, stdlib.h</span>
+<span style="color: cyan">    9ms</span> [D] <span style="color: darkgoldenrod">ok, stdlib.h still resolves to {}</span>
+<span style="color: cyan">    9ms</span> [d] <span style="color: darkgoldenrod">assert.h has changed from {} =&gt; {source assert.h 1661146556036258} -- rescan</span>
+<span style="color: cyan">    9ms</span> [d] <span style="color: darkgoldenrod">cache is out-of-date for test-api.c - rescanning</span>
+<span style="color: cyan">   10ms</span> [D] <span style="color: darkgoldenrod">header-scan-regexp test-api.c =&gt; stdio.h stdlib.h assert.h api.h</span>
+<span style="color: cyan">   10ms</span> [D] <span style="color: darkgoldenrod">header-scan-regexp assert.h =&gt; </span>
+<span style="color: cyan">   10ms</span> [D] <span style="color: darkgoldenrod">header-scan-regexp api.h =&gt; </span>
+<span style="color: cyan">   10ms</span> [d] <span style="color: darkgoldenrod">Dynamic dependencies for test-api.o: assert.h api.h</span>
+    Cc           test-api.o
+<span style="color: cyan">   12ms</span> [D] <span style="color: darkgoldenrod">Scanning api.c for headers: incpaths=publish/include .</span>
+<span style="color: cyan">   12ms</span> [D] <span style="color: darkgoldenrod">verifying up-to-date cached results for api.c</span>
+<span style="color: cyan">   12ms</span> [D] <span style="color: darkgoldenrod">ok, api.h still resolves to {source api.h 1661146555538708}</span>
+<span style="color: cyan">   12ms</span> [d] <span style="color: darkgoldenrod">header-scan-regexp api.c (cached) =&gt; api.h</span>
+<span style="color: cyan">   12ms</span> [d] <span style="color: darkgoldenrod">Dynamic dependencies for api.o: api.h</span>
+    Link         test-api
+<span style="color: cyan">Built 2 of 5 target(s) in 0.10 seconds</span>
+</pre>
+<h2 id="print-commands-during-parsing">Print commands during parsing</h2>
+<pre><code>p    Print rules while parsing
+</code></pre>
+<p>As <code>tmake</code> parses project.spec and build.spec files ...</p>
+<pre>
+<span style="color: yellow">$ tmake -dp</span>
+<span style="color: cyan">    2ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:2326 Phony all</span>
+<span style="color: cyan">    2ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:2327 Phony libs</span>
+<span style="color: cyan">    2ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:2328 Phony install all</span>
+<span style="color: cyan">    2ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:2329 Phony test</span>
+<span style="color: cyan">    3ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:2337 Phony clean-orphans -do </span>
+	do-delete-orphans [get-orphan-targets]
+	# Now remove the trash
+	if {[file exists .trash]} {
+		note Clean .trash
+		file delete -force .trash
+	}
+
+<span style="color: cyan">    5ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:950 IncludePaths --build publish/include</span>
+<span style="color: cyan">    6ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:950 CFlags -Iobjdir/publish/include</span>
+<span style="color: cyan">    6ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:338 rulebase-prolog .</span>
+<span style="color: cyan">    6ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:360 IncludePaths .</span>
+<span style="color: cyan">    6ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:360 CFlags -I.</span>
+<span style="color: cyan">    6ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:360 CFlags -Iobjdir</span>
+<span style="color: cyan">    6ms</span> [p] <span style="color: darkgoldenrod">build.spec:8 ArchiveLib --publish api api.c</span>
+<span style="color: cyan">    7ms</span> [p] <span style="color: darkgoldenrod">build.spec:8 Glob --all api.c</span>
+<span style="color: cyan">    7ms</span> [p] <span style="color: darkgoldenrod">build.spec:8 Objects api.c</span>
+<span style="color: cyan">    7ms</span> [p] <span style="color: darkgoldenrod">build.spec:8 Object api.o api.c</span>
+<span style="color: cyan">    8ms</span> [p] <span style="color: darkgoldenrod">build.spec:8 Phony libs libapi.a</span>
+<span style="color: cyan">    8ms</span> [p] <span style="color: darkgoldenrod">build.spec:10 Executable --test test-api test-api.c</span>
+<span style="color: cyan">    9ms</span> [p] <span style="color: darkgoldenrod">build.spec:10 Glob --all test-api.c</span>
+<span style="color: cyan">    9ms</span> [p] <span style="color: darkgoldenrod">build.spec:10 Objects test-api.c</span>
+<span style="color: cyan">    9ms</span> [p] <span style="color: darkgoldenrod">build.spec:10 Object test-api.o test-api.c</span>
+<span style="color: cyan">   10ms</span> [p] <span style="color: darkgoldenrod">build.spec:10 Test test-api</span>
+<span style="color: cyan">   10ms</span> [p] <span style="color: darkgoldenrod">build.spec:10 Phony test test#1</span>
+<span style="color: cyan">   10ms</span> [p] <span style="color: darkgoldenrod">build.spec:10 Phony all test-api</span>
+<span style="color: cyan">   11ms</span> [p] <span style="color: darkgoldenrod">/Volumes/src/tmake/rulebase.default:364 rulebase-epilog .</span>
+</pre>
+<h2 id="print-target-rules-when-building">Print target rules when building</h2>
+<pre><code>r    Display rules when triggered
+</code></pre>
+<pre>
+<span style="color: yellow">$ touch api.h</span>
+<span style="color: yellow">$ tmake -dr --jobs=1</span>
+    Cc           test-api.o
+<span style="color: cyan">   11ms</span> [r] <span style="color: darkgoldenrod">Rule for test-api.o</span>
+<span style="color: yellow">-- test-api.o -------------------------------------------------</span>
+@build.spec:10
+test-api.o: test-api.c
+dyndep=header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
+       api.h
+       assert.h
+local=.
+  var CC=gcc
+  var C_FLAGS=-Iobjdir/publish/include -I. -Iobjdir
+  var INCPATHS=publish/include .
+	run $CCACHE $CC $C_FLAGS $CFLAGS $CPPFLAGS -c $inputs -o $target
+    Cc           api.o
+<span style="color: cyan">   24ms</span> [r] <span style="color: darkgoldenrod">Rule for api.o</span>
+<span style="color: yellow">-- api.o ------------------------------------------------------</span>
+@build.spec:8
+api.o: api.c
+dyndep=header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
+       api.h
+local=.
+  var CC=gcc
+  var C_FLAGS=-Iobjdir/publish/include -I. -Iobjdir
+  var INCPATHS=publish/include .
+	run $CCACHE $CC $C_FLAGS $CFLAGS $CPPFLAGS -c $inputs -o $target
+    Ar           libapi.a
+<span style="color: cyan">   32ms</span> [r] <span style="color: darkgoldenrod">Rule for libapi.a</span>
+<span style="color: yellow">-- libapi.a ---------------------------------------------------</span>
+@build.spec:8
+libapi.a: api.o
+local=.
+	file delete $target
+	run $AR $ARFLAGS $target {*}[expand-objects $inputs]
+	run $RANLIB $target
+    Link         test-api
+<span style="color: cyan">   63ms</span> [r] <span style="color: darkgoldenrod">Rule for test-api</span>
+<span style="color: yellow">-- test-api ---------------------------------------------------</span>
+@build.spec:10
+test-api: test-api.o libapi.a
+local=.
+  var CCLD=gcc
+  var LD_FLAGS=
+  var PROJLIBS=
+  var SYSLIBS=
+	run $CCLD $LD_FLAGS $LDFLAGS -o $target $inputs $PROJLIBS $SYSLIBS
+<span style="color: cyan">Built 4 of 5 target(s) in 0.13 seconds</span>
+</pre>
+
+    </div>
+        
+
+
+
+
+		<div id="subpages">
+	<p><b>Subpages:</b></p>
+	<div class="thumb-subpages">
+										</div>
+							<p>
+			<a href="debug-flags-advanced.html">Advanced debug flags</a>
+							– Using advanced debug flags
+						</p>
+			</div>
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>

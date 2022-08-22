@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<base href=".">
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>Dynamic Dependency Checking</title>
+
+<link rel="stylesheet" href="assets/css/custom_bootstrap.css" type="text/css">
+<link rel="stylesheet" href="assets/css/bootstrap-toc.min.css" type="text/css">
+<link rel="stylesheet" href="assets/css/frontend.css" type="text/css">
+<link rel="stylesheet" href="assets/css/jquery.mCustomScrollbar.min.css">
+<link rel="stylesheet" href="assets/js/search/enable_search.css" type="text/css">
+
+<link rel="stylesheet" href="assets/css/prism-tomorrow.css" type="text/css">
+
+<script src="assets/js/mustache.min.js"></script>
+<script src="assets/js/jquery.js"></script>
+<script src="assets/js/bootstrap.js"></script>
+<script src="assets/js/scrollspy.js"></script>
+<script src="assets/js/typeahead.jquery.min.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/compare-versions.js"></script>
+<script src="assets/js/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="assets/js/bootstrap-toc.min.js"></script>
+<script src="assets/js/jquery.touchSwipe.min.js"></script>
+<script src="assets/js/anchor.min.js"></script>
+<script src="assets/js/tag_filtering.js"></script>
+<script src="assets/js/language_switching.js"></script>
+
+<script src="assets/js/lines_around_headings.js"></script>
+
+<script src="assets/js/prism-core.js"></script>
+<script src="assets/js/prism-autoloader.js"></script>
+<script src="assets/js/prism_autoloader_path_override.js"></script>
+<script src="assets/js/trie.js"></script>
+
+
+</head>
+
+<body class="no-script
+">
+
+<script>
+$('body').removeClass('no-script');
+</script>
+
+<nav class="navbar navbar-fixed-top navbar-default" id="topnav">
+	<div class="container-fluid">
+		<div class="navbar-right">
+			<a id="toc-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-wrapper" aria-expanded="false">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<form class="navbar-form pull-right" id="navbar-search-form">
+                               <div class="form-group has-feedback">
+                                       <input type="text" class="form-control input-sm" name="search" id="sidenav-lookup-field" placeholder="search" disabled>
+				       <span class="glyphicon glyphicon-search form-control-feedback" id="search-mgn-glass"></span>
+                               </div>
+                        </form>
+		</div>
+		<div class="navbar-header">
+			<a id="sidenav-toggle">
+				<span class="glyphicon glyphicon-menu-right"></span>
+				<span class="glyphicon glyphicon-menu-left"></span>
+			</a>
+			<a id="home-link" href="index.html" class="hotdoc-navbar-brand">
+				<img src="assets/images/home.svg" alt="Home">
+			</a>
+		</div>
+		<div class="navbar-collapse collapse" id="navbar-wrapper">
+			<ul class="nav navbar-nav" id="menu">
+							</ul>
+			<div class="hidden-xs hidden-sm navbar-text navbar-center">
+							</div>
+		</div>
+	</div>
+</nav>
+
+<main>
+<div data-extension="core" data-hotdoc-in-toplevel="True" data-hotdoc-project="tmake" data-hotdoc-ref="dyndep.html" class="page_container" id="page-wrapper">
+<script src="assets/js/utils.js"></script>
+
+<div class="panel panel-collapse oc-collapsed" id="sidenav" data-hotdoc-role="navigation">
+	<script src="assets/js/navigation.js"></script>
+	<script src="assets/js/sitemap.js"></script>
+</div>
+
+<div id="body">
+	<div id="main">
+				    <div id="page-description" data-hotdoc-role="main">
+        <h1 id="dynamic-dependency-checking">Dynamic Dependency Checking</h1>
+<p>Dynamic dependency checking is supported which allows a commmand (e.g. a file scanner)
+to automatically determine dependencies.</p>
+<p>Consider the following file, a.c</p>
+<pre><code>#include &lt;stdio.h&gt;
+#include &lt;common.h&gt;
+#include "a.h"
+...
+</code></pre>
+<p>And a.h</p>
+<pre><code>#include "b.h"
+</code></pre>
+<p>The built-in rulebase automatically associates the built-in recursive regex scanner with
+rules to build object files (.o) from source files (.c) via a rule that looks like:</p>
+<pre><code>a.o: a.c
+dyndep=header-scan-regexp-recursive $INCPATHS "" $CHDRPATTERN
+  var INCPATHS=publish/include .
+    run $CCACHE $CC $C_FLAGS $CFLAGS -c $inputs -o $target
+</code></pre>
+<p>Note that the 'dyndep' attribute specifies a command prefix to run that will
+return a list of dependent targets/files.</p>
+<p>The built-in scanner:</p>
+<ul>
+<li>Uses a regular expression to scan for dependencies of the form #include &lt;abc.h&gt; or #include "abc.h"</li>
+<li>Ignores conditional compilation (#ifdef, etc.)
+<ul>
+<li>And thus is conservative in that it can make create an unnecessary dependency (but not the reverse)</li>
+</ul>
+</li>
+<li>Is recursive, so that in the example above, a.o depends upon both a.h and b.h</li>
+<li>Knows if a dependency is:
+<ul>
+<li>a target, and thus must be generated before being scanned recursively</li>
+<li>an existing source file, and thus creates a time or hash-based dependeny</li>
+<li>missing, and thus assumed to be a system header, and ignored</li>
+</ul>
+</li>
+<li>Caches the results of the scan to avoid unnecessary scanning</li>
+<li>Carefully checks to see that the scan would return the same results as
+the cache to ensure that changes such as creating files in-tree which
+shadow system headers cause a rebuild</li>
+</ul>
+<p>Dynamic dependencies:</p>
+<ul>
+<li>Are cached, along with the command (paths, pattern, ...), so that the (small) cost of scanning is
+only incurred when the file changes</li>
+<li>The set of dependencies is cached. If this set changes, the target is rebuilt.
+This can occur if a system header was previously shadowed by a source file, but
+the build changes so that this no longer occurs, or if a new header file is added
+in a directory earlier in the set of include paths.</li>
+</ul>
+<p>Note that only inputs are passed to the dynamic dependency scanner, not all dependencies.
+For example, if a rule uses a generator, we typically don't want to scan the generator
+for dynamic dependencies, only the input files. If the generator has it's own dynamic
+dependencies, they should be included in the rule to build that generator. (If it is a script
+generator, PublishBin --copy can be used to add dynamic dependencies).</p>
+<p>XXX: Note that "#include INCLUDEFILENAME" is not supported. Suggest workarounds.</p>
+
+    </div>
+        
+
+
+
+
+		
+	</div>
+	<div id="search_results">
+		<p>The results of the search are</p>
+	</div>
+	<div id="footer">
+		    
+
+	</div>
+</div>
+
+<div id="toc-column">
+	
+		<div class="edit-button">
+		
+
+	</div>
+		<div id="toc-wrapper">
+		<nav id="toc"></nav>
+	</div>
+</div>
+</div>
+</main>
+
+
+<script src="assets/js/navbar_offset_scroller.js"></script>
+</body>
+</html>
