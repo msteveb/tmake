@@ -7,7 +7,7 @@
 # Initialiation
 # ==================================================================
 
-set tmake(version) {0.7.9 (03-Apr-2021)+}
+set tmake(version) {0.8.0}
 set tmake(cacheversion) 4
 
 # Turn on debugging as early as possible
