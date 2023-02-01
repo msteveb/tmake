@@ -371,7 +371,7 @@ proc relative-path {path {pwd {}}} {
 # If everything is working properly, the only errors which occur
 # should be generated in user code (e.g. auto.def).
 # By default, we only want to show the error location in user code.
-# We use [info frame] to achieve this.
+# We use [stacktrace] to achieve this.
 #
 # This is designed to be called for incorrect usage, via parse-error
 #
@@ -401,16 +401,14 @@ proc warning-location {msg} {
 #
 proc find-source-location {} {
 	set result {}
-	set level [expr {[info level] - 1}]
-	for {set i $level} {$i > 0} {incr i -1} {
-		lassign [info frame -$i] info(caller) info(file) info(line)
-		if {[string match *.spec $info(file)]} {
-			lappend result [relative-path $info(file)]:$info(line)
-		} elseif {[string match *.default $info(file)]} {
+	foreach {p f l} [stacktrace] {
+		if {[string match *.spec $f]} {
+			lappend result [relative-path $f]:$l
+		} elseif {[string match *.default $f]} {
 			# No need to include the location in rulebase.default if there are other locations
 			if {[llength $result] == 0} {
 				# rulebase.default is outside the prjoject so use the path directly
-				lappend result $info(file):$info(line)
+				lappend result $f:$l
 			}
 			# And only need one location from rulebase.default
 			break
