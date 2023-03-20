@@ -2633,8 +2633,8 @@ proc needbuild? {ruletarget depends &reason} {
 			# Hmmm if many elements are the same it would be nice to just show the differences
 			set allhashkeys [dict merge $savedhash $calchash]
 			foreach key $allhashkeys {
-				set old [dict getdef $savedhash $key -]
-				set new [dict getdef $calchash $key -]
+				set old [dict-getdef $savedhash $key -]
+				set new [dict-getdef $calchash $key -]
 				if {$old ne $new} {
 					dputs B "Changed $key: $old -> $new"
 				}

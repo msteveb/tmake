@@ -210,7 +210,7 @@ proc show-command-reference {} {
 # combine type, text into the current command help dictionary
 proc add-cmd-help {&dict type text} {
     if {$text eq "" || $dict(type) ne $type} {
-        if {[llength [dict getdef $dict lines {}]]} {
+        if {[llength [dict-getdef $dict lines {}]]} {
             lappend dict(blocks) $dict(type) $dict(lines)
         }
         dict set dict type $type

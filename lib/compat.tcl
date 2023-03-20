@@ -290,6 +290,18 @@ proc file-type {file} {
 	return $type
 }
 
+if {"getwithdefault" in [dict -commands]} {
+	alias dict-getdef dict getdef
+} else {
+	proc dict-getdef {dict keys default} {
+		if {[dict exists $dict {*}$keys]} {
+			dict get $dict {*}$keys
+		} else {
+			return $default
+		}
+	}
+}
+
 # Implements 'wait' in terms of the older 'os.wait'
 #
 if {![exists -command wait]} {
