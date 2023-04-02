@@ -783,7 +783,10 @@ proc install-file {args} {
 	getopt {--strip: --bin target source} args
 
 	vputs "Copy $source $target"
-	file copy -force $source $target
+	# Delete the target first in case it is in use
+	# XXX Should we instead copy to a tmp file and force rename?
+	file delete $target
+	file copy $source $target
 	if {$bin} {
 		chmodx-file $target
 	}
