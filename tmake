@@ -1519,9 +1519,9 @@ proc user-notice {{col {}} msg} {
 proc parse-error {msg} {
 	global tmake
 	# Message may contain a source reference relative to the top source dir
-    if {[exists tmake(topsrcdir)]} {
-        enter-new-dir $tmake(topsrcdir)
-    }
+	if {[exists tmake(topsrcdir)]} {
+		enter-new-dir $tmake(topsrcdir)
+	}
 
 	user-notice colerror [error-location "Error: $msg"]
 	if {!$tmake(configure)} {
@@ -3857,7 +3857,7 @@ proc colerr {colour string} {
 }
 
 proc error-location {msg} {
-    return $msg
+	return $msg
 }
 
 # Embedded modules are inserted below here
