@@ -381,7 +381,7 @@ proc relative-path {path {pwd {}}} {
 }
 
 # If everything is working properly, the only errors which occur
-# should be generated in user code (e.g. auto.def).
+# should be generated in user code (e.g. *.spec).
 # By default, we only want to show the error location in user code.
 # We use [stacktrace] to achieve this.
 #
@@ -412,24 +412,28 @@ proc warning-location {msg} {
 # Returns a list: {file:line ...} or "unknown" if none found.
 #
 proc find-source-location {} {
-	set result {}
+	set specresult {}
+	set defaultresult {}
 	foreach {p f l} [stacktrace] {
 		if {[string match *.spec $f]} {
-			lappend result [relative-path $f]:$l
+			lappend specresult [relative-path $f]:$l
 		} elseif {[string match *.default $f]} {
 			# No need to include the location in rulebase.default if there are other locations
-			if {[llength $result] == 0} {
-				# rulebase.default is outside the prjoject so use the path directly
-				lappend result $f:$l
-			}
 			# And only need one location from rulebase.default
-			break
+			if {[llength $defaultresult] == 0} {
+				# rulebase.default is outside the project so use the path directly
+				lappend defaultresult $f:$l
+			}
 		}
 	}
-	if {[llength $result] == 0} {
-		return unknown
+	if {[llength $specresult]} {
+		return $specresult
 	}
-	return $result
+	if {[llength $defaultresult]} {
+		return $defaultresult
+	}
+
+	return unknown
 }
 
 # Similar to error-location, but called when user code generates an error
