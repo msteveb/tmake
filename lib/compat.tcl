@@ -380,6 +380,38 @@ proc relative-path {path {pwd {}}} {
 	join $relpath /
 }
 
+try {
+	proc __testing {} {
+		stacktrace
+	}
+	__testing
+} on error msg {
+	# Reimplement stacktrace for broken versions
+	proc stacktrace {{skip 0}} {
+		set frames {}
+		set prev {level -1}
+		loop level [info frame]+1 {
+			set frame [info frame -$level]
+			if {[dict exists $frame proc]} {
+				# If non-proc frames exist at the same level, the first of these contains
+				# the file and line we care about for this level
+				if {[dict get $prev level] != [dict get $frame level]} {
+					set prev $frame
+				}
+				set pfl [list [dict get $frame proc] [dict get $prev file] [dict get $prev line]]
+				set prev {level -1}
+				lappend frames {*}$pfl
+			} elseif {[dict get $prev level] != [dict get $frame level]} {
+				set prev $frame
+			}
+		}
+		# Omit frames the user isn't interested in, including the current one
+		return [lrange $frames $(($skip+1)*3) end]
+	}
+} finally {
+	rename __testing {}
+}
+
 # If everything is working properly, the only errors which occur
 # should be generated in user code (e.g. *.spec).
 # By default, we only want to show the error location in user code.
