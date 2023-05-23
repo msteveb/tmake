@@ -64,6 +64,7 @@ set tmake(configure) 0
 set tmake(depfindcache) {}
 set tmake(addtargets) {}
 set tmake(varloc) {}
+set tmake(omitsource) {}
 set tmake(emptycache) {
 	file {} cmd {} deps {} target {} headerscan {} warnings {}
 	exec {} version 0 writecache 0 srchash {} dephash {} usehashes 0
@@ -1038,6 +1039,9 @@ proc invoke-spec-file {filename args} {
 		}
 	}
 
+	# Record the current frame level to make it more efficient to find source location
+	set tmake(stacklevel) [info frame]
+
 	# Spec files are loaded at frame level #1, in the scope of run-do
 	# 'define' relies on this
 	set result [uplevel #0 [list run-do {} $cmd]]
@@ -1223,6 +1227,7 @@ proc tmake-reset-defines {} {
 # when the scope ends.
 proc Scope {{dir ""} script} {
 	global tmake
+	omit-source-location
 	# Save all defines
 	set defines $tmake(defines)
 	if {$dir ne ""} {
@@ -1638,6 +1643,14 @@ proc dbg-msg-indent {{autoindent 1}} {
 		set indent {}
 	}
 	return [format %5dms $time]$indent
+}
+
+# call to omit the current proc from source location info
+# e.g. Scope, ifconfig
+proc omit-source-location {} {
+	global tmake
+	set cmd [lindex [info level -1] 0]
+	lappend tmake(omitsource) $cmd
 }
 
 # ==================================================================
@@ -2361,11 +2374,14 @@ proc target {ruletarget args} {
 	lappend orig(do) {*}$info(add-do)
 	append-with-space orig(dyndep) $info(dyndep) \n
 
-	if {$info(source) eq "unknown" || $info(source) in $orig(source)} {
-		# Nothing to do
-	} elseif {$info(source) ne "unknown"} {
-		lappend orig(source) $info(source)
+	# Merge source
+	set set {}
+	foreach s [list {*}$orig(source) {*}$info(source)] {
+		if {$s ne "unknown"} {
+			dict set set $s 1
+		}
 	}
+	set orig(source) [dict keys $set]
 
 	# Need to append to any vars which exist
 	set orig(vars) [merge-vars $orig(vars) $info(vars)]

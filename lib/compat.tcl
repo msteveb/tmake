@@ -290,18 +290,6 @@ proc file-type {file} {
 	return $type
 }
 
-if {"getwithdefault" in [dict -commands]} {
-	alias dict-getdef dict getdef
-} else {
-	proc dict-getdef {dict keys default} {
-		if {[dict exists $dict {*}$keys]} {
-			dict get $dict {*}$keys
-		} else {
-			return $default
-		}
-	}
-}
-
 # Implements 'wait' in terms of the older 'os.wait'
 #
 if {![exists -command wait]} {
@@ -380,11 +368,31 @@ proc relative-path {path {pwd {}}} {
 	join $relpath /
 }
 
+if {"getwithdefault" in [dict -commands]} {
+	alias dict-getdef dict getdef
+} else {
+	proc dict-getdef {dict keys default} {
+		if {[dict exists $dict {*}$keys]} {
+			dict get $dict {*}$keys
+		} else {
+			return $default
+		}
+	}
+}
+
 try {
 	apply {{} {stacktrace}}
 } on error msg {
 	# Implement a dummy stacktrace for broken versions
-	proc stacktrace {{skip 0}} {
+	proc stacktrace {{skip 0} {last 0}} {
+	}
+}
+set tmake(stackformat) {p f l cmd}
+if {[dict-getdef $tcl_platform stackFormat 3] != 4} {
+	# Older stylestacktrace
+	set tmake(stackformat) {p f l}
+	local proc stacktrace {{skip 0} args} {
+		tailcall upcall stacktrace $skip
 	}
 }
 
@@ -419,10 +427,16 @@ proc warning-location {msg} {
 # 
 # Returns a list: {file:line ...} or "unknown" if none found.
 #
-proc find-source-location {} {
+proc find-source-location {{skip 3}} {
+	global tmake
 	set specresult {}
 	set defaultresult {}
-	foreach {p f l} [stacktrace] {
+	set cmd {}
+	foreach $tmake(stackformat) [stacktrace $skip $tmake(stacklevel)-1] {
+		if {[lindex $cmd 0] in $tmake(omitsource)} {
+			# This command should be ignored
+			continue
+		}
 		if {[string match *.spec $f]} {
 			lappend specresult [relative-path $f]:$l
 		} elseif {[string match *.default $f]} {
@@ -449,36 +463,33 @@ proc find-source-location {} {
 # (unless --debug is enabled)
 #
 proc error-stacktrace {msg {stacktrace {}}} {
-	if {$::tmake(debug)} {
-		# In debug mode, prepend a live stacktrace to the error stacktrace, omitting the current level
-		lappend stacktrace {*}[lrange [stacktrace] 3 end]
-	}
-
-	if {!$::tmake(debug)} {
+	global tmake
+	if {!$tmake(debug)} {
 		# Only keep levels from *.spec files or with no file
 		set newstacktrace {}
-		foreach {p f l} $stacktrace {
+		set cmd {}
+		foreach $tmake(stackformat) $stacktrace {
 			if {![string match "*.spec" $f] || $f eq ""} {
-				#puts "Skipping $p $f:$l"
+				#puts "Skipping $p $f:$l $cmd"
 				continue
 			}
-			lappend newstacktrace $p $f $l
+			lappend newstacktrace $p $f $l $cmd
 		}
 		set stacktrace $newstacktrace
 	}
 
 	# Convert filenames to relative paths
 	set newstacktrace {}
-	foreach {p f l} $stacktrace {
+	foreach {p f l cmd} $stacktrace {
 		if {$f ne "" && [file exists $f]} {
 			set f [relative-path $f]
 		}
-		lappend newstacktrace $p $f $l
+		lappend newstacktrace $p $f $l $cmd
 	}
-	lassign $newstacktrace p f l
+	lassign $newstacktrace p f l cmd
 	if {$f ne ""} {
 		set prefix "$f:$l: "
-		set newstacktrace [lrange $newstacktrace 3 end]
+		set newstacktrace [lrange $newstacktrace 4 end]
 	} else {
 		set prefix ""
 	}

@@ -41,7 +41,7 @@ proc ifconfig {expr args} {
 
 	dputs c "ifconfig: expr='$expr' tclexpr='$tclexpr'"
 
-	do_ifconfig ifconfig $tclexpr $args
+	tailcall do_ifconfig ifconfig $tclexpr $args
 }
 
 # Internal command.
@@ -51,21 +51,18 @@ proc ifconfig {expr args} {
 proc do_ifconfig {name expr exprargs} {
 	if {[llength $exprargs] == 0} {
 		# bare 'ifconfig expr'
-		do_if_else 3 $expr "" "return -code 20 skip"
-		return
+		tailcall do_if_else $expr "" "return -code 20 skip"
 	}
 
 	switch -exact [llength $exprargs] {
 		1 {
 			# ifconfig expr {code}
-			do_if_else 3 $expr [lindex $exprargs 0] ""
-			return
+			tailcall do_if_else $expr [lindex $exprargs 0] ""
 		}
 		3 {
 			# ifconfig expr {code} else {code}
 			if {[lindex $exprargs 1] eq "else"} {
-				do_if_else 3 $expr [lindex $exprargs 0] [lindex $exprargs 2]
-				return
+				tailcall do_if_else $expr [lindex $exprargs 0] [lindex $exprargs 2]
 			}
 		}
 	}
@@ -75,16 +72,16 @@ proc do_ifconfig {name expr exprargs} {
 
 # Internal command to implement ifconfig
 #
-proc do_if_else {level expr true false} {
+proc do_if_else {expr true false} {
 	if $expr {
 		dputs c "Expression is true, so executing $true"
 		if {$true ne ""} {
-			uplevel $level $true
+			tailcall eval $true
 		}
 	} else {
 		dputs c "Expression is false"
 		if {$false ne ""} {
-			uplevel $level $false
+			tailcall eval $false
 		}
 	}
 }
