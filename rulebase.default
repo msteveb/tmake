@@ -1810,7 +1810,7 @@ to be uninstalled with 'uninstall'
 
 
 rule InstallFile {args} {
-InstallFile ?--strip|--striplib? ?--bin? dest source
+InstallFile ?--strip|--striplib? ?--nowarn? ?--bin? dest source
 
 Installs the given source file to the destination (file) relative to $DESTDIR
 
@@ -1818,6 +1818,7 @@ The following options are supported:
   --bin               Make the target executable
   --strip             Strip the target with $STRIP $STRIPFLAGS
   --striplib          Strip the target with $STRIP $STRIPLIBFLAGS
+  --nowarn            Don't warn on duplicate install rule
 
 Adds the rule to the global 'install' target and adds the file the list of files
 to be uninstalled with 'uninstall'
@@ -1826,7 +1827,7 @@ Note that the source can be an absolute path to install an external file.
 } {
 	show-this-rule
 
-	getopt {--strip --striplib --bin --build dest src} args
+	getopt {--strip --striplib --bin --build --nowarn dest src} args
 
 	#puts "InstallFile $dest $src"
 
@@ -1845,7 +1846,9 @@ Note that the source can be an absolute path to install an external file.
 	}
 
 	if {[is-target? $destfile]} {
-		user-notice purple [warning-location "Warning: Duplicate install rule for $dest [make-source-location $destfile @]"]
+		if {!$nowarn} {
+			user-notice purple [warning-location "Warning: Duplicate install rule for $dest [make-source-location $destfile @]"]
+		}
 		return
 	}
 
@@ -1874,7 +1877,7 @@ Note that the source can be an absolute path to install an external file.
 }
 
 rule Install {args} {
-Install ?--bin? ?--strip|--striplib? ?--keepdir? destdir file-spec...
+Install ?--bin? ?--strip|--striplib? ?--keepdir? ?--nowarn? destdir file-spec...
 
 A convenience wrapper around InstallFile to allow multiple files to be installed at once.
 See InstallFile for more details.
@@ -1885,12 +1888,13 @@ specifications' above.
 
 The following options are supported:
   --bin               Pass --bin to InstallFile
+  --nowarn            Pass --nowarn to InstallFile
   --strip|--striplib  Pass --strip or --striplib to InstallFile
   --keepdir           Pass --keepdir to InstallFile
 } {
 	show-this-rule
 
-	getopt {--bin --strip --striplib --keepdir destdir args} args
+	getopt {--bin --strip --striplib --keepdir --nowarn destdir args} args
 	set args [join $args]
 	set opts {}
 	if {$bin} {
@@ -1901,6 +1905,9 @@ The following options are supported:
 	}
 	if {$striplib} {
 		lappend opts --striplib
+	}
+	if {$nowarn} {
+		lappend opts --nowarn
 	}
 
 	set srcs {}
