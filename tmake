@@ -3682,21 +3682,17 @@ proc header-scan-regexp {suffix regex filename} {
 		if {![file exists $filename]} {
 			# Might be a target which failed to build. This will be handled later
 			dputs-D "header-scan-regexp $filename => <does not exist>"
+			user-notice "Ignoring non-existent file $filename"
 			return {}
 		}
 	}
-	set f [open $filename]
+	# It is much faster to run the regexp with -all -line than running
+	# it for each line.
+	set contents [readfile $filename]
 	set headers {}
-	set n 0
-	set d 0
-	while {[gets $f buf] >= 0} {
-		incr n
-		if {[regexp $regex $buf -> name]} {
-			append name $suffix
-			lappend headers $name
-		}
+	foreach {line name} [regexp -all -inline -line $regex $contents] {
+		lappend headers $name$suffix
 	}
-	close $f
 	dputs-D "header-scan-regexp $filename => $headers"
 	return $headers
 }
