@@ -74,7 +74,7 @@ void page_timeline_rss(void){
         blob_append(&bSQL, " AND event.type=='ci'", -1);
       }
     }else if( !g.okRdTkt ){
-      assert( !g.okRdTkt &&& g.okRead && g.okRdWiki );
+      assert( !g.okRdTkt && g.okRead && g.okRdWiki );
       blob_append(&bSQL, " AND event.type!='t'", -1);
     }
   }
