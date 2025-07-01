@@ -3705,7 +3705,7 @@ proc header-scan-regexp {suffix regex filename} {
 # where type is "target" or "source"
 #
 # If the $path/$filename is neither a target nor source, the empty list is returned
-proc find-file-on-path {filename path} {
+proc find-all-files-on-path {filename path} {
 	set f [file-join $path $filename]
 
 	set result {}
@@ -3730,16 +3730,16 @@ proc find-file-on-path {filename path} {
 			set result [list source $f [get-file-hash $f]]
 		}
 	}
-	#dputs-D "find-file-on-path: file=$filename, path=$path ($f) => $result"
+	#dputs-D "find-all-files-on-path file=$filename, path=$path ($f) => $result"
 	return $result
 }
 
+# Searches for $filename from directory $dir in the given $paths.
+#
 # Returns a list of {type path hash}
 # where type is "target" or "source".
 #
-# Note that the current directory (.) is special.
-# We return both the first match along $paths and any match on [file dirname $filename]
-# (Unless they are the same)
+# We return all matches along $paths
 #
 proc find-file {filename paths} {
 	#puts "find-file filename=$filename, paths=$paths"
@@ -3753,21 +3753,8 @@ proc find-file {filename paths} {
 	}
 
 	set result {}
-	set filedir [file dirname $filename]
-	set seendot 0
-
-	# Add $filedir to the end of paths if not already there
-	if {$filedir ni $paths} {
-		lappend paths $filedir
-	}
-
-	set result {}
-	# First search the given paths
 	foreach p $paths {
-		set result [find-file-on-path $filename $p]
-		if {[llength $result]} {
-			break
-		}
+		lappend result {*}[find-all-files-on-path $filename $p]
 	}
 
 	#puts "find-file filename=$filename, paths=$paths => $result"
@@ -3782,6 +3769,15 @@ proc find-file {filename paths} {
 	#puts "=> [dict get $::tmake(depfindcache) $cachekey]"
 
 	return $result
+}
+
+# If $value is not in the dict, append it to the list.
+# and add it to the dict
+proc lappend-uniq {value &list &dict} {
+	if {![dict exists $dict $value]} {
+		lappend list $value
+		dict set dict $value 1
+	}
 }
 
 # XXX: This could be done better
@@ -3800,6 +3796,16 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	}
 	set cachekey "$incpaths $suffix $regex $filename"
 
+	# Create a dict as it is more efficient to check for existence
+	set incpathdict {}
+	foreach p $incpaths {
+		dict set incpathdict $p 1
+	}
+
+	# This is necessary for #include "..."
+	set filedir [file dirname $filepath]
+	lappend-uniq $filedir incpaths incpathdict
+
 	dputs-D "Scanning $filename for headers: incpaths=$incpaths"
 	# Can we get the result from the cache?
 	set stamp [list [calc-file-hash $filename] $incpaths $suffix $regex]
@@ -3808,6 +3814,10 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 		if {$cache_stamp eq $stamp} {
 			# Need to verify that find-file returns the same result as last time
 			dputs-D "verifying up-to-date cached results for $filename"
+			# Before scanning, add each file path to incpaths to account for #include "..."
+			foreach {cname cinfo} $cachedresults {
+				lappend-uniq [file join $filedir [file dirname $cname]] incpaths incpathdict
+			}
 			set ok 1
 			#cachedresults=test2.in {source subdir/test2.in 1560901841973445} test4.in {source subdir/test4.in 1560899705528444}
 			foreach {cname cinfo} $cachedresults {
@@ -3843,9 +3853,14 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 			if {![info exists scanned($d)]} {
 				set scanned($d) 1
 				set findfiles [find-file $d $incpaths]
+				if {[llength $findfiles]} {
+					dputs-D "$d found at {$findfiles}"
+				}
 				set results($d) $findfiles
 				foreach {type deppath hash} $findfiles {
 					set deps($deppath) 1
+					set depdir [file dirname $deppath]
+					lappend-uniq $depdir incpaths incpathdict
 					lappend newscan {*}[header-scan-regexp $suffix $regex $deppath]
 				}
 			}
