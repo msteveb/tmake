@@ -3827,10 +3827,10 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 			}
 			if {$ok} {
 				# Can reuse the cache
-				dputs-d "header-scan-regexp $filename (cached) => $headers"
+				dputs-D "header-scan-regexp $filename (cached) => $headers"
 				return $headers
 			} else {
-				dputs-d "cache is out-of-date for $filename - rescanning"
+				dputs-D "cache is out-of-date for $filename - rescanning"
 			}
 		}
 		# Stale
