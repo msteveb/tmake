@@ -3812,7 +3812,9 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 			dputs-D "verifying up-to-date cached results for $filename"
 			# Before scanning, add each file path to incpaths to account for #include "..."
 			foreach {cname cinfo} $cachedresults {
-				lappend-uniq [file dirname $cname] incpaths incpathdict
+				foreach {type deppath hash} $cinfo {
+					lappend-uniq [file dirname $deppath] incpaths incpathdict
+				}
 			}
 			set ok 1
 			#cachedresults=test2.in {source subdir/test2.in 1560901841973445} test4.in {source subdir/test4.in 1560899705528444}
