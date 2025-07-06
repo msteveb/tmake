@@ -2593,7 +2593,7 @@ proc calc-file-hash {file} {
 		set realfile [file-build [map-alias $file]]
 		set type [file-type $realfile]
 		if {$type eq "link"} {
-			# symlinks aways hash to the link contents
+			# symlinks always hash to the link contents
 			return link:[file readlink $realfile]
 		}
 		if {$::tmake(norun) && $type eq "none"} {
@@ -2607,6 +2607,16 @@ proc calc-file-hash {file} {
 
 	# Otherwise it is source, so use the source hash (possibly from cache)
 	return [get-file-hash $file]
+}
+
+# Called for a file that must exist
+# Returns the uuid for the file (dev,ino) so that
+# we can identify two files that are the same.
+# Note that this looks through symlinks.
+#
+proc calc-file-uuid {file} {
+	set stat [file stat $file]
+	return $stat(dev),$stat(ino)
 }
 
 # Calculates the hash of each file in the list
@@ -3697,7 +3707,7 @@ proc header-scan-regexp {suffix regex filename} {
 	return $headers
 }
 
-# Returns a list of {type path-to-filename hash}
+# Returns a list of {type path-to-filename hash uuid}
 # where type is "target" or "source"
 #
 # If the $path/$filename is neither a target nor source, the empty list is returned
@@ -3712,7 +3722,7 @@ proc find-all-files-on-path {filename path} {
 		if {$status in {built uptodate}} {
 			# with tmake -n, the file may not have actually been built
 			set filepath [file-build $f]
-			set result [list target $f [calc-file-hash $f]]
+			set result [list target $f [calc-file-hash $f] [calc-file-uuid $filepath]]
 		} else {
 			dputs-D "failed to build $f"
 			if {$::tmake(quickstop)} {
@@ -3723,7 +3733,7 @@ proc find-all-files-on-path {filename path} {
 		}
 	} else {
 		if {[file exists $f]} {
-			set result [list source $f [get-file-hash $f]]
+			set result [list source $f [get-file-hash $f] [calc-file-uuid $f]]
 		}
 	}
 	#dputs-D "find-all-files-on-path file=$filename, path=$path ($f) => $result"
@@ -3842,6 +3852,7 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 	# Recursively scan files
 	unset -nocomplain deps results
 	set deps {}
+	set uuids {}
 	set results {}
 	set scanned($filename) 1
 	set toscan [header-scan-regexp $suffix $regex $filepath]
@@ -3855,8 +3866,14 @@ proc header-scan-regexp-recursive {incpaths suffix regex filename} {
 					dputs-D "$d found at {$findfiles}"
 				}
 				set results($d) $findfiles
-				foreach {type deppath hash} $findfiles {
-					set deps($deppath) 1
+				foreach {type deppath hash uuid} $findfiles {
+					# Before we add this to the scan, if the uuid is the same
+					# as a file we have already scanned, nothing to do
+					if {[dict exists $uuids $uuid]} {
+						continue
+					}
+					dict set uuids $uuid 1
+					dict set deps $deppath 1
 					set depdir [file dirname $deppath]
 					lappend-uniq $depdir incpaths incpathdict
 					lappend newscan {*}[header-scan-regexp $suffix $regex $deppath]
