@@ -380,13 +380,18 @@ if {"getwithdefault" in [dict -commands]} {
 	}
 }
 
-try {
-	apply {{} {stacktrace}}
-} on error msg {
-	# Implement a dummy stacktrace for broken versions
-	proc stacktrace {{skip 0} {last 0}} {
+# 0.82 crashes on apply {{} {stacktrace}},
+# and new versions (0.83+) don't have a broken stacktrace
+if {[info version] <= 0.81} {
+	try {
+		apply {{} {stacktrace}}
+	} on error msg {
+		# Implement a dummy stacktrace for broken versions
+		proc stacktrace {{skip 0} {last 0}} {
+		}
 	}
 }
+
 set tmake(stackformat) {p f l cmd}
 if {[dict-getdef $tcl_platform stackFormat 3] != 4} {
 	# Older stylestacktrace
