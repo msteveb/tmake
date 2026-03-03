@@ -3722,7 +3722,9 @@ proc find-all-files-on-path {filename path} {
 		if {$status in {built uptodate}} {
 			# with tmake -n, the file may not have actually been built
 			set filepath [file-build $f]
-			set result [list target $f [calc-file-hash $f] [calc-file-uuid $filepath]]
+			if {[file exists $filepath]} {
+				set result [list target $f [calc-file-hash $f] [calc-file-uuid $filepath]]
+			}
 		} else {
 			dputs-D "failed to build $f"
 			if {$::tmake(quickstop)} {
