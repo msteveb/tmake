@@ -429,35 +429,43 @@ proc warning-location {msg} {
 
 # Traverse stack frames and find each location in *.spec and *.default files,
 # starting with the top-most level.
+#
+# Prefer any results from build.spec, then project.spec then rulebase.*
 # 
 # Returns a list: {file:line ...} or "unknown" if none found.
 #
 proc find-source-location {{skip 3}} {
 	global tmake
-	set specresult {}
-	set defaultresult {}
+	set buildspecresult {}
+	set projectspecresult {}
+	set rulebaseresult {}
 	set cmd {}
 	foreach $tmake(stackformat) [stacktrace $skip $tmake(stacklevel)-1] {
+		set tail [file tail $f]
 		if {[lindex $cmd 0] in $tmake(omitsource)} {
 			# This command should be ignored
 			continue
 		}
-		if {[string match *.spec $f]} {
-			lappend specresult [relative-path $f]:$l
-		} elseif {[string match *.default $f]} {
-			# No need to include the location in rulebase.default if there are other locations
-			# And only need one location from rulebase.default
-			if {[llength $defaultresult] == 0} {
-				# rulebase.default is outside the project so use the path directly
-				lappend defaultresult $f:$l
-			}
+		if {$tail eq "project.spec"} {
+			lappend projectspecresult [relative-path $f]:$l
+		} elseif {$tail eq "build.spec"} {
+			lappend buildspecresult [relative-path $f]:$l
+		} elseif {$tail eq "rulebase.spec"} {
+			lappend rulebaseresult [relative-path $f]:$l
+		} else {
+			# rulebase.default is outside the project so use the path directly
+			lappend rulebaseresult $f:$l
 		}
 	}
-	if {[llength $specresult]} {
-		return $specresult
+	if {[llength $buildspecresult]} {
+		return $buildspecresult
 	}
-	if {[llength $defaultresult]} {
-		return $defaultresult
+	if {[llength $projectspecresult]} {
+		return $projectspecresult
+	}
+	if {[llength $rulebaseresult]} {
+		# Only return the top-most rulebase result
+		return [lindex $rulebaseresult 0]
 	}
 
 	return unknown
