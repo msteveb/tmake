@@ -180,12 +180,19 @@ proc is-duplicate-obj-rule {obj src vars} {
 
 	if {[dict exists $tmakedrb objrules $obj]} {
 		# Is it identical?
-		dputs m "Ignoring identical duplicate object rule for $obj at [find-source-location]"
-
 		set oldinfo [dict get $tmakedrb objrules $obj]
-		if {$oldinfo ne $info} {
-			build-error [warning-location "Error: Duplicate Object rule for $obj with different settings"]
+		if {$oldinfo eq $info} {
+			dputs m "Ignoring identical duplicate object rule for $obj at [find-source-location]"
+		} else {
+			if {[debug-is-set m]} {
+				dputs m "OLD: $oldinfo"
+				dputs m "NEW: $info"
+				build-error [warning-location "Error: Duplicate Object rule for $obj with different settings"]
+			} else {
+				build-error [warning-location "Error: Duplicate Object rule for $obj with different settings - use -dm for details"]
+			}
 		}
+
 		return 1
 	}
 
