@@ -7,7 +7,7 @@
 # Initialiation
 # ==================================================================
 
-set tmake(version) {0.8.0}
+set tmake(version) {0.8.1}
 set tmake(cacheversion) 4
 
 # Turn on debugging as early as possible
@@ -100,6 +100,7 @@ set tmake(targets) {}
 set tmake(parsedone) 0
 set tmake(numtargets) 0
 set tmake(subdirs) {}
+set tmake(skipsubdirs) {}
 set tmake(prefix) ""
 set tmake(localdir) .
 set tmake(warningmsgs) {}
@@ -1317,10 +1318,24 @@ proc process-build-spec-file {dir {optional 0}} {
 # This could be useful if building third-party source where
 # we don't want to create the build.spec file in that directory.
 proc VirtualSubDir {dir code} {
+	# dir is relative to the current directory
+	set dir [local-prefix]$dir
+	set parent [file dirname $dir]
+	if {[dict exists $::tmake(skipsubdirs) $parent]} {
+		dputs m "Skipping VirtualSubdir $dir since parent is skipped"
+		dict set ::tmake(skipsubdirs) $dir 1
+		return
+	}
 	Scope $dir {
 		rulebase-invoke prolog
-		invoke-spec-file {} $code
+		lassign [invoke-spec-file {} $code] rc msg opts
+		dputs T "Parsed VirtualSubdir $dir"
 		rulebase-invoke epilog
+	}
+	if {$opts(-code) == 20} {
+		dputs m "Skipping VirtualSubdir $dir"
+		# Mark this subdir as skipped so that if we see a child VirtualSubDir we can skip it
+		dict set ::tmake(skipsubdirs) $dir 1
 	}
 }
 
