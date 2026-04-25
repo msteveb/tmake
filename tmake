@@ -78,7 +78,7 @@ set tmake(cli-options) {}
 set tmake(emptytarget) {
 	alias {} chdir 0 depends {} do {} dyndep {} fatal 0 finally {}
 	getvars {} hash 0 inputs {} msg {} nocache 0 nofail 0
-	nofork 0 onerror {} phony 0 rootok 0 slow 0 symlink 0 vars {}
+	nofork 0 onerror {} phony 0 rootok 0 slow 0 symlink 0 global 0 vars {}
 }
 
 # The known clean targets
@@ -510,15 +510,9 @@ proc make {argv} {
 	# Targets are relative to the local dir, $tmake(subdir),
 	# unless prefixed with / in which case they are global.
 	if {[llength $tmake(cmdline)]} {
-		foreach arg $tmake(cmdline) {
-			if {[regexp {//(.*)} $arg -> realtarget] || [regexp {^/(.*)} $arg -> realtarget]} {
-				lappend targets $realtarget
-			} else {
-				lappend targets [file-join $tmake(subdir) $arg]
-			}
-		}
+		lappend targets {*}[make-local-prefix $tmake(subdir) {*}$tmake(cmdline)]
 	} else {
-		lappend targets [file-join $tmake(subdir) $tmake(defaulttarget)]
+		lappend targets [make-local-prefix $tmake(subdir) $tmake(defaulttarget)]
 	}
 
 	# Finally we can begin building the specified targets.
@@ -943,6 +937,26 @@ proc top-src-dir {} {
 	return $::tmake(topsrcdir)
 }
 
+proc make-local-prefix {prefix args} {
+	set result [lmap p $args {
+		if {[string match <* $p]} {
+			# no need to add prefix to aliases
+			string cat $p
+		} elseif {[string match /* $p]} {
+			# project-root relative file
+			string range $p 1 end
+		} elseif {[is-global-target? $p]} {
+			# global target is unchanged
+			string cat $p
+		} else {
+			# local file
+			file-join $prefix $p
+		}
+	}]
+	#puts "make-local-prefix $prefix $args => $result"
+	return $result
+}
+
 # @make-local ...
 #
 # Converts each target or path into a path relative to the top of the tree
@@ -951,22 +965,11 @@ proc top-src-dir {} {
 # For each argument:
 # - If it is an alias (e.g. <bin>name), it is returned unchanged.
 # - If it is an absolute path (e.g. /dir/name), it is considered to be from the top of the project, so it is returned without the leading slash.
-# - Otherwise it is considered to be relative to the current directory so it is returned prefixed by [local-prefix].
+# - If it is a global target it is returned unchanged
+# - Otherwise it is considered to be relative to the current directory so it is returned prefixed [local-prefix].
+# (.e.g $tmake(subdir) [local-prefix] during parsing, local during rule invocation)
 proc make-local {args} {
-	set result [lmap p $args {
-		if {[string match <* $p]} {
-			# no need to add prefix to aliases
-			string cat $p
-		} elseif {[string match /* $p]} {
-			# project-root relative file
-			string range $p 1 end
-		} else {
-			# local file
-			file-join [local-prefix] $p
-		}
-	}]
-	#puts "make-local $args => $result"
-	return $result
+	make-local-prefix [local-prefix] {*}$args
 }
 
 # XXX internal - unused - to be removed
@@ -2154,6 +2157,15 @@ proc map-alias {target} {
 # Returns 1 if the target is an individual target
 proc is-target? {target} {
 	dict exists $::tmake(targets) [map-alias $target]
+}
+
+# Returns 1 if the target is a global target
+# XXX Could optimise by caching global targets in a separate dict
+proc is-global-target? {target} {
+	if {[is-target? $target]} {
+		return [dict get [get-target-rule $target] global]
+	}
+	return 0
 }
 
 # Returns 1 if the target is a rule target

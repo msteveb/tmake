@@ -124,6 +124,12 @@ Note that many keys are simple flags and do not expect any values.
 	Marks the target as phony. A phony target is considered to always need building
 	and any file with the same name is ignored. Typical phony targets are: all, clean, test, install
 
+-global
+	Marks the target as global. A global target is available in all directories.
+	For example install and uninstall. Thus it is possible to do 'tmake install' from
+	any directory and it is equivalent to doing 'tmake /install'. Other rules can depend
+	on these global targets.
+
 -nofail
 	Failure of the '-do' commands for the rule is ignored.
 

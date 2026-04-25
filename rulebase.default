@@ -139,8 +139,8 @@ The following global phony targets are created:
   test:      Runs the 'test' targets from all subdirectories
   clean:     Runs the 'clean' targets from all subdirectories
   distclean: Runs the 'distclean' targets from all subdirectories
-  install:   Runs all install rules
-  uninstall: Runs all uninstall rules
+  install:   Runs the install rules
+  uninstall: Runs the uninstall rules
 
   Note that these global targets can be accessed from within a subdirectory
   by using a / prefix. e.g. /all
@@ -152,8 +152,6 @@ The following per-directory phony targets are created:
   clean:     Removes all build products, including Clean targets, for the current directory
   distclean: Runs 'clean', and removes DistClean targets for the current directory,
              and removes all orphan objects
-  install:   A convenience alias for /install
-  uninstall: A convenience alias for /uninstall
 
 Note that by default, Lib is an alias for ArchiveLib. This can be changed with:
   alias Lib SharedLib
@@ -352,8 +350,6 @@ proc rulebase-prolog {} {
 			target $localtarget -phony
 			target $parentprefix$t -phony -depends $localtarget
 		}
-		Phony install install
-		Phony uninstall uninstall
 		clean-target [make-local clean] Clean
 		clean-target [make-local distclean] DistClean
 	}
@@ -2342,8 +2338,10 @@ clean-target uninstall Uninstall -rootok
 
 Phony all
 Phony libs
-Phony install all
 Phony test
+# These are global targets
+target install -global -phony -depends all
+target uninstall -global -phony
 
 Depends clean clean-orphans
 Depends distclean clean-orphans
