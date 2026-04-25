@@ -13,6 +13,7 @@
 # - Call [argparam $arg] to extract the value from a parameter like --option=value.
 #
 # Leaves $argv with unconsumed args.
+# Returns the list of consumed args.
 
 proc argparse {&argv spec} {
 	# Make the arg available in the calling context
@@ -38,6 +39,9 @@ proc argparse {&argv spec} {
 		}
 		parse-error "Can't find parameter from $arg"
 	}
+
+	# Remember the original args
+	set argv_orig $argv
 
 	set done 0
 	while {[llength $argv]} {
@@ -75,4 +79,7 @@ proc argparse {&argv spec} {
 		}
 	}
 	# argv now contains all unconsumed args
+	# Return the consumed args as a list
+	set n [llength $argv]
+	return [lrange $argv_orig 0 end-$n]
 }

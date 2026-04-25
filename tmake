@@ -123,11 +123,7 @@ proc make-parse-options {argv} {
 
 	use argparse
 
-	# Do we need to remove anything from cli-options
-	# e.g. -C?
-	set tmake(cli-options) $argv
-
-	argparse argv {
+	set opts [argparse argv {
 		--configure {
 			# Just want to run configure with the remaining args
 			set tmake(configure) 1
@@ -217,7 +213,6 @@ proc make-parse-options {argv} {
 				foreach i [dict keys $tmake(debugtypes)] {
 					dict set tmake(debugtypes) $i 1
 				}
-				lappend tmake(cli-options) $arg
 			} else {
 				foreach i [split [string range $arg 2 end] {}] {
 					dict set tmake(debugtypes) $i 1
@@ -252,7 +247,7 @@ proc make-parse-options {argv} {
 		}
 		{--help -h --help=*} {
 			use help
-			show-help $tmake(cli-options) [argparam $arg]
+			show-help $argv [argparam $arg]
 			exit 0
 		}
 		{--ref --man} {
@@ -265,7 +260,7 @@ proc make-parse-options {argv} {
 		}
 		--genie {
 			use genie
-			tmake-genie $tmake(cli-options)
+			tmake-genie $argv
 			exit 0
 		}
 		{--dry-run --just-print -n} {
@@ -301,7 +296,10 @@ proc make-parse-options {argv} {
 				define! $n $v
 			}
 		}
-	}
+	}]
+
+	# Record the options
+	lappend tmake(cli-options) {*}$opts
 	return $argv
 }
 
